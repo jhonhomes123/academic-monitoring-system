@@ -1,0 +1,1070 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport"
+content="width=device-width, initial-scale=1.0">
+
+<title>Teacher Manage Students</title>
+
+<link rel="preconnect"
+href="https://fonts.googleapis.com">
+
+<link rel="preconnect"
+href="https://fonts.gstatic.com"
+crossorigin>
+
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
+rel="stylesheet">
+
+<link rel="stylesheet"
+href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<style>
+/* ================= CUSTOM AMS ALERT ================= */
+
+.ams-alert{
+    position:fixed;
+    top:30px;
+    right:30px;
+    min-width:340px;
+    max-width:420px;
+    background:white;
+    border-radius:20px;
+    padding:22px;
+    box-shadow:0 20px 45px rgba(0,0,0,0.15);
+    border-left:6px solid var(--primary);
+    z-index:99999;
+
+    display:flex;
+    gap:18px;
+    align-items:flex-start;
+
+    transform:translateX(500px);
+    opacity:0;
+
+    transition:.4s ease;
+}
+
+.ams-alert.show{
+    transform:translateX(0);
+    opacity:1;
+}
+
+.ams-alert.success{
+    border-left-color:#16a34a;
+}
+
+.ams-alert.error{
+    border-left-color:#dc2626;
+}
+
+.ams-alert.warning{
+    border-left-color:#f59e0b;
+}
+
+.alert-icon{
+    width:55px;
+    height:55px;
+    border-radius:16px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-size:24px;
+    flex-shrink:0;
+}
+
+.success .alert-icon{
+    background:#dcfce7;
+    color:#16a34a;
+}
+
+.error .alert-icon{
+    background:#fee2e2;
+    color:#dc2626;
+}
+
+.warning .alert-icon{
+    background:#fef3c7;
+    color:#f59e0b;
+}
+
+.alert-content h3{
+    margin-bottom:8px;
+    font-size:18px;
+    color:var(--primary);
+}
+
+.alert-content p{
+    color:var(--gray);
+    line-height:1.7;
+    font-size:14px;
+}
+
+.alert-close{
+    margin-left:auto;
+    background:none;
+    border:none;
+    font-size:18px;
+    cursor:pointer;
+    color:#94a3b8;
+}
+
+@media(max-width:600px){
+
+    .ams-alert{
+        left:20px;
+        right:20px;
+        min-width:auto;
+        max-width:none;
+    }
+
+}
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+    font-family:'Inter',sans-serif;
+}
+
+:root{
+    --primary:#0b3d91;
+    --light:#f4f7fc;
+    --white:#ffffff;
+    --gray:#64748b;
+    --border:#dbe4f0;
+    --success:#16a34a;
+    --warning:#f59e0b;
+    --danger:#dc2626;
+}
+
+body{
+    background:var(--light);
+    display:flex;
+    min-height:100vh;
+}
+
+/* =========================
+SIDEBAR
+========================= */
+
+/* =========================
+SIDEBAR
+========================= */
+
+.sidebar{
+    width:270px;
+    height:100vh;
+    background:var(--primary);
+    color:white;
+    position:fixed;
+    left:0;
+    top:0;
+    padding:30px 20px;
+    overflow-y:auto;
+}
+
+.logo{
+    margin-bottom:40px;
+}
+
+.logo h2{
+    font-size:24px;
+}
+
+.logo p{
+    font-size:13px;
+    opacity:.8;
+    margin-top:5px;
+}
+
+.menu{
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+}
+
+.menu a{
+    text-decoration:none;
+    color:white;
+    padding:14px;
+    border-radius:12px;
+    transition:.3s;
+    font-weight:500;
+}
+
+.menu a:hover,
+.menu a.active{
+    background:rgba(255,255,255,.15);
+}
+
+.menu i{
+    margin-right:10px;
+}
+/* =========================
+MAIN
+========================= */
+
+.main{
+    margin-left:270px;
+    width:calc(100% - 270px);
+    padding:30px;
+}
+
+.topbar{
+    margin-bottom:30px;
+}
+
+.topbar h1{
+    color:var(--primary);
+    font-size:32px;
+}
+
+.topbar p{
+    color:var(--gray);
+    margin-top:5px;
+}
+
+/* =========================
+FILTERS
+========================= */
+
+.filters{
+    background:white;
+    padding:25px;
+    border-radius:20px;
+    border:1px solid var(--border);
+    margin-bottom:25px;
+
+    display:grid;
+    grid-template-columns:
+    repeat(auto-fit,minmax(220px,1fr));
+
+    gap:20px;
+}
+
+.filter-group{
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+}
+
+.filter-group label{
+    font-size:14px;
+    font-weight:600;
+    color:var(--primary);
+}
+
+.filter-group select{
+    padding:14px;
+    border-radius:12px;
+    border:1px solid var(--border);
+    font-size:15px;
+    width:100%;
+    background:white;
+}
+
+/* =========================
+TABLE
+========================= */
+
+.table-section{
+    background:white;
+    border-radius:20px;
+    padding:25px;
+    border:1px solid var(--border);
+    overflow-x:auto;
+}
+
+table{
+    width:100%;
+    border-collapse:collapse;
+    min-width:700px;
+}
+
+table th{
+    background:#eef4ff;
+    padding:14px;
+    text-align:left;
+    color:var(--primary);
+    font-size:14px;
+}
+
+table td{
+    padding:14px;
+    border-bottom:1px solid #edf2f7;
+    font-size:14px;
+}
+
+.status-pending{
+    color:var(--warning);
+    font-weight:700;
+}
+
+.status-approved{
+    color:var(--success);
+    font-weight:700;
+}
+
+.status-failed{
+    color:var(--danger);
+    font-weight:700;
+}
+
+.empty{
+    text-align:center;
+    padding:30px;
+    color:var(--gray);
+}
+
+/* =========================
+TABLE SCROLLBAR
+========================= */
+
+.table-section::-webkit-scrollbar{
+    height:8px;
+}
+
+.table-section::-webkit-scrollbar-thumb{
+    background:#cbd5e1;
+    border-radius:20px;
+}
+.status-incomplete{
+    color:#f59e0b;
+    font-weight:700;
+}
+</style>
+<link rel="stylesheet" href="mobile_fix.css">
+</head>
+<body>
+
+<div class="sidebar">
+
+    <div class="logo">
+        <h2>AMS Teacher</h2>
+        <p>Talisay City College</p>
+    </div>
+
+    <div class="menu">
+
+        <a href="teacher_dashboard.html">
+            <i class="fa-solid fa-house"></i>
+            Dashboard
+        </a>
+
+        <a href="teacher_manage_students.html"
+        class="active">
+            <i class="fa-solid fa-users"></i>
+            Manage Students
+        </a>
+
+        <a href="teacher_manage_subjects.html">
+            <i class="fa-solid fa-book"></i>
+            Manage Subjects
+        </a>
+
+        <a href="teacher_student_status.html">
+            <i class="fa-solid fa-clipboard-check"></i>
+            Student Status
+        </a>
+
+        <a href="teacher_profile.html">
+            <i class="fa-solid fa-user"></i>
+            Profile
+        </a>
+
+        <a href="login.html">
+
+    <i class="fa-solid fa-right-from-bracket"></i>
+
+    Logout
+
+</a>
+
+    </div>
+
+</div>
+
+<div class="main">
+
+    <div class="topbar">
+        <h1>Manage Students</h1>
+        <p>Students under your handled subjects</p>
+    </div>
+
+    <!-- FILTERS -->
+
+    <div class="filters">
+
+        <div class="filter-group">
+            <label>Year Level</label>
+
+            <select id="yearFilter">
+                <option value="">Select Year</option>
+            </select>
+        </div>
+
+        <div class="filter-group">
+            <label>Department</label>
+
+            <select id="departmentFilter">
+                <option value="">Select Department</option>
+            </select>
+        </div>
+
+        <div class="filter-group">
+            <label>Major</label>
+
+            <select id="majorFilter">
+                <option value="">Select Major</option>
+            </select>
+        </div>
+
+        <div class="filter-group">
+            <label>Subject</label>
+
+            <select id="subjectFilter">
+                <option value="">Select Subject</option>
+            </select>
+        </div>
+
+        <div class="filter-group">
+            <label>Section</label>
+
+            <select id="sectionFilter">
+                <option value="">Select Section</option>
+            </select>
+        </div>
+
+    </div>
+
+    <!-- TABLE -->
+
+    <div class="table-section">
+
+        <table>
+
+            <thead>
+
+                <tr>
+                    <th>Student ID</th>
+                    <th>Name</th>
+                    <th>Status</th>
+                </tr>
+
+            </thead>
+
+            <tbody id="studentTableBody">
+
+                <tr>
+                    <td colspan="4" class="empty">
+                        Select filters to load students
+                    </td>
+                </tr>
+
+            </tbody>
+
+        </table>
+
+    </div>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
+    <script>
+
+    /* =====================================================
+    SUPABASE CONFIG
+    ===================================================== */
+
+    const SUPABASE_URL = "https://nrqrsolfowebujogawti.supabase.co";
+    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5ycXJzb2xmb3dlYnVqb2dhd3RpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkyODE2NjksImV4cCI6MjA5NDg1NzY2OX0.XcawTf9niOIZbG0hBTtwSXjySWfdVl3LAClbWdZmfl8";
+
+
+const supabaseClient =
+supabase.createClient(
+    SUPABASE_URL,
+    SUPABASE_ANON_KEY
+);
+
+/* =====================================================
+SAMPLE TEACHER EMAIL
+===================================================== */
+let teacherEmail = "";
+let teacherId = null;
+
+/* =====================================================
+ELEMENTS
+===================================================== */
+
+const yearFilter =
+document.getElementById("yearFilter");
+
+const departmentFilter =
+document.getElementById("departmentFilter");
+
+const majorFilter =
+document.getElementById("majorFilter");
+
+const subjectFilter =
+document.getElementById("subjectFilter");
+
+const sectionFilter =
+document.getElementById("sectionFilter");
+
+const tableBody =
+document.getElementById("studentTableBody");
+
+/* =====================================================
+INIT
+===================================================== */
+
+async function initialize(){
+
+    /* =========================
+       GET LOGGED IN USER
+    ========================= */
+
+    const {
+        data: { user },
+        error
+    } = await supabaseClient.auth.getUser();
+
+    if(error || !user){
+
+        console.log("User not logged in");
+        return;
+
+    }
+
+    teacherEmail = user.email;
+
+    console.log("LOGGED IN EMAIL:", teacherEmail);
+
+    /* =========================
+       LOAD TEACHER
+    ========================= */
+
+    await loadTeacher();
+
+    if(!teacherId){
+
+        console.log("No teacher found");
+        return;
+
+    }
+
+    /* =========================
+       LOAD FILTERS
+    ========================= */
+
+    await loadYears();
+
+
+}
+/* =====================================================
+LOAD TEACHER
+===================================================== */
+
+async function loadTeacher(){
+
+    const { data, error } = await supabaseClient
+
+    .from("teachers")
+
+    .select(`
+        teacher_id,
+        user_id,
+        users!teachers_user_id_fkey(
+            email
+        )
+    `);
+
+    if(error){
+
+        console.log(error);
+        return;
+
+    }
+
+    console.log("TEACHERS:", data);
+
+    const teacher = data.find(t =>
+
+        t.users?.email?.toLowerCase() ===
+        teacherEmail.toLowerCase()
+
+    );
+
+    console.log("MATCHED TEACHER:", teacher);
+
+    if(teacher){
+
+        teacherId = teacher.teacher_id;
+
+        console.log("TEACHER ID:", teacherId);
+
+    }else{
+
+        console.log("Teacher not found");
+
+    }
+
+}
+/* =====================================================
+YEARS
+===================================================== */
+
+async function loadYears(){
+
+    const years = [
+        "1st Year",
+        "2nd Year",
+        "3rd Year",
+        "4th Year"
+    ];
+
+    years.forEach(year => {
+
+        yearFilter.innerHTML += `
+            <option value="${year}">
+                ${year}
+            </option>
+        `;
+
+    });
+
+}
+
+yearFilter.addEventListener(
+    "change",
+    async () => {
+        await loadDepartments(yearFilter.value);
+    }
+);
+
+/* =====================================================
+DEPARTMENTS
+===================================================== */
+
+async function loadDepartments(yearLevel){
+    departmentFilter.innerHTML = '<option value="">Select Department</option>';
+    majorFilter.innerHTML = '<option value="">Select Major</option>';
+    subjectFilter.innerHTML = '<option value="">Select Subject</option>';
+    sectionFilter.innerHTML = '<option value="">Select Section</option>';
+
+    if (!teacherId || !yearLevel) return;
+
+    const { data, error } = await supabaseClient
+        .from('teacher_subject_assignments')
+        .select(`
+            subject_id,
+            subjects(
+                subject_id,
+                year_level,
+                major_id,
+                majors(
+                    major_id,
+                    major_name,
+                    department_id,
+                    departments(
+                        department_id,
+                        department_name
+                    )
+                )
+            )
+        `)
+        .eq('teacher_id', teacherId);
+
+    if (error) {
+        console.log(error);
+        return;
+    }
+
+    const departments = {};
+    data?.forEach(item => {
+        const subject = item.subjects;
+        if (!subject || subject.year_level !== yearLevel) return;
+
+        const department = subject.majors?.departments;
+        if (department) {
+            departments[department.department_id] = department;
+        }
+    });
+
+    Object.values(departments).forEach(dep => {
+        departmentFilter.innerHTML += `
+            <option value="${dep.department_id}">
+                ${dep.department_name}
+            </option>
+        `;
+    });
+}
+
+/* =====================================================
+DEPARTMENT CHANGE
+===================================================== */
+
+departmentFilter.addEventListener(
+    "change",
+    async () => {
+        majorFilter.innerHTML = '<option value="">Select Major</option>';
+        subjectFilter.innerHTML = '<option value="">Select Subject</option>';
+        sectionFilter.innerHTML = '<option value="">Select Section</option>';
+
+        const departmentId = departmentFilter.value;
+        const yearLevel = yearFilter.value;
+        if (!departmentId || !yearLevel) return;
+
+        const { data, error } = await supabaseClient
+            .from('teacher_subject_assignments')
+            .select(`
+                subject_id,
+                subjects(
+                    subject_id,
+                    year_level,
+                    major_id,
+                    majors(
+                        major_id,
+                        major_name,
+                        department_id
+                    )
+                )
+            `)
+            .eq('teacher_id', teacherId);
+
+        if (error) {
+            console.log(error);
+            return;
+        }
+
+        const majors = {};
+        data?.forEach(item => {
+            const subject = item.subjects;
+            if (!subject || subject.year_level !== yearLevel) return;
+            if (String(subject.majors?.department_id) !== String(departmentId)) return;
+            const major = subject.majors;
+            if (major) majors[major.major_id] = major;
+        });
+
+        Object.values(majors).forEach(major => {
+            majorFilter.innerHTML += `
+                <option value="${major.major_id}">
+                    ${major.major_name}
+                </option>
+            `;
+        });
+    }
+);
+
+majorFilter.addEventListener(
+    "change",
+    async () => {
+        subjectFilter.innerHTML = '<option value="">Select Subject</option>';
+        sectionFilter.innerHTML = '<option value="">Select Section</option>';
+
+        const majorId = majorFilter.value;
+        const yearLevel = yearFilter.value;
+        if (!majorId || !yearLevel) return;
+
+        const { data, error } = await supabaseClient
+            .from('teacher_subject_assignments')
+            .select(`
+                subject_id,
+                subjects(
+                    subject_id,
+                    subject_code,
+                    subject_name,
+                    major_id,
+                    year_level
+                )
+            `)
+            .eq('teacher_id', teacherId);
+
+        if (error) {
+            console.log(error);
+            return;
+        }
+
+        const subjects = {};
+        data?.forEach(item => {
+            const subject = item.subjects;
+            if (!subject || subject.year_level !== yearLevel) return;
+            if (String(subject.major_id) !== String(majorId)) return;
+            subjects[subject.subject_id] = subject;
+        });
+
+        Object.values(subjects).forEach(subject => {
+            subjectFilter.innerHTML += `
+                <option value="${subject.subject_id}">
+                    ${subject.subject_code} - ${subject.subject_name}
+                </option>
+            `;
+        });
+    }
+);
+
+/* =====================================================
+LOAD TEACHER SUBJECTS
+===================================================== */
+
+async function loadTeacherSubjects(){
+
+    if(!teacherId){
+
+        console.log("Teacher ID missing");
+        return;
+
+    }
+
+    const { data, error } = await supabaseClient
+
+    .from("teacher_subject_assignments")
+
+    .select(`
+        assignment_id,
+        subject_id,
+        subjects(
+            subject_id,
+            subject_code,
+            subject_name,
+            major_id,
+            year_level
+        )
+    `)
+
+    .eq("teacher_id", teacherId);
+
+    if(error){
+
+        console.log(error);
+        return;
+
+    }
+
+    console.log("ASSIGNED SUBJECTS:", data);
+
+    subjectFilter.innerHTML = `
+    
+        <option value="">
+            Select Subject
+        </option>
+    
+    `;
+
+    if(!data.length){
+
+        subjectFilter.innerHTML += `
+        
+            <option value="">
+                No assigned subjects
+            </option>
+        
+        `;
+
+        return;
+
+    }
+
+    data.forEach(item => {
+
+        if(!item.subjects) return;
+
+        subjectFilter.innerHTML += `
+        
+            <option
+                value="${item.subjects.subject_id}"
+            >
+
+                ${item.subjects.subject_code}
+                -
+                ${item.subjects.subject_name}
+
+            </option>
+        
+        `;
+
+    });
+
+}
+
+/* =====================================================
+SUBJECT CHANGE
+===================================================== */
+
+subjectFilter.addEventListener('change', async () => {
+    sectionFilter.innerHTML = '<option value="">Select Section</option>';
+    const subjectId = subjectFilter.value;
+    if (!subjectId) return;
+
+    const { data, error } = await supabaseClient
+        .from('teacher_subject_assignments')
+        .select(`
+            assignment_id,
+            teacher_section_assignments(
+                section_id,
+                sections(
+                    section_id,
+                    section_name
+                )
+            )
+        `)
+        .eq('teacher_id', teacherId)
+        .eq('subject_id', subjectId);
+
+    if (error) {
+        console.log(error);
+        return;
+    }
+
+    const sections = {};
+    data?.forEach(assign => {
+        assign.teacher_section_assignments?.forEach(sec => {
+            if (sec?.sections) sections[sec.sections.section_id] = sec.sections;
+        });
+    });
+
+    Object.values(sections).forEach(sec => {
+        sectionFilter.innerHTML += `<option value="${sec.section_id}">${sec.section_name}</option>`;
+    });
+
+    if (sectionFilter.value) await loadStudents();
+});
+
+/* =====================================================
+SECTION CHANGE
+===================================================== */
+
+sectionFilter.addEventListener(
+    "change",
+    loadStudents
+);
+
+/* =====================================================
+LOAD STUDENTS
+===================================================== */
+
+async function loadStudents(){
+
+    const sectionId = sectionFilter.value;
+    const subjectId = subjectFilter.value;
+
+    if(!sectionId || !subjectId) return;
+
+    const { data: students, error } =
+    await supabaseClient
+
+    .from("students")
+
+    .select(`
+        student_id,
+        student_number,
+        first_name,
+        middle_initial,
+        last_name,
+        sections(
+            section_name
+        )
+    `)
+
+    .eq("section_id", sectionId);
+
+    if(error){
+
+        console.log(error);
+        return;
+
+    }
+
+    tableBody.innerHTML = "";
+
+    if(students.length === 0){
+
+        tableBody.innerHTML = `
+        <tr>
+            <td colspan="4" class="empty">
+                No students found
+            </td>
+        </tr>
+        `;
+
+        return;
+
+    }
+
+    for(const student of students){
+
+        /* GET STATUS FROM student_grades */
+
+        const { data: grade } =
+        await supabaseClient
+
+        .from("student_grades")
+
+        .select("status")
+
+        .eq("student_id", student.student_id)
+
+        .eq("subject_id", subjectFilter.value)
+
+        .maybeSingle();
+
+        let status =
+        grade?.status || "PENDING";
+
+        let statusClass =
+        "status-pending";
+
+        if(status === "PASSED"){
+
+    statusClass = "status-approved";
+
+}
+else if(status === "FAILED"){
+
+    statusClass = "status-failed";
+
+}
+else if(status === "INCOMPLETE"){
+
+    statusClass = "status-incomplete";
+
+}
+
+        const fullName = `
+            ${student.last_name},
+            ${student.first_name}
+            ${student.middle_initial || ""}
+        `;
+
+        tableBody.innerHTML += `
+
+        <tr>
+
+            <td>
+                ${student.student_number}
+            </td>
+
+            <td>
+                ${fullName}
+            </td>
+
+            <td class="${statusClass}">
+                ${status}
+            </td>
+
+        </tr>
+
+        `;
+    }
+}
+/* =========================
+   START PAGE
+========================= */
+
+initialize();
+</script>
+</body>
+</html>

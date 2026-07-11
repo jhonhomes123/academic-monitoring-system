@@ -1,0 +1,1668 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Teacher Manage Subjects</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
+
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Inter', sans-serif;
+        }
+
+        :root {
+            --primary: #0b3d91;
+            --light: #f4f7fc;
+            --white: #ffffff;
+            --gray: #64748b;
+            --border: #dbe4f0;
+            --success: #16a34a;
+            --warning: #f59e0b;
+            --danger: #dc2626;
+        }
+
+        body {
+            background: var(--light);
+            display: flex;
+        }
+
+        /* SIDEBAR */
+
+        .sidebar {
+            width: 270px;
+            height: 100vh;
+            background: var(--primary);
+            color: white;
+            position: fixed;
+            left: 0;
+            top: 0;
+            padding: 30px 20px;
+            overflow-y: auto;
+        }
+
+        .logo {
+            margin-bottom: 40px;
+        }
+
+        .logo h2 {
+            font-size: 24px;
+        }
+
+        .logo p {
+            font-size: 13px;
+            opacity: .8;
+            margin-top: 5px;
+        }
+
+        .menu {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .menu a {
+            text-decoration: none;
+            color: white;
+            padding: 14px;
+            border-radius: 12px;
+            transition: .3s;
+            font-weight: 500;
+        }
+
+        .menu a:hover,
+        .menu a.active {
+            background: rgba(255, 255, 255, .15);
+        }
+
+        .menu i {
+            margin-right: 10px;
+        }
+
+        /* MAIN */
+
+        .main {
+            margin-left: 270px;
+            width: calc(100% - 270px);
+            padding: 30px;
+        }
+
+        /* TOPBAR */
+
+        .topbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+        }
+
+        .topbar h1 {
+            color: var(--primary);
+            margin-bottom: 8px;
+        }
+
+        .topbar p {
+            color: var(--gray);
+        }
+
+        /* PROFILE MINI */
+
+        .profile-mini {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            background: white;
+            padding: 14px 18px;
+            border-radius: 16px;
+            border: 1px solid var(--border);
+        }
+
+        .profile-mini img {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+        }
+
+        /* TABLE SECTION */
+
+        .table-section {
+            background: white;
+            border-radius: 20px;
+            padding: 25px;
+            border: 1px solid var(--border);
+            overflow-x: auto;
+        }
+
+        .section-header {
+            margin-bottom: 20px;
+        }
+
+        .section-header h2 {
+            color: var(--primary);
+            margin-bottom: 8px;
+        }
+
+        .section-header p {
+            color: var(--gray);
+        }
+
+        /* TABLE */
+
+        table {
+            width: 100%;
+            min-width: 900px;
+            border-collapse: collapse;
+        }
+
+        table th {
+            background: #eef4ff;
+            color: var(--primary);
+            padding: 14px;
+            text-align: left;
+            font-size: 14px;
+        }
+
+        table td {
+            padding: 14px;
+            border-bottom: 1px solid #edf2f7;
+            font-size: 14px;
+        }
+
+        .warning-text {
+            color: var(--warning);
+            font-weight: 700;
+        }
+
+        .danger-text {
+            color: var(--danger);
+            font-weight: 700;
+        }
+
+        /* BUTTON */
+
+        .btn {
+            padding: 10px 14px;
+            border: none;
+            border-radius: 10px;
+            background: var(--primary);
+            color: white;
+            cursor: pointer;
+            font-weight: 600;
+        }
+
+        /* MODAL */
+
+        .modal {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, .5);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 999;
+            padding: 20px;
+        }
+
+        .modal-content {
+            background: white;
+            width: 100%;
+            max-width: 500px;
+            border-radius: 20px;
+            overflow: hidden;
+        }
+
+        .modal-header {
+            background: var(--primary);
+            color: white;
+            padding: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-body {
+            padding: 25px;
+        }
+
+        .modal-body input,
+        .modal-body select,
+        .modal-body textarea {
+            width: 100%;
+            padding: 12px;
+            margin-bottom: 15px;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+        }
+
+        .close-btn {
+            background: white;
+            border: none;
+            width: 35px;
+            height: 35px;
+            border-radius: 50%;
+            cursor: pointer;
+        }
+
+        /* ================= CUSTOM AMS ALERT ================= */
+
+        .ams-alert {
+            position: fixed;
+            top: 30px;
+            right: 30px;
+            min-width: 340px;
+            max-width: 420px;
+            background: white;
+            border-radius: 20px;
+            padding: 22px;
+            box-shadow: 0 20px 45px rgba(0, 0, 0, 0.15);
+            border-left: 6px solid var(--primary);
+            z-index: 99999;
+
+            display: flex;
+            gap: 18px;
+            align-items: flex-start;
+
+            transform: translateX(500px);
+            opacity: 0;
+
+            transition: .4s ease;
+        }
+
+        .ams-alert.show {
+            transform: translateX(0);
+            opacity: 1;
+        }
+
+        .ams-alert.success {
+            border-left-color: #16a34a;
+        }
+
+        .ams-alert.error {
+            border-left-color: #dc2626;
+        }
+
+        .ams-alert.warning {
+            border-left-color: #f59e0b;
+        }
+
+        .alert-icon {
+            width: 55px;
+            height: 55px;
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            flex-shrink: 0;
+        }
+
+        .success .alert-icon {
+            background: #dcfce7;
+            color: #16a34a;
+        }
+
+        .error .alert-icon {
+            background: #fee2e2;
+            color: #dc2626;
+        }
+
+        .warning .alert-icon {
+            background: #fef3c7;
+            color: #f59e0b;
+        }
+
+        .alert-content h3 {
+            margin-bottom: 8px;
+            font-size: 18px;
+            color: var(--primary);
+        }
+
+        .alert-content p {
+            color: var(--gray);
+            line-height: 1.7;
+            font-size: 14px;
+        }
+
+        .alert-close {
+            margin-left: auto;
+            background: none;
+            border: none;
+            font-size: 18px;
+            cursor: pointer;
+            color: #94a3b8;
+        }
+
+        @media(max-width:600px) {
+
+            .ams-alert {
+                left: 20px;
+                right: 20px;
+                min-width: auto;
+                max-width: none;
+            }
+
+        }
+
+        /* =========================================================
+   CUSTOM CONFIRM MODAL
+========================================================= */
+
+        .confirm-modal-overlay {
+
+            position: fixed;
+            inset: 0;
+
+            background: rgba(0, 0, 0, 0.45);
+
+            display: flex;
+            align-items: center;
+            justify-content: center;
+
+            z-index: 999999;
+
+            opacity: 0;
+            visibility: hidden;
+
+            transition: .3s ease;
+
+            backdrop-filter: blur(4px);
+
+        }
+
+        .confirm-modal-overlay.show {
+
+            opacity: 1;
+            visibility: visible;
+
+        }
+
+        .confirm-modal {
+
+            width: 420px;
+            max-width: 95%;
+
+            background: white;
+
+            border-radius: 28px;
+
+            padding: 35px;
+
+            text-align: center;
+
+            transform: translateY(30px) scale(.9);
+
+            transition: .3s ease;
+
+            box-shadow:
+                0 25px 50px rgba(0, 0, 0, 0.2);
+
+        }
+
+        .confirm-modal-overlay.show .confirm-modal {
+
+            transform: translateY(0) scale(1);
+
+        }
+
+        .confirm-icon {
+
+            width: 90px;
+            height: 90px;
+
+            margin: auto auto 20px;
+
+            border-radius: 24px;
+
+            display: flex;
+            align-items: center;
+            justify-content: center;
+
+            font-size: 40px;
+
+            background: #fef3c7;
+            color: #f59e0b;
+
+        }
+
+        .confirm-modal h2 {
+
+            font-size: 28px;
+            color: var(--primary);
+
+            margin-bottom: 12px;
+
+        }
+
+        .confirm-modal p {
+
+            color: var(--gray);
+
+            line-height: 1.7;
+
+            margin-bottom: 30px;
+
+            font-size: 15px;
+
+        }
+
+        .confirm-buttons {
+
+            display: flex;
+            gap: 15px;
+
+        }
+
+        .confirm-buttons button {
+
+            flex: 1;
+
+            padding: 15px;
+
+            border: none;
+
+            border-radius: 14px;
+
+            font-size: 15px;
+            font-weight: 600;
+
+            cursor: pointer;
+
+            transition: .3s ease;
+
+        }
+
+        .cancel-btn {
+
+            background: #e2e8f0;
+            color: #334155;
+
+        }
+
+        .cancel-btn:hover {
+
+            background: #cbd5e1;
+
+        }
+
+        .confirm-btn {
+
+            background: linear-gradient(135deg,
+                    #dc2626,
+                    #b91c1c);
+
+            color: white;
+
+        }
+
+        .confirm-btn:hover {
+
+            transform: translateY(-2px);
+
+            box-shadow:
+                0 12px 20px rgba(220, 38, 38, .25);
+
+        }
+
+        /*-------------------------------------------*/
+        .filters {
+            background: white;
+            padding: 25px;
+            border-radius: 20px;
+            border: 1px solid var(--border);
+            margin-bottom: 25px;
+            display: grid;
+            grid-template-columns: repeat(4, minmax(220px, 1fr));
+            gap: 20px;
+        }
+
+        .filter-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .filter-group label {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--primary);
+        }
+
+        .filter-group select {
+            width: 100%;
+            padding: 14px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            background: white;
+            font-size: 15px;
+        }
+
+        .table-wrapper {
+            overflow: auto;
+        }
+
+        .action-buttons {
+
+            display: flex;
+
+            gap: 8px;
+
+        }
+
+        .btn-success {
+
+            background: #16a34a;
+
+        }
+
+        .btn-danger {
+
+            background: #dc2626;
+
+        }
+        table{
+    width:100%;
+    min-width:900px;
+    border-collapse:collapse;
+}
+
+.table-wrapper{
+    overflow-x:auto;
+}
+    </style>
+    <link rel="stylesheet" href="mobile_fix.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+
+<body>
+
+    <!-- SIDEBAR -->
+
+    <div class="sidebar">
+
+        <div class="logo">
+
+            <h2>AMS Teacher</h2>
+
+            <p>Talisay City College</p>
+
+        </div>
+
+        <div class="menu">
+
+            <a href="teacher_dashboard.html">
+                <i class="fa-solid fa-house"></i>
+                Dashboard
+            </a>
+
+            <a href="teacher_manage_students.html">
+                <i class="fa-solid fa-users"></i>
+                Manage Students
+            </a>
+
+            <a href="teacher_manage_subjects.html" class="active">
+                <i class="fa-solid fa-book"></i>
+                Manage Subjects
+            </a>
+
+            <a href="teacher_student_status.html">
+                <i class="fa-solid fa-clipboard-check"></i>
+                Student Status
+            </a>
+
+            <a href="teacher_profile.html">
+                <i class="fa-solid fa-user"></i>
+                Profile
+            </a>
+
+            <a href="login.html">
+                <i class="fa-solid fa-right-from-bracket"></i>
+                Logout
+            </a>
+
+        </div>
+
+    </div>
+    <!-- MAIN -->
+    <div class="main">
+
+        <div class="table-section">
+
+            <div class="section-header">
+
+                <h2>Manage Subject Requirements</h2>
+
+                <p>
+                    Add missing requirements and upload instructions
+                </p>
+
+            </div>
+
+            <!-- FILTERS -->
+
+            <div class="filters">
+                <div class="filter-group">
+                    <label for="yearSelect">Year Level</label>
+                    <select id="yearSelect">
+                        <option value="">Year Level</option>
+                    </select>
+                </div>
+
+                <div class="filter-group">
+                    <label for="departmentSelect">Department</label>
+                    <select id="departmentSelect">
+                        <option value="">Department</option>
+                    </select>
+                </div>
+
+                <div class="filter-group">
+                    <label for="majorSelect">Major</label>
+                    <select id="majorSelect">
+                        <option value="">Major</option>
+                    </select>
+                </div>
+
+                <div class="filter-group">
+                    <label for="subjectSelect">Subject</label>
+                    <select id="subjectSelect">
+                        <option value="">Subject</option>
+                    </select>
+                </div>
+
+                <div class="filter-group">
+                    <label for="sectionSelect">Section</label>
+                    <select id="sectionSelect">
+                        <option value="">Section</option>
+                    </select>
+                </div>
+            </div>
+           <div class="table-section">
+
+<div class="section-header">
+
+<h2>Student Requirements</h2>
+
+<p>
+Manage student requirements and instructions
+</p>
+
+</div>
+
+<table>
+
+<thead>
+
+<tr>
+
+<th>Student Name</th>
+<th>Requirements</th>
+<th>Action</th>
+
+</tr>
+
+</thead>
+
+<tbody id="studentsTable">
+
+<tr>
+
+<td colspan="4" class="empty">
+
+Select Subject and Section
+
+</td>
+
+</tr>
+
+</tbody>
+
+</table>
+
+</div>
+
+        <div class="modal" id="requirementModal">
+
+            <div class="modal-content">
+
+                <div class="modal-header">
+
+                    <h3>Add Requirement</h3>
+
+                    <button class="close-btn" onclick="closeRequirementModal()">
+
+                        X
+
+                    </button>
+
+                </div>
+
+                <div class="modal-body">
+
+                    <input type="hidden" id="studentId">
+
+                    <input type="text" id="requirementTitle" placeholder="Project Name">
+
+                    <textarea id="requirementDescription" rows="5" placeholder="Instruction"></textarea>
+
+                    <input type="date" id="requirementDeadline" style="margin-top:12px; padding:12px; border:1px solid #dbe4f0; border-radius:12px; width:100%;" placeholder="Deadline">
+
+                    <input type="file" id="requirementFile" style="margin-top:12px; padding:12px; border:1px solid #dbe4f0; border-radius:12px; width:100%;">
+
+                    <button class="btn" onclick="saveRequirement()">
+
+                        Save Requirement
+
+                    </button>
+
+                </div>
+
+            </div>
+
+        </div>
+        <div class="modal" id="uploadModal">
+
+            <div class="modal-content">
+
+                <div class="modal-header">
+
+                    <h3>Upload Instruction File</h3>
+
+                    <button class="close-btn" onclick="closeUploadModal()">
+
+                        X
+
+                    </button>
+
+                </div>
+
+                <div class="modal-body">
+
+                    <input type="file" id="instructionFile">
+
+                    <button class="btn" onclick="uploadInstruction()">
+
+                        Upload File
+
+                    </button>
+
+                </div>
+
+            </div>
+
+        </div>
+    </div>
+        <script>
+            const SUPABASE_URL = 'https://nrqrsolfowebujogawti.supabase.co';
+            const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5ycXJzb2xmb3dlYnVqb2dhd3RpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkyODE2NjksImV4cCI6MjA5NDg1NzY2OX0.XcawTf9niOIZbG0hBTtwSXjySWfdVl3LAClbWdZmfl8';
+            const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+            let teacherId = null;
+            let teacherEmail = '';
+
+            async function loadTeacher() {
+                const { data, error } = await supabaseClient
+                    .from('teachers')
+                    .select(`teacher_id, users!teachers_user_id_fkey(email)`);
+
+                if (error) {
+                    console.error(error);
+                    showAlert('error', 'Error', 'Unable to load teacher profile');
+                    return;
+                }
+
+                const teacher = data?.find(t => t.users?.email?.toLowerCase() === teacherEmail?.toLowerCase());
+                if (teacher) teacherId = teacher.teacher_id;
+            }
+
+            async function loadYears() {
+                const yearSelect = document.getElementById('yearSelect');
+                yearSelect.innerHTML = '<option value="">Year Level</option>';
+                ['1st Year', '2nd Year', '3rd Year', '4th Year'].forEach(year => {
+                    yearSelect.innerHTML += `<option value="${year}">${year}</option>`;
+                });
+            }
+
+            async function loadDepartments(yearLevel) {
+                const departmentSelect = document.getElementById('departmentSelect');
+                const majorSelect = document.getElementById('majorSelect');
+                const subjectSelect = document.getElementById('subjectSelect');
+                const sectionSelect = document.getElementById('sectionSelect');
+
+                departmentSelect.innerHTML = '<option value="">Department</option>';
+                majorSelect.innerHTML = '<option value="">Major</option>';
+                subjectSelect.innerHTML = '<option value="">Subject</option>';
+                sectionSelect.innerHTML = '<option value="">Section</option>';
+
+                if (!teacherId || !yearLevel) return;
+
+                const { data, error } = await supabaseClient
+                    .from('teacher_subject_assignments')
+                    .select(`
+                        subject_id,
+                        subjects(
+                            subject_id,
+                            year_level,
+                            major_id,
+                            majors(
+                                major_id,
+                                major_name,
+                                department_id,
+                                departments(
+                                    department_id,
+                                    department_name
+                                )
+                            )
+                        )
+                    `)
+                    .eq('teacher_id', teacherId);
+
+                if (error) {
+                    console.error(error);
+                    showAlert('error', 'Error', 'Unable to load departments');
+                    return;
+                }
+
+                const departments = {};
+                data?.forEach(item => {
+                    const subject = item.subjects;
+                    if (!subject || subject.year_level !== yearLevel) return;
+                    const department = subject.majors?.departments;
+                    if (department) {
+                        departments[department.department_id] = department;
+                    }
+                });
+
+                Object.values(departments).forEach(dep => {
+                    departmentSelect.innerHTML += `<option value="${dep.department_id}">${dep.department_name}</option>`;
+                });
+            }
+
+            async function loadMajors(departmentId) {
+                const majorSelect = document.getElementById('majorSelect');
+                const subjectSelect = document.getElementById('subjectSelect');
+                const sectionSelect = document.getElementById('sectionSelect');
+                majorSelect.innerHTML = '<option value="">Major</option>';
+                subjectSelect.innerHTML = '<option value="">Subject</option>';
+                sectionSelect.innerHTML = '<option value="">Section</option>';
+
+                const yearLevel = document.getElementById('yearSelect').value;
+                if (!departmentId || !yearLevel) return;
+
+                const { data, error } = await supabaseClient
+                    .from('teacher_subject_assignments')
+                    .select(`
+                        subject_id,
+                        subjects(
+                            subject_id,
+                            year_level,
+                            major_id,
+                            majors(
+                                major_id,
+                                major_name,
+                                department_id
+                            )
+                        )
+                    `)
+                    .eq('teacher_id', teacherId);
+
+                if (error) {
+                    console.error(error);
+                    showAlert('error', 'Error', 'Unable to load majors');
+                    return;
+                }
+
+                const majors = {};
+                data?.forEach(item => {
+                    const subject = item.subjects;
+                    if (!subject || subject.year_level !== yearLevel) return;
+                    if (String(subject.majors?.department_id) !== String(departmentId)) return;
+                    const major = subject.majors;
+                    if (major) {
+                        majors[major.major_id] = major;
+                    }
+                });
+
+                Object.values(majors).forEach(major => {
+                    majorSelect.innerHTML += `<option value="${major.major_id}">${major.major_name}</option>`;
+                });
+            }
+
+            async function loadSubjects(majorId) {
+                const subjectSelect = document.getElementById('subjectSelect');
+                const sectionSelect = document.getElementById('sectionSelect');
+                subjectSelect.innerHTML = '<option value="">Subject</option>';
+                sectionSelect.innerHTML = '<option value="">Section</option>';
+
+                const yearLevel = document.getElementById('yearSelect').value;
+                if (!majorId || !yearLevel) return;
+
+                const { data, error } = await supabaseClient
+                    .from('teacher_subject_assignments')
+                    .select(`
+                        subject_id,
+                        subjects(
+                            subject_id,
+                            subject_code,
+                            subject_name,
+                            major_id,
+                            year_level
+                        )
+                    `)
+                    .eq('teacher_id', teacherId);
+
+                if (error) {
+                    console.error(error);
+                    showAlert('error', 'Error', 'Unable to load subjects');
+                    return;
+                }
+
+                const subjects = {};
+                data?.forEach(item => {
+                    const subject = item.subjects;
+                    if (!subject || subject.year_level !== yearLevel) return;
+                    if (String(subject.major_id) !== String(majorId)) return;
+                    subjects[subject.subject_id] = subject;
+                });
+
+                Object.values(subjects).forEach(subject => {
+                    subjectSelect.innerHTML += `<option value="${subject.subject_id}">${subject.subject_code} - ${subject.subject_name}</option>`;
+                });
+            }
+
+            async function loadSections(subjectId) {
+                const sectionSelect = document.getElementById('sectionSelect');
+                sectionSelect.innerHTML = '<option value="">Section</option>';
+                if (!subjectId) return;
+
+                const { data, error } = await supabaseClient
+                    .from('teacher_subject_assignments')
+                    .select(`
+                        assignment_id,
+                        teacher_section_assignments(
+                            section_id,
+                            sections(
+                                section_id,
+                                section_name
+                            )
+                        )
+                    `)
+                    .eq('teacher_id', teacherId)
+                    .eq('subject_id', subjectId);
+
+                if (error) {
+                    console.error(error);
+                    showAlert('error', 'Error', 'Unable to load sections');
+                    return;
+                }
+
+                const sections = {};
+                data?.forEach(assign => {
+                    assign.teacher_section_assignments?.forEach(sec => {
+                        if (sec?.sections) {
+                            sections[sec.sections.section_id] = sec.sections;
+                        }
+                    });
+                });
+
+                Object.values(sections).forEach(sec => {
+                    sectionSelect.innerHTML += `<option value="${sec.section_id}">${sec.section_name}</option>`;
+                });
+            }
+
+            async function loadStudents() {
+                const sectionId = document.getElementById('sectionSelect').value;
+                const subjectId = document.getElementById('subjectSelect').value;
+                const studentsTable = document.getElementById('studentsTable');
+
+                if (!sectionId || !subjectId) {
+                    studentsTable.innerHTML = `
+                        <tr>
+                            <td colspan="3">Select Subject and Section</td>
+                        </tr>`;
+                    return;
+                }
+
+                const { data: students, error } = await supabaseClient
+                    .from('students')
+                    .select('*')
+                    .eq('section_id', sectionId);
+
+                if (error) {
+                    return showAlert('error', 'Error', error.message || 'Unable to load students');
+                }
+
+                if (!students?.length) {
+                    studentsTable.innerHTML = `
+                        <tr>
+                            <td colspan="3">No students found</td>
+                        </tr>`;
+                    return;
+                }
+
+                // fetch instructor uploaded files for this subject (once)
+                const { data: uploadedFiles } = await supabaseClient
+                    .from('subject_instruction_files')
+                    .select('*')
+                    .eq('subject_id', subjectId)
+                    .eq('teacher_id', teacherId);
+
+                let html = '';
+                for (const student of students) {
+                    const { data: requirements } = await supabaseClient
+                        .from('student_requirements')
+                        .select('*')
+                        .eq('student_id', student.student_id)
+                        .eq('subject_id', subjectId);
+
+                    const requirementList = requirements?.length
+                        ? requirements.map(r => {
+                            const description = r.requirement_description?.trim();
+                            const deadlineText = r.deadline ? `<div style="color:#334155;margin-top:4px;"><strong>Deadline:</strong> ${new Date(r.deadline).toLocaleDateString()}</div>` : '';
+                            const requirementFiles = (uploadedFiles || []).filter(f => String(f.requirement_id) === String(r.requirement_id));
+                            const requirementFilesHtml = requirementFiles.length
+                                ? `<div style="margin-top:8px; padding:10px; background-color:#eef2ff; border-radius:8px; border:1px solid #c7d2fe;">
+                                        <div style="font-size:13px; color:#1d4ed8; font-weight:600; margin-bottom:6px;">Attached Files</div>
+                                        ${requirementFiles.map(f => `<div style="margin-bottom:6px;"><a href="${f.file_url}" target="_blank" style="color:#2563eb; text-decoration:none;">📎 ${f.file_name}</a></div>`).join('')}
+                                    </div>`
+                                : '';
+                            return `<div style="margin-bottom:10px; padding:12px; background-color:#f1f5f9; border-radius:8px; border:1px solid #dbe4f0;">
+                                        <div style="display:flex; justify-content:space-between; align-items:start; gap:10px;">
+                                            <div style="flex:1; min-width:0;">
+                                                <strong>${r.requirement_title}</strong>
+                                                ${description ? `<div style="color:#475569;margin-top:4px;">${description}</div>` : ''}
+                                                ${deadlineText}
+                                                ${requirementFilesHtml}
+                                            </div>
+                                            <button class="btn btn-danger" onclick="deleteRequirement(${r.requirement_id})" style="margin-left:10px; white-space:nowrap; padding:6px 12px; font-size:12px;">Delete</button>
+                                        </div>
+                                    </div>`;
+                        }).join('')
+                        : "<span style='color:#94a3b8'>No Requirements</span>";
+
+                        // Create files column grouped by requirement
+                        const requirementMap = {};
+                        requirements?.forEach(r => {
+                            requirementMap[r.requirement_id] = r.requirement_title;
+                        });
+
+                        const studentRequirementFiles = (uploadedFiles || []).filter(f => {
+                            return String(f.student_id) === String(student.student_id) && f.requirement_id;
+                        });
+
+                        const filesHtml = studentRequirementFiles.length
+                            ? studentRequirementFiles.map(f => {
+                                const reqTitle = requirementMap[f.requirement_id] || 'Unknown';
+                                return `<div style="margin-bottom:8px; padding:8px; background-color:#f8fafc; border-left:3px solid #0284c7; border-radius:4px;">
+                                    <div style="font-size:12px; color:#475569; font-weight:500;">${reqTitle}</div>
+                                    <a href="${f.file_url}" target="_blank" style="color:#0284c7; text-decoration:none; font-size:13px;">📎 ${f.file_name}</a>
+                                </div>`;
+                            }).join('')
+                            : "";
+
+                    html += `
+                        <tr>
+                            <td>${student.last_name.charAt(0).toUpperCase() + student.last_name.slice(1)}, ${student.first_name.charAt(0).toUpperCase() + student.first_name.slice(1)}</td>
+                            <td>${requirementList}</td>
+                            <td>
+                                <div class="action-buttons">
+                                    <button class="btn" onclick="openRequirementModal(${student.student_id})">Add</button>
+                                </div>
+                            </td>
+                        </tr>`;
+                }
+
+                studentsTable.innerHTML = html;
+            }
+
+            async function saveRequirement() {
+                const studentId = document.getElementById('studentId').value;
+                const subjectId = document.getElementById('subjectSelect').value;
+                const title = document.getElementById('requirementTitle').value.trim();
+                const description = document.getElementById('requirementDescription').value.trim();
+                const deadline = document.getElementById('requirementDeadline').value;
+                const file = document.getElementById('requirementFile').files[0];
+
+                if (!studentId || !subjectId || !title) {
+                    return showAlert('warning', 'Validation', 'Please select a student and enter a title.');
+                }
+
+                const { data: insertedData, error } = await supabaseClient
+                    .from('student_requirements')
+                    .insert({
+                        student_id: studentId,
+                        subject_id: subjectId,
+                        requirement_title: title,
+                        requirement_description: description,
+                        deadline: deadline || null
+                    })
+                    .select('requirement_id');
+
+                if (error) {
+                    console.error("INSERT ERROR:", error);
+                    showAlert(
+                        'error',
+                        'Error',
+                        `${error.message} | Table: student_requirements`
+                    );
+                    return;
+                }
+
+                const requirementId = insertedData?.[0]?.requirement_id;
+
+                // Upload file if provided
+                if (file && requirementId) {
+                    const fileName = `${Date.now()}_${file.name}`;
+                    const bucketCandidates = ['instruction-files'];
+                    let uploadError = null;
+                    let usedBucket = null;
+
+                    for (const bucketName of bucketCandidates) {
+                        const { error } = await supabaseClient.storage
+                            .from(bucketName)
+                            .upload(fileName, file, { cacheControl: '3600', upsert: false });
+
+                        if (!error) {
+                            usedBucket = bucketName;
+                            uploadError = null;
+                            break;
+                        }
+
+                        uploadError = error;
+                        if (error.message?.toLowerCase().includes('bucket not found')) {
+                            continue;
+                        }
+                    }
+
+                    if (uploadError || !usedBucket) {
+                        console.error(uploadError);
+                        showAlert('warning', 'File Upload', 'Requirement saved, but file upload failed. You can upload later.');
+                        closeRequirementModal();
+                        await loadStudents();
+                        return;
+                    }
+
+                    const { data: publicUrlData } = supabaseClient.storage
+                        .from(usedBucket)
+                        .getPublicUrl(fileName);
+
+                    if (!publicUrlData?.publicUrl) {
+                        showAlert('warning', 'File Upload', 'Requirement saved, but could not get file URL.');
+                        closeRequirementModal();
+                        await loadStudents();
+                        return;
+                    }
+
+                    const { error: fileError } = await supabaseClient
+                        .from('subject_instruction_files')
+                        .insert({
+                            subject_id: subjectId,
+                            teacher_id: teacherId,
+                            file_name: file.name,
+                            file_url: publicUrlData.publicUrl,
+                            student_id: studentId,
+                            requirement_id: requirementId
+                        });
+
+                    if (fileError) {
+                        console.error("File record error:", fileError);
+                        showAlert('warning', 'File Save', 'Requirement saved, but could not link file to student.');
+                    }
+                }
+
+                showAlert('success', 'Success', 'Requirement Added');
+                closeRequirementModal();
+                await loadStudents();
+            }
+
+            async function deleteRequirement(requirementId) {
+                showConfirmModal('Delete', 'Delete this requirement and its files?', async () => {
+                    const { error: requirementError } = await supabaseClient
+                        .from('student_requirements')
+                        .delete()
+                        .eq('requirement_id', requirementId);
+
+                    if (requirementError) {
+                        return showAlert('error', 'Error', requirementError.message || 'Unable to delete requirement');
+                    }
+
+                    const { error: fileError } = await supabaseClient
+                        .from('subject_instruction_files')
+                        .delete()
+                        .eq('requirement_id', requirementId);
+
+                    if (fileError) {
+                        return showAlert('error', 'Error', fileError.message || 'Unable to delete files');
+                    }
+
+                    showAlert('success', 'Deleted', 'Requirement and files removed');
+                    await loadStudents();
+                });
+            }
+
+            async function uploadInstruction() {
+                const file = document.getElementById('instructionFile').files[0];
+                const subjectId = selectedSubjectId || document.getElementById('subjectSelect').value;
+
+                if (!file || !subjectId) {
+                    return showAlert('warning', 'Validation', 'Please choose a subject and file before uploading.');
+                }
+
+                if (!teacherId) {
+                    return showAlert('error', 'Error', 'Teacher profile not loaded. Please reload and try again.');
+                }
+
+                const fileName = `${Date.now()}_${file.name}`;
+                const bucketCandidates = ['instruction-files'];
+                let uploadError = null;
+                let usedBucket = null;
+
+                for (const bucketName of bucketCandidates) {
+                    const { error } = await supabaseClient.storage
+                        .from(bucketName)
+                        .upload(fileName, file, { cacheControl: '3600', upsert: false });
+
+                    if (!error) {
+                        usedBucket = bucketName;
+                        uploadError = null;
+                        break;
+                    }
+
+                    uploadError = error;
+                    if (error.message?.toLowerCase().includes('bucket not found')) {
+                        continue;
+                    }
+                }
+
+                if (uploadError || !usedBucket) {
+                    console.error(uploadError);
+                    return showAlert('error', 'Upload Failed', uploadError?.message || 'Unable to upload file.');
+                }
+
+                const { data: publicUrlData } = supabaseClient.storage
+                    .from(usedBucket)
+                    .getPublicUrl(fileName);
+
+                if (!publicUrlData?.publicUrl) {
+                    return showAlert('error', 'Error', 'Unable to get file URL after upload.');
+                }
+
+                const insertPayload = {
+                    subject_id: subjectId,
+                    teacher_id: teacherId,
+                    file_name: file.name,
+                    file_url: publicUrlData.publicUrl
+                };
+
+                if (selectedStudentId) insertPayload.student_id = selectedStudentId;
+
+                const { error: insertError } = await supabaseClient
+                    .from('subject_instruction_files')
+                    .insert(insertPayload);
+
+                if (insertError) {
+                    console.error(insertError);
+                    return showAlert('error', 'Error', insertError.message || 'Unable to save instruction file');
+                }
+
+                showAlert('success', 'Uploaded', 'Instruction file saved');
+                // reset selected ids and file input, then refresh the list
+                selectedSubjectId = null;
+                selectedStudentId = null;
+                const input = document.getElementById('instructionFile');
+                if (input) input.value = '';
+
+                // reload students to show the new file immediately
+                try {
+                    await loadStudents();
+                } catch (e) {
+                    console.error('Failed to reload students after upload', e);
+                }
+
+                closeUploadModal();
+            }
+
+            window.onload = async () => {
+                const { data: { user }, error } = await supabaseClient.auth.getUser();
+                if (error) {
+                    console.error(error);
+                }
+
+                if (user) {
+                    teacherEmail = user.email;
+                    await loadTeacher();
+                }
+
+                await loadYears();
+            };
+
+            document.getElementById('yearSelect').addEventListener('change', async function () {
+                const yearLevel = this.value;
+                await loadDepartments(yearLevel);
+            });
+
+            document.getElementById('departmentSelect').addEventListener('change', async function () {
+                await loadMajors(this.value);
+            });
+
+            document.getElementById('majorSelect').addEventListener('change', async function () {
+                await loadSubjects(this.value);
+            });
+
+            document.getElementById('subjectSelect').addEventListener('change', async function () {
+                await loadSections(this.value);
+                if (document.getElementById('sectionSelect').value) await loadStudents();
+            });
+
+            document.getElementById('sectionSelect').addEventListener('change', async function () {
+                if (document.getElementById('subjectSelect').value) await loadStudents();
+            });
+        </script>
+        <!-- ================= AMS ALERT ================= -->
+
+        <div class="ams-alert" id="amsAlert">
+
+            <div class="alert-icon" id="alertIcon">
+                <i class="fa-solid fa-circle-check"></i>
+            </div>
+
+            <div class="alert-content">
+
+                <h3 id="alertTitle">
+                    Success
+                </h3>
+
+                <p id="alertMessage">
+                    Message here
+                </p>
+
+            </div>
+
+            <button class="alert-close" onclick="closeAlert()">
+
+                <i class="fa-solid fa-xmark"></i>
+
+            </button>
+
+        </div>
+        <!-- =========================================================
+     CUSTOM CONFIRM MODAL
+========================================================= -->
+
+        <div class="confirm-modal-overlay" id="confirmModal">
+
+            <div class="confirm-modal">
+
+                <!-- ICON -->
+
+                <div class="confirm-icon" id="confirmIcon">
+
+                    <i class="fa-solid fa-triangle-exclamation"></i>
+
+                </div>
+
+                <!-- TITLE -->
+
+                <h2 id="confirmTitle">
+                    Confirmation
+                </h2>
+
+                <!-- MESSAGE -->
+
+                <p id="confirmMessage">
+                    Are you sure?
+                </p>
+
+                <!-- BUTTONS -->
+
+                <div class="confirm-buttons">
+
+                    <button class="cancel-btn" onclick="closeConfirmModal()">
+
+                        Cancel
+
+                    </button>
+
+                    <button class="confirm-btn" id="confirmActionBtn">
+
+                        Confirm
+
+                    </button>
+
+                </div>
+
+            </div>
+
+        </div>
+
+        <script>
+
+            /* ================= ALERT FUNCTION ================= */
+
+            function showAlert(type, title, message) {
+
+                const alertBox =
+                    document.getElementById('amsAlert');
+
+                const alertTitle =
+                    document.getElementById('alertTitle');
+
+                const alertMessage =
+                    document.getElementById('alertMessage');
+
+                const alertIcon =
+                    document.getElementById('alertIcon');
+
+                // RESET CLASSES
+
+                alertBox.className = 'ams-alert';
+
+                // TYPE
+
+                alertBox.classList.add(type);
+
+                // CONTENT
+
+                alertTitle.innerText = title;
+
+                alertMessage.innerText = message;
+
+                // ICONS
+
+                if (type === 'success') {
+
+                    alertIcon.innerHTML =
+                        '<i class="fa-solid fa-circle-check"></i>';
+
+                }
+
+                else if (type === 'error') {
+
+                    alertIcon.innerHTML =
+                        '<i class="fa-solid fa-circle-xmark"></i>';
+
+                }
+
+                else if (type === 'warning') {
+
+                    alertIcon.innerHTML =
+                        '<i class="fa-solid fa-triangle-exclamation"></i>';
+
+                }
+
+                // SHOW
+
+                setTimeout(() => {
+
+                    alertBox.classList.add('show');
+
+                }, 100);
+
+                // AUTO CLOSE
+
+                setTimeout(() => {
+
+                    closeAlert();
+
+                }, 4000);
+
+            }
+
+            /* CLOSE ALERT */
+
+            function closeAlert() {
+
+                document
+                    .getElementById('amsAlert')
+                    .classList.remove('show');
+
+            }
+            /* =========================================================
+               CUSTOM CONFIRM MODAL
+            ========================================================= */
+
+            function showConfirmModal(
+
+                title,
+                message,
+                callback
+
+            ) {
+
+                document.getElementById(
+                    'confirmTitle'
+                ).innerText = title;
+
+                document.getElementById(
+                    'confirmMessage'
+                ).innerText = message;
+
+                document.getElementById(
+                    'confirmModal'
+                ).classList.add('show');
+
+                document.getElementById(
+                    'confirmActionBtn'
+                ).onclick = () => {
+
+                    closeConfirmModal();
+
+                    callback();
+
+                };
+
+            }
+
+            /* CLOSE MODAL */
+
+            function closeConfirmModal() {
+
+                document.getElementById(
+                    'confirmModal'
+                ).classList.remove('show');
+
+            }
+            function openRequirementModal(studentId) {
+
+                document.getElementById(
+                    "studentId"
+                ).value = studentId;
+
+                document.getElementById(
+                    "requirementModal"
+                ).style.display = "flex";
+
+            }
+
+            function closeRequirementModal() {
+                document.getElementById("requirementModal").style.display = "none";
+                // Clear form fields
+                document.getElementById('requirementTitle').value = '';
+                document.getElementById('requirementDescription').value = '';
+                document.getElementById('requirementDeadline').value = '';
+                document.getElementById('requirementFile').value = '';
+                document.getElementById('studentId').value = '';
+            }
+            let selectedSubjectId = null;
+            let selectedStudentId = null;
+
+            function openUploadModal(subjectId, studentId) {
+
+                selectedSubjectId = subjectId;
+                selectedStudentId = studentId;
+
+                document.getElementById(
+                    "uploadModal"
+                ).style.display = "flex";
+
+            }
+
+            function closeUploadModal() {
+
+                document.getElementById(
+                    "uploadModal"
+                ).style.display = "none";
+
+            }
+        </script>
+        <script>
+
+            document
+                .getElementById("sectionSelect")
+                .addEventListener("change", async () => {
+
+                    const subjectId =
+                        document.getElementById(
+                            "subjectSelect"
+                        ).value;
+
+                    const sectionId =
+                        document.getElementById(
+                            "sectionSelect"
+                        ).value;
+
+                    if (!subjectId || !sectionId) {
+                        return;
+                    }
+
+                    await loadStudents();
+
+                });
+
+            document
+                .getElementById("subjectSelect")
+                .addEventListener("change", async () => {
+
+                    const subjectId =
+                        document.getElementById(
+                            "subjectSelect"
+                        ).value;
+
+                    const sectionId =
+                        document.getElementById(
+                            "sectionSelect"
+                        ).value;
+
+                    if (!subjectId || !sectionId) {
+                        return;
+                    }
+
+                    await loadStudents();
+
+                });
+
+        </script>
+</body>
+
+</html>

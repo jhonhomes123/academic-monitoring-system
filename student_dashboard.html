@@ -1,0 +1,927 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Student Dashboard</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
+<link rel="stylesheet"
+href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+
+
+<style>
+
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+    font-family:'Inter',sans-serif;
+}
+
+:root{
+    --primary:#0b3d91;
+    --secondary:#1f6bff;
+    --light:#f4f7fc;
+    --white:#ffffff;
+    --text:#1e293b;
+    --gray:#64748b;
+    --border:#dbe4f0;
+    --success:#16a34a;
+    --warning:#f59e0b;
+    --danger:#dc2626;
+}
+
+body{
+    background:var(--light);
+    display:flex;
+}
+
+/* SIDEBAR */
+
+.sidebar{
+    width:270px;
+    height:100vh;
+    background:var(--primary);
+    color:white;
+    position:fixed;
+    left:0;
+    top:0;
+    padding:30px 20px;
+    overflow-y:auto;
+}
+
+.logo{
+    margin-bottom:40px;
+}
+
+.logo h2{
+    font-size:24px;
+}
+
+.logo p{
+    font-size:13px;
+    opacity:.8;
+    margin-top:5px;
+}
+
+.menu{
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+}
+
+.menu a{
+    text-decoration:none;
+    color:white;
+    padding:14px;
+    border-radius:12px;
+    transition:.3s;
+    font-weight:500;
+}
+
+.menu a:hover,
+.menu a.active{
+    background:rgba(255,255,255,.15);
+}
+
+.menu i{
+    margin-right:10px;
+}
+
+/* MAIN */
+
+.main{
+    margin-left:270px;
+    width:calc(100% - 270px);
+    padding:30px;
+}
+
+.content-section{
+    display:none;
+}
+
+.active-section{
+    display:block;
+}
+
+/* TOPBAR */
+
+.topbar{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    margin-bottom:30px;
+    flex-wrap:wrap;
+    gap:20px;
+}
+
+.welcome-label{
+    color:var(--gray);
+    font-size:13px;
+    text-transform:uppercase;
+    letter-spacing:2px;
+    margin-bottom:10px;
+}
+
+.topbar h1{
+    color:var(--primary);
+    margin-bottom:8px;
+}
+
+.student-info{
+    color:var(--gray);
+    font-size:14px;
+}
+
+.profile-mini{
+    display:flex;
+    align-items:center;
+    gap:14px;
+    background:white;
+    padding:14px 18px;
+    border-radius:16px;
+    border:1px solid var(--border);
+}
+
+.profile-mini img{
+    width:50px;
+    height:50px;
+    border-radius:50%;
+}
+
+/* CARDS */
+
+.dashboard-grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
+    gap:20px;
+    margin-bottom:30px;
+}
+
+.card{
+    background:white;
+    padding:25px;
+    border-radius:20px;
+    border:1px solid var(--border);
+    box-shadow:0 10px 25px rgba(0,0,0,0.04);
+}
+
+.card h3{
+    color:var(--gray);
+    font-size:15px;
+    margin-bottom:15px;
+}
+
+.card h2{
+    font-size:34px;
+    color:var(--primary);
+}
+
+.pass-text{
+    color:var(--success);
+    font-weight:700;
+}
+
+.warning-text{
+    color:var(--warning);
+    font-weight:700;
+}
+
+.danger-text{
+    color:var(--danger);
+    font-weight:700;
+}
+
+/* TABLES */
+
+.table-section{
+    background:white;
+    border-radius:20px;
+    padding:25px;
+    border:1px solid var(--border);
+    margin-bottom:30px;
+    overflow-x:auto;
+}
+
+.table-section h2{
+    color:var(--primary);
+    margin-bottom:20px;
+}
+
+table{
+    width:100%;
+    border-collapse:collapse;
+}
+
+table th{
+    background:#eef4ff;
+    color:var(--primary);
+    padding:14px;
+    text-align:left;
+    font-size:14px;
+}
+
+table td{
+    padding:14px;
+    border-bottom:1px solid #edf2f7;
+    font-size:14px;
+}
+
+table tr:hover{
+    background:#f8fbff;
+}
+
+/* SUBJECT PANEL */
+
+.subject-panel{
+    background:white;
+    border-radius:20px;
+    padding:25px;
+    border:1px solid var(--border);
+}
+
+.subject-panel h2{
+    color:var(--primary);
+    margin-bottom:20px;
+}
+
+.subject-list{
+    display:flex;
+    flex-wrap:wrap;
+    gap:15px;
+}
+
+.subject-box{
+    padding:14px 18px;
+    background:#edf4ff;
+    border-radius:12px;
+    color:var(--primary);
+    font-weight:600;
+}
+
+/* BUTTON */
+
+.view-btn{
+    padding:10px 14px;
+    border:none;
+    border-radius:10px;
+    background:var(--primary);
+    color:white;
+    cursor:pointer;
+    font-weight:600;
+}
+
+/* MODAL */
+
+.modal{
+    position:fixed;
+    inset:0;
+    background:rgba(0,0,0,.5);
+    display:none;
+    justify-content:center;
+    align-items:center;
+    z-index:999;
+    padding:20px;
+}
+
+.modal-content{
+    background:white;
+    width:100%;
+    max-width:700px;
+    border-radius:20px;
+    overflow:hidden;
+}
+
+.modal-header{
+    padding:20px;
+    background:var(--primary);
+    color:white;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+}
+
+.modal-body{
+    padding:25px;
+}
+
+.modal-body img{
+    width:100%;
+    border-radius:14px;
+}
+
+.close-btn{
+    background:white;
+    border:none;
+    width:35px;
+    height:35px;
+    border-radius:50%;
+    cursor:pointer;
+    color:var(--primary);
+    font-weight:700;
+}
+
+/* SECTION HEADER */
+
+.section-header{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    margin-bottom:25px;
+    flex-wrap:wrap;
+    gap:15px;
+}
+
+.section-header h2{
+    color:var(--primary);
+    font-size:28px;
+}
+
+.section-header p{
+    color:var(--gray);
+    font-size:14px;
+}
+
+/* SMALL SUMMARY CARDS */
+
+.small-grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(180px,1fr));
+    gap:18px;
+    margin-bottom:25px;
+}
+
+.small-card{
+    background:white;
+    border-radius:18px;
+    padding:20px;
+    border:1px solid var(--border);
+    box-shadow:0 8px 20px rgba(0,0,0,.04);
+}
+
+.small-card h4{
+    color:var(--gray);
+    margin-bottom:10px;
+    font-size:14px;
+}
+
+.small-card h3{
+    color:var(--primary);
+    font-size:28px;
+}
+
+/* ACTIVITY BOX */
+
+.activity-box{
+    background:white;
+    border-radius:20px;
+    padding:25px;
+    border:1px solid var(--border);
+    margin-bottom:30px;
+}
+
+.activity-item{
+    padding:15px 0;
+    border-bottom:1px solid #edf2f7;
+}
+
+.activity-item:last-child{
+    border-bottom:none;
+}
+
+.activity-item p{
+    color:var(--text);
+    font-weight:600;
+}
+
+.activity-item span{
+    color:var(--gray);
+    font-size:13px;
+}
+
+/* PROGRESS BAR */
+
+.progress-box{
+    margin-bottom:18px;
+}
+
+.progress-box p{
+    margin-bottom:8px;
+    font-weight:600;
+    color:var(--text);
+}
+
+.progress-bar{
+    width:100%;
+    height:12px;
+    background:#e5e7eb;
+    border-radius:10px;
+    overflow:hidden;
+}
+
+.progress-fill{
+    height:100%;
+    background:linear-gradient(
+    90deg,
+    var(--primary),
+    var(--secondary)
+    );
+    border-radius:10px;
+}
+
+/* PROFILE CARD */
+
+.profile-card{
+    background:white;
+    border-radius:20px;
+    padding:30px;
+    border:1px solid var(--border);
+    text-align:center;
+    margin-bottom:25px;
+}
+
+.profile-card img{
+    width:120px;
+    height:120px;
+    border-radius:50%;
+    margin-bottom:15px;
+}
+
+.section-header{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    margin-bottom:20px;
+}
+
+.section-header p{
+    color:var(--gray);
+    font-size:14px;
+    margin-top:5px;
+}
+
+.small-grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(180px,1fr));
+    gap:20px;
+    margin-bottom:25px;
+}
+
+.small-card{
+    background:white;
+    border-radius:18px;
+    padding:20px;
+    border:1px solid var(--border);
+    box-shadow:0 10px 20px rgba(0,0,0,.04);
+}
+
+.small-card h4{
+    color:var(--gray);
+    margin-bottom:10px;
+}
+
+.small-card h3{
+    color:var(--primary);
+    font-size:28px;
+}
+
+.profile-wrapper{
+    display:grid;
+    grid-template-columns:300px 1fr;
+    gap:25px;
+}
+
+.profile-info-card{
+    background:white;
+    border-radius:20px;
+    padding:30px;
+    text-align:center;
+    border:1px solid var(--border);
+    height:fit-content;
+}
+
+.profile-info-card img{
+    width:120px;
+    height:120px;
+    border-radius:50%;
+    margin-bottom:15px;
+}
+
+.profile-info-card h2{
+    color:var(--primary);
+    margin-bottom:10px;
+}
+
+.profile-info-card p{
+    color:var(--gray);
+    font-size:14px;
+}
+
+.profile-details{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
+    gap:20px;
+}
+
+.info-box{
+    background:white;
+    border-radius:18px;
+    padding:20px;
+    border:1px solid var(--border);
+    box-shadow:0 8px 20px rgba(0,0,0,.04);
+}
+
+.info-box h4{
+    color:var(--gray);
+    font-size:13px;
+    margin-bottom:10px;
+}
+
+.info-box p{
+    color:var(--primary);
+    font-size:17px;
+    font-weight:700;
+}
+
+@media(max-width:900px){
+
+    .profile-wrapper{
+        grid-template-columns:1fr;
+    }
+
+}
+
+</style>
+<link rel="stylesheet" href="mobile_fix.css">
+</head>
+<body>
+
+<!-- SIDEBAR -->
+
+<div class="sidebar">
+
+    <div class="logo">
+        <h2>AMS Student</h2>
+        <p>Talisay City College</p>
+    </div>
+
+    <div class="menu">
+
+        <a href="student_dashboard.html" class="active nav-link">
+            <i class="fa-solid fa-house"></i>
+            Dashboard
+        </a>
+
+        <a href="student_subjects.html" class="nav-link">
+            <i class="fa-solid fa-book"></i>
+            My Subjects
+        </a>
+
+        <a href="student_academic.html" class="nav-link">
+            <i class="fa-solid fa-chart-column"></i>
+            Academic Status
+        </a>
+
+        <a href="student_requirements.html" class="nav-link">
+            <i class="fa-solid fa-file-lines"></i>
+            Missing Requirements
+        </a>
+
+        <a href="student_profile.html" class="nav-link">
+            <i class="fa-solid fa-user"></i>
+            Profile
+        </a>
+
+        <a href="login.html">
+            <i class="fa-solid fa-right-from-bracket"></i>
+            Logout
+        </a>
+
+</div>
+
+</div>
+
+<div class="main">
+
+    <!-- ================= DASHBOARD ================= -->
+
+    <div class="content-section active-section"
+    id="dashboardSection">
+
+        <!-- TOPBAR -->
+
+        <div class="topbar">
+
+            <div>
+
+                <p class="welcome-label">
+                    Student Academic Monitoring
+                </p>
+
+                <h1 id="welcomeName">Loading...</h1>
+
+                <span class="student-info" id="studentSection">Loading...</span>
+
+            </div>
+
+            <!-- profile-mini removed per design -->
+
+        </div>
+
+        <!-- SUMMARY CARDS -->
+
+        <div class="dashboard-grid">
+
+            <div class="card">
+                <h3>Total Subjects</h3>
+                <h2 id="totalSubjects">0</h2>
+            </div>
+
+            <div class="card">
+                <h3>Passed</h3>
+                <h2 class="pass-text" id="passedCount">0</h2>
+            </div>
+
+            <div class="card">
+                <h3>Incomplete</h3>
+                <h2 class="warning-text" id="incompleteCount">0</h2>
+            </div>
+
+            <div class="card">
+                <h3>Failed</h3>
+                <h2 class="danger-text" id="failedCount">0</h2>
+            </div>
+
+        </div>
+
+        <!-- SUBJECT SUMMARY -->
+
+        <div class="table-section">
+
+            <div class="section-header">
+
+                <div>
+                    <h2>Enrolled Subjects</h2>
+
+                    <p>
+                        Current subjects and instructor status
+                    </p>
+                </div>
+
+            </div>
+
+            <table>
+
+                <thead>
+
+                    <tr>
+                        <th>Subject</th>
+                        <th>Instructor</th>
+                        <th>Status</th>
+                    </tr>
+
+                </thead>
+
+                <tbody id="enrolledTableBody">
+                    <tr>
+                        <td colspan="3" class="empty">Loading enrolled subjects...</td>
+                    </tr>
+                </tbody>
+
+            </table>
+
+        </div>
+
+        <!-- RECENT REQUIREMENTS -->
+
+        <div class="table-section">
+
+            <div class="section-header">
+
+                <div>
+
+                    <h2>Recent Missing</h2>
+
+                    <p>
+                        Latest missing requirements (subject, title, deadline)
+                    </p>
+
+                </div>
+
+            </div>
+
+            <table>
+
+                <thead>
+
+                    <tr>
+                        <th>Subject</th>
+                        <th>Requirement</th>
+                        <th>Deadline</th>
+                    </tr>
+
+                </thead>
+
+                <tbody id="recentMissingBody">
+                    <tr>
+                        <td colspan="3" class="empty">Loading recent missing requirements...</td>
+                    </tr>
+                </tbody>
+
+            </table>
+
+        </div>
+
+    </div>
+
+</div>
+
+<!-- FILE MODAL -->
+
+<div class="modal" id="fileModal">
+
+    <div class="modal-content">
+
+        <div class="modal-header">
+
+            <h3>Teacher Attachment</h3>
+
+            <button class="close-btn"
+            onclick="closeModal()">
+                X
+            </button>
+
+        </div>
+
+        <div class="modal-body">
+
+            <p style="margin-bottom:15px;">
+                Sample attachment uploaded by the teacher.
+            </p>
+
+            <img src="https://picsum.photos/700/400"
+            alt="Attachment">
+
+        </div>
+
+    </div>
+
+</div>
+
+<script>
+
+function openModal(){
+
+    document.getElementById('fileModal')
+    .style.display='flex';
+
+}
+
+function closeModal(){
+
+    document.getElementById('fileModal')
+    .style.display='none';
+
+}
+
+window.onclick = function(event){
+
+    const modal =
+    document.getElementById('fileModal');
+
+    if(event.target === modal){
+
+        closeModal();
+
+    }
+
+}
+
+
+</script>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+const SUPABASE_URL = 'https://nrqrsolfowebujogawti.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5ycXJzb2xmb3dlYnVqb2dhd3RpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkyODE2NjksImV4cCI6MjA5NDg1NzY2OX0.XcawTf9niOIZbG0hBTtwSXjySWfdVl3LAClbWdZmfl8';
+const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+async function loadStudentDashboard() {
+    try {
+        const { data: { user }, error: userErr } = await supabaseClient.auth.getUser();
+        if (userErr || !user) {
+            console.error('Not logged in', userErr);
+            return;
+        }
+
+        const { data: student, error: studentError } = await supabaseClient
+            .from('students')
+            .select(`
+                student_id,
+                first_name,
+                last_name,
+                section_id,
+                sections(
+                    section_name,
+                    year_level,
+                    majors(major_name)
+                )
+            `)
+            .eq('user_id', user.id)
+            .maybeSingle();
+
+        if (studentError || !student) {
+            console.error('Student record not found', studentError);
+            return;
+        }
+
+        const studentId = student.student_id ?? student.id;
+
+        // Update welcome and section
+        const welcomeEl = document.getElementById('welcomeName');
+        const sectionEl = document.getElementById('studentSection');
+        if (welcomeEl) welcomeEl.textContent = `Welcome, ${student.first_name} ${student.last_name}`;
+        if (sectionEl) sectionEl.textContent = `${student.sections?.majors?.major_name || ''} ${student.sections?.year_level || ''} • ${student.sections?.section_name || ''}`;
+
+        // Load student grades and subjects
+        const { data: grades, error: gradesError } = await supabaseClient
+            .from('student_grades')
+            .select(`status, subject_id, subjects(subject_name, subject_code, teacher_subject_assignments(teachers(first_name, last_name)))`)
+            .eq('student_id', studentId);
+
+        if (gradesError) console.error('Error loading grades', gradesError);
+
+        const enrolledBody = document.getElementById('enrolledTableBody');
+        const totalSubjectsEl = document.getElementById('totalSubjects');
+        const passedEl = document.getElementById('passedCount');
+        const incEl = document.getElementById('incompleteCount');
+        const failedEl = document.getElementById('failedCount');
+
+        let total = 0, passed = 0, incomplete = 0, failed = 0;
+        let rows = '';
+
+        if (grades && grades.length) {
+            total = grades.length;
+            for (const g of grades) {
+                const subj = g.subjects || {};
+                const subjectName = subj.subject_name || subj.subject_code || 'Unknown Subject';
+                const teacherAssign = subj.teacher_subject_assignments || [];
+                const teacher = teacherAssign[0]?.teachers;
+                const instructor = teacher ? `${teacher.first_name || ''} ${teacher.last_name || ''}`.trim() : 'TBD';
+                const statusRaw = (g.status || '').toString().toUpperCase() || 'PENDING';
+                let statusClass = 'warning-text';
+                if (statusRaw === 'PASSED') { statusClass = 'pass-text'; passed++; }
+                else if (statusRaw === 'FAILED') { statusClass = 'danger-text'; failed++; }
+                else { statusClass = 'warning-text'; incomplete++; }
+
+                rows += `<tr><td>${subjectName}</td><td>${instructor}</td><td class="${statusClass}">${statusRaw}</td></tr>`;
+            }
+        } else {
+            rows = '<tr><td colspan="3" class="empty">No enrolled subjects</td></tr>';
+        }
+
+        if (enrolledBody) enrolledBody.innerHTML = rows;
+        if (totalSubjectsEl) totalSubjectsEl.textContent = String(total);
+        if (passedEl) passedEl.textContent = String(passed);
+        if (incEl) incEl.textContent = String(incomplete);
+        if (failedEl) failedEl.textContent = String(failed);
+
+        // Load recent missing requirements
+        const { data: reqs, error: reqErr } = await supabaseClient
+            .from('student_requirements')
+            .select('requirement_id, requirement_title, deadline, subject_id, subjects(subject_name)')
+            .eq('student_id', studentId)
+            .order('deadline', { ascending: true })
+            .limit(10);
+
+        if (reqErr) console.error('Error loading requirements', reqErr);
+
+        const recentBody = document.getElementById('recentMissingBody');
+        let reqHtml = '';
+        if (reqs && reqs.length) {
+            for (const r of reqs) {
+                const subjectName = r.subjects?.subject_name || 'Unknown Subject';
+                const deadline = r.deadline ? new Date(r.deadline).toLocaleDateString() : '';
+                reqHtml += `<tr><td>${subjectName}</td><td>${r.requirement_title}</td><td>${deadline}</td></tr>`;
+            }
+        } else {
+            reqHtml = '<tr><td colspan="3" class="empty">No recent missing requirements</td></tr>';
+        }
+        if (recentBody) recentBody.innerHTML = reqHtml;
+
+    } catch (e) {
+        console.error('Error loading dashboard', e);
+    }
+}
+
+window.addEventListener('DOMContentLoaded', loadStudentDashboard);
+</script>
+
+</body>
+</html>

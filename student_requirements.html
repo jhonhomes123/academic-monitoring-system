@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Student Missing Requirements</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+
+<style>
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+    font-family:'Inter',sans-serif;
+}
+:root{
+    --primary:#0b3d91;
+    --secondary:#1f6bff;
+    --light:#f4f7fc;
+    --white:#ffffff;
+    --text:#1e293b;
+    --gray:#64748b;
+    --border:#dbe4f0;
+    --success:#16a34a;
+    --warning:#f59e0b;
+    --danger:#dc2626;
+}
+body{
+    background:var(--light);
+    display:flex;
+}
+.sidebar{
+    width:270px;
+    height:100vh;
+    background:var(--primary);
+    color:white;
+    position:fixed;
+    left:0;
+    top:0;
+    padding:30px 20px;
+    overflow-y:auto;
+}
+.logo{
+    margin-bottom:40px;
+}
+.logo h2{
+    font-size:24px;
+}
+.logo p{
+    font-size:13px;
+    opacity:.8;
+    margin-top:5px;
+}
+.menu{
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+}
+.menu a{
+    text-decoration:none;
+    color:white;
+    padding:14px;
+    border-radius:12px;
+    transition:.3s;
+    font-weight:500;
+}
+.menu a:hover,
+.menu a.active{
+    background:rgba(255,255,255,.15);
+}
+.menu i{
+    margin-right:10px;
+}
+.main{
+    margin-left:270px;
+    width:calc(100% - 270px);
+    padding:30px;
+}
+.topbar{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    margin-bottom:30px;
+    flex-wrap:wrap;
+    gap:20px;
+}
+.welcome-label{
+    color:var(--gray);
+    font-size:13px;
+    text-transform:uppercase;
+    letter-spacing:2px;
+    margin-bottom:10px;
+}
+.topbar h1{
+    color:var(--primary);
+    margin-bottom:8px;
+}
+.student-info{
+    color:var(--gray);
+    font-size:14px;
+}
+.profile-mini{
+    display:flex;
+    align-items:center;
+    gap:14px;
+    background:white;
+    padding:14px 18px;
+    border-radius:16px;
+    border:1px solid var(--border);
+}
+.profile-mini img{
+    width:50px;
+    height:50px;
+    border-radius:50%;
+}
+.table-section{
+    background:white;
+    border-radius:20px;
+    padding:25px;
+    border:1px solid var(--border);
+    margin-bottom:30px;
+    overflow-x:auto;
+}
+.table-section h2{
+    color:var(--primary);
+    margin-bottom:20px;
+}
+table{
+    width:100%;
+    border-collapse:collapse;
+}
+table th{
+    background:#eef4ff;
+    color:var(--primary);
+    padding:14px;
+    text-align:left;
+    font-size:14px;
+}
+table td{
+    padding:14px;
+    border-bottom:1px solid #edf2f7;
+    font-size:14px;
+}
+table tr:hover{
+    background:#f8fbff;
+}
+.view-btn{
+    padding:10px 14px;
+    border:none;
+    border-radius:10px;
+    background:var(--primary);
+    color:white;
+    cursor:pointer;
+    font-weight:600;
+}
+.modal{
+    position:fixed;
+    inset:0;
+    background:rgba(0,0,0,.5);
+    display:none;
+    justify-content:center;
+    align-items:center;
+    z-index:999;
+    padding:20px;
+}
+.modal-content{
+    background:white;
+    width:100%;
+    max-width:700px;
+    border-radius:20px;
+    overflow:hidden;
+}
+.modal-header{
+    padding:20px;
+    background:var(--primary);
+    color:white;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+}
+.modal-body{
+    padding:25px;
+}
+.modal-body img{
+    width:100%;
+    border-radius:14px;
+}
+.close-btn{
+    background:white;
+    border:none;
+    width:35px;
+    height:35px;
+    border-radius:50%;
+    cursor:pointer;
+    color:var(--primary);
+    font-weight:700;
+}
+.pass-text{
+    color:var(--success);
+    font-weight:700;
+}
+.warning-text{
+    color:var(--warning);
+    font-weight:700;
+}
+.danger-text{
+    color:var(--danger);
+    font-weight:700;
+}
+
+/* Requirement cards */
+.requirements-list{
+    display:flex;
+    flex-direction:column;
+    gap:12px;
+}
+.requirement-card{
+    padding:14px;
+    background:#f1f5f9;
+    border-radius:10px;
+    border:1px solid var(--border);
+}
+.requirement-card .req-title{
+    font-size:15px;
+    color:var(--text);
+    margin-top:6px;
+}
+.requirement-card .req-desc{
+    color:#475569;
+    margin-top:6px;
+}
+.requirement-card .req-deadline{
+    color:#334155;
+    margin-top:6px;
+    font-size:13px;
+}
+.requirement-card .req-subject{
+    font-size:12px;
+    color:#475569;
+    margin-bottom:6px;
+}
+.requirement-card .attached-files{margin-top:8px;}
+</style>
+<link rel="stylesheet" href="mobile_fix.css">
+</head>
+<body>
+
+<div class="sidebar">
+    <div class="logo">
+        <h2>AMS Student</h2>
+        <p>Talisay City College</p>
+    </div>
+    <div class="menu">
+        <a href="student_dashboard.html" class="nav-link">
+            <i class="fa-solid fa-house"></i>
+            Dashboard
+        </a>
+        <a href="student_subjects.html" class="nav-link">
+            <i class="fa-solid fa-book"></i>
+            My Subjects
+        </a>
+        <a href="student_academic.html" class="nav-link">
+            <i class="fa-solid fa-chart-column"></i>
+            Academic Status
+        </a>
+        <a href="student_requirements.html" class="active nav-link">
+            <i class="fa-solid fa-file-lines"></i>
+            Missing Requirements
+        </a>
+        <a href="student_profile.html" class="nav-link">
+            <i class="fa-solid fa-user"></i>
+            Profile
+        </a>
+        <a href="login.html">
+            <i class="fa-solid fa-right-from-bracket"></i>
+            Logout
+        </a>
+    </div>
+</div>
+
+<div class="main">
+    <div class="table-section">
+        <div class="section-header">
+            <div>
+                <h2>Missing Requirements</h2>
+                <p>Pending academic submissions</p>
+            </div>
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Subject</th>
+                    <th>Requirement</th>
+                </tr>
+            </thead>
+            <tbody id="requirementsTable">
+                <tr>
+                    <td colspan="2" class="empty">Loading requirements...</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="modal" id="fileModal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Requirement File</h3>
+            <button class="close-btn" onclick="closeModal()">X</button>
+        </div>
+        <div class="modal-body">
+            <p style="margin-bottom:15px;">File attachment from teacher.</p>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<script>
+const SUPABASE_URL = 'https://nrqrsolfowebujogawti.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5ycXJzb2xmb3dlYnVqb2dhd3RpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkyODE2NjksImV4cCI6MjA5NDg1NzY2OX0.XcawTf9niOIZbG0hBTtwSXjySWfdVl3LAClbWdZmfl8';
+const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+async function loadStudentRequirements() {
+    try {
+        // Get current user
+        const { data: { user }, error: userError } = await supabaseClient.auth.getUser();
+        if (userError || !user) {
+            console.error('Not logged in');
+            return;
+        }
+
+        // Get student record with section and major info
+        const { data: student, error: studentError } = await supabaseClient
+            .from('students')
+            .select(`
+                student_id,
+                first_name,
+                last_name,
+                section_id,
+                sections(
+                    section_name,
+                    year_level,
+                    majors(major_name)
+                )
+            `)
+            .eq('user_id', user.id)
+            .maybeSingle();
+
+        if (studentError || !student) {
+            console.error('Student record not found', studentError, student);
+            return;
+        }
+
+        // Update welcome message and section info
+        const studentName = `Welcome, ${student.first_name} ${student.last_name}`;
+        const sectionInfo = `${student.sections?.majors?.major_name || 'Unknown'} ${student.sections?.year_level || ''} • ${student.sections?.section_name || 'Unknown'}`;
+
+        const welcomeEl = document.getElementById('welcomeName');
+        if (welcomeEl) welcomeEl.textContent = studentName;
+        const sectionEl = document.getElementById('studentSection');
+        if (sectionEl) sectionEl.textContent = sectionInfo;
+
+        // Load requirements with subject info
+        const studentId = student.student_id ?? student.id;
+        const { data: requirements, error: reqError } = await supabaseClient
+            .from('student_requirements')
+            .select(`
+                requirement_id,
+                requirement_title,
+                requirement_description,
+                deadline,
+                subject_id,
+                subjects(subject_name)
+            `)
+            .eq('student_id', studentId);
+
+        if (reqError) {
+            console.error('Error loading requirements', reqError);
+            return;
+        }
+
+        // Load all files for this student's requirements (guard empty requirement list)
+        let files = [];
+        try {
+            if (requirements && requirements.length > 0) {
+                const reqIds = requirements.map(r => r.requirement_id).filter(id => id != null);
+
+                // Try batch fetch first
+                let filesData = null;
+                let filesError = null;
+                try {
+                    const resp = await supabaseClient
+                        .from('subject_instruction_files')
+                        .select('file_url, file_name, requirement_id, student_id, subject_id')
+                        .in('requirement_id', reqIds);
+                    filesData = resp.data;
+                    filesError = resp.error;
+                } catch (e) {
+                    filesError = e;
+                }
+
+                if (filesError) {
+                    console.warn('Batch file fetch failed, falling back to per-requirement fetch', filesError);
+                    // Fallback: fetch files per requirement to avoid server-side errors with .in()
+                    for (const r of requirements) {
+                        try {
+                            const { data: fData, error: fErr } = await supabaseClient
+                                .from('subject_instruction_files')
+                                .select('file_url, file_name, requirement_id, student_id, subject_id')
+                                .eq('requirement_id', r.requirement_id);
+                            if (fErr) {
+                                console.warn('Error fetching files for requirement', r.requirement_id, fErr);
+                            } else if (fData && fData.length) {
+                                files.push(...fData);
+                            }
+                        } catch (e) {
+                            console.warn('Exception fetching files for requirement', r.requirement_id, e);
+                        }
+                    }
+                } else {
+                    files = filesData || [];
+                }
+            } else {
+                console.log('No requirements to fetch files for.');
+            }
+        } catch (e) {
+            console.error('Exception while loading files', e);
+        }
+
+        console.log('requirements ->', requirements || []);
+        console.log('files ->', files || []);
+
+        const tableBody = document.getElementById('requirementsTable');
+
+        if (!requirements || requirements.length === 0) {
+            tableBody.innerHTML = '<tr><td colspan="2" class="empty">No requirements assigned</td></tr>';
+            return;
+        }
+
+        let rows = '';
+        requirements.forEach(req => {
+            const subjectName = req.subjects?.subject_name || 'Unknown Subject';
+            const deadline = req.deadline ? new Date(req.deadline).toLocaleDateString() : '';
+            const titleText = req.requirement_title || req.title || 'No title';
+            const description = req.requirement_description?.trim() || '';
+            const reqFiles = (files || []).filter(f => String(f.requirement_id) === String(req.requirement_id));
+
+            const requirementFilesHtml = reqFiles.length
+                ? `<div class="attached-files" style="margin-top:8px; padding:10px; background-color:#eef2ff; border-radius:8px; border:1px solid #c7d2fe;">
+                        <div style="font-size:13px; color:#1d4ed8; font-weight:600; margin-bottom:6px;">Attached Files</div>
+                        ${reqFiles.map(f => {
+                            const fileRef = f.file_url || '';
+                            const fileLabel = f.file_name || (fileRef.split('/').pop()) || 'View';
+                            return `<div style="margin-bottom:6px;"><button class="view-btn" onclick="viewFile('${fileRef.replace(/'/g, "\\'")}', '${fileLabel.replace(/'/g, "\\'")}')">📎 ${fileLabel}</button></div>`;
+                        }).join('')}
+                    </div>`
+                : '';
+
+            const reqHtml = `
+                <div>
+                    <strong>${titleText}</strong>
+                    ${description ? `<div class="req-desc">${description}</div>` : ''}
+                    ${deadline ? `<div class="req-deadline"><strong>Deadline:</strong> ${deadline}</div>` : ''}
+                    ${requirementFilesHtml}
+                </div>`;
+
+            rows += `
+                <tr>
+                    <td>${subjectName}</td>
+                    <td>${reqHtml}</td>
+                </tr>`;
+        });
+
+        tableBody.innerHTML = rows;
+
+    } catch (err) {
+        console.error('Error loading requirements', err);
+    }
+}
+
+
+
+async function viewFile(filePath, fileName) {
+    if (!filePath) return alert('No file URL available');
+    try {
+        if (filePath.startsWith('http')) {
+            window.open(filePath, '_blank');
+            return;
+        }
+
+        const candidateBuckets = ['instruction-files', 'documents', 'uploads', 'public'];
+        const parts = filePath.split('/');
+
+        // Helper to try getPublicUrl, createSignedUrl, then download
+        const tryBucketKey = async (bucket, key) => {
+            try {
+                const pub = supabaseClient.storage.from(bucket).getPublicUrl(key);
+                const publicUrl = pub?.data?.publicUrl;
+                if (publicUrl) return publicUrl;
+            } catch (e) {
+                console.warn('getPublicUrl failed', bucket, e);
+            }
+
+            try {
+                const { data: signedData, error: signedErr } = await supabaseClient.storage.from(bucket).createSignedUrl(key, 60);
+                if (!signedErr && signedData?.signedUrl) return signedData.signedUrl;
+            } catch (e) {
+                console.warn('createSignedUrl failed', bucket, e);
+            }
+
+            try {
+                const { data: downloadData, error: downloadErr } = await supabaseClient.storage.from(bucket).download(key);
+                if (!downloadErr && downloadData) {
+                    const url = URL.createObjectURL(downloadData);
+                    return url;
+                }
+            } catch (e) {
+                console.warn('download failed', bucket, e);
+            }
+
+            return null;
+        };
+
+        // If path includes bucket prefix like 'bucket/key...'
+        if (parts.length > 1 && candidateBuckets.includes(parts[0])) {
+            const bucket = parts[0];
+            const key = parts.slice(1).join('/');
+            const url = await tryBucketKey(bucket, key);
+            if (url) { window.open(url, '_blank'); return; }
+        }
+
+        // Try candidate buckets with filePath as key
+        for (const bucket of candidateBuckets) {
+            const url = await tryBucketKey(bucket, filePath);
+            if (url) { window.open(url, '_blank'); return; }
+        }
+
+        // Final fallback: open as relative path
+        window.open(filePath, '_blank');
+    } catch (e) {
+        console.error('Error opening file', e);
+        alert('Unable to open file');
+    }
+}
+
+// Load requirements on page load
+window.addEventListener('DOMContentLoaded', loadStudentRequirements);
+</script>
+
+<script>
+function openModal(){
+    document.getElementById('fileModal').style.display='flex';
+}
+function closeModal(){
+    document.getElementById('fileModal').style.display='none';
+}
+window.onclick = function(event){
+    const modal = document.getElementById('fileModal');
+    if(event.target === modal){
+        closeModal();
+    }
+}
+</script>
+
+</body>
+</html>

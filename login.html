@@ -1,0 +1,3030 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Academic Monitoring System</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+
+<style>
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+    font-family:'Inter', sans-serif;
+}
+
+:root{
+    --primary:#0b3d91;
+    --secondary:#1f6bff;
+    --light:#f4f7fc;
+    --white:#ffffff;
+    --text:#1e293b;
+    --gray:#64748b;
+    --border:#dbe4f0;
+}
+
+html{
+    scroll-behavior:smooth;
+}
+
+body{
+    background:var(--light);
+    color:var(--text);
+    overflow-x:hidden;
+}
+
+header{
+    width:100%;
+    background:var(--white);
+    border-bottom:1px solid var(--border);
+    position:sticky;
+    top:0;
+    z-index:1000;
+}
+
+.navbar{
+    max-width:1300px;
+    margin:auto;
+    padding:18px 25px;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+}
+
+.logo{
+    display:flex;
+    align-items:center;
+    gap:14px;
+}
+
+.logo img{
+    width:48px;
+    height:48px;
+    border-radius:50%;
+    object-fit:cover;
+}
+
+.logo-text h1{
+    font-size:20px;
+    color:var(--primary);
+    font-weight:800;
+}
+
+.logo-text p{
+    font-size:12px;
+    color:var(--gray);
+}
+
+nav ul{
+    list-style:none;
+    display:flex;
+    gap:25px;
+}
+
+nav ul li a{
+    text-decoration:none;
+    color:var(--text);
+    font-weight:600;
+    transition:.3s;
+}
+
+nav ul li a:hover{
+    color:var(--primary);
+}
+
+.hero{
+    width:100%;
+    padding:90px 25px 80px;
+}
+
+.hero-container{
+    max-width:1300px;
+    margin:auto;
+    display:grid;
+    grid-template-columns:1.1fr .9fr;
+    gap:50px;
+    align-items:center;
+}
+
+.hero-text h1{
+    font-size:58px;
+    line-height:1.1;
+    color:var(--primary);
+    margin-bottom:20px;
+}
+
+.hero-text p{
+    color:var(--gray);
+    font-size:17px;
+    line-height:1.8;
+    margin-bottom:30px;
+    max-width:700px;
+}
+
+.hero-buttons{
+    display:flex;
+    gap:15px;
+    flex-wrap:wrap;
+}
+
+.primary-btn,
+.secondary-btn{
+    padding:15px 28px;
+    border-radius:12px;
+    border:none;
+    font-size:15px;
+    font-weight:700;
+    cursor:pointer;
+    transition:.3s;
+}
+
+.primary-btn{
+    background:var(--primary);
+    color:white;
+}
+
+.primary-btn:hover{
+    background:#082d6b;
+    transform:translateY(-2px);
+}
+
+.secondary-btn{
+    background:white;
+    border:1px solid var(--border);
+    color:var(--primary);
+}
+
+.secondary-btn:hover{
+    transform:translateY(-2px);
+}
+
+.hero-image img{
+    width:100%;
+    border-radius:24px;
+    box-shadow:0 15px 40px rgba(0,0,0,0.08);
+}
+
+.portal-section{
+    padding:30px 25px 90px;
+}
+
+.section-container{
+    max-width:1300px;
+    margin:auto;
+}
+
+.section-title{
+    text-align:center;
+    margin-bottom:50px;
+}
+
+.section-title h2{
+    font-size:40px;
+    color:var(--primary);
+    margin-bottom:15px;
+}
+
+.section-title p{
+    color:var(--gray);
+    max-width:800px;
+    margin:auto;
+    line-height:1.7;
+}
+
+.portal-grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(320px,1fr));
+    gap:30px;
+}
+
+.portal-card{
+    background:white;
+    border-radius:24px;
+    padding:35px;
+    border:1px solid var(--border);
+    transition:.35s;
+    box-shadow:0 10px 25px rgba(0,0,0,0.04);
+}
+
+.portal-card:hover{
+    transform:translateY(-8px);
+    box-shadow:0 18px 40px rgba(11,61,145,0.12);
+}
+
+.portal-icon{
+    width:75px;
+    height:75px;
+    border-radius:18px;
+    background:#eaf1ff;
+    color:var(--primary);
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    font-size:30px;
+    margin-bottom:25px;
+}
+
+.portal-card h3{
+    font-size:28px;
+    margin-bottom:15px;
+    color:var(--primary);
+}
+
+.portal-card p{
+    color:var(--gray);
+    line-height:1.8;
+    margin-bottom:25px;
+}
+
+.card-buttons{
+    display:flex;
+    gap:12px;
+    flex-wrap:wrap;
+}
+
+.card-btn{
+    flex:1;
+    min-width:120px;
+    padding:13px;
+    border:none;
+    border-radius:12px;
+    cursor:pointer;
+    font-weight:700;
+    transition:.3s;
+}
+
+.login-btn{
+    background:var(--primary);
+    color:white;
+}
+
+.signup-btn{
+    background:#edf3ff;
+    color:var(--primary);
+}
+
+.card-btn:hover{
+    transform:translateY(-2px);
+}
+
+.features{
+    padding:20px 25px 90px;
+}
+
+.feature-grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(250px,1fr));
+    gap:25px;
+}
+
+.feature-box{
+    background:white;
+    border-radius:20px;
+    padding:30px;
+    border:1px solid var(--border);
+}
+
+.feature-box i{
+    color:var(--primary);
+    font-size:30px;
+    margin-bottom:18px;
+}
+
+.feature-box h4{
+    margin-bottom:10px;
+    color:var(--primary);
+}
+
+.feature-box p{
+    color:var(--gray);
+    line-height:1.7;
+    font-size:15px;
+}
+
+footer{
+    background:var(--primary);
+    color:white;
+    margin-top:50px;
+}
+
+.footer-container{
+    max-width:1300px;
+    margin:auto;
+    padding:70px 25px 25px;
+}
+
+.footer-grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(240px,1fr));
+    gap:40px;
+}
+
+.footer-box h3{
+    margin-bottom:18px;
+}
+
+.footer-box p,
+.footer-box a{
+    color:rgba(255,255,255,0.85);
+    text-decoration:none;
+    display:block;
+    margin-bottom:10px;
+    line-height:1.7;
+}
+
+.footer-bottom{
+    border-top:1px solid rgba(255,255,255,0.15);
+    margin-top:40px;
+    padding-top:20px;
+    text-align:center;
+    color:rgba(255,255,255,0.75);
+}
+
+.modal{
+    position:fixed;
+    inset:0;
+    background:rgba(15,23,42,0.55);
+    display:none;
+
+    justify-content:center;
+
+    align-items:flex-start;
+
+    overflow-y:auto;
+
+    padding:40px 20px;
+
+    z-index:9999;
+}       
+
+.modal-box{
+    width:100%;
+    max-width:950px;
+    max-height:95vh;
+    overflow:hidden;
+    background:white;
+    border-radius:28px;
+    position:relative;
+    animation:popup .3s ease;
+    display:grid;
+    grid-template-columns:320px 1fr;
+    box-shadow:0 25px 60px rgba(0,0,0,0.18);
+}
+
+/* Single-column modal variant (use for simple forms like forgot password) */
+.modal-box.single-column{
+    grid-template-columns: 1fr;
+    max-width:720px;
+}
+
+.modal-box.forgot-modal{
+    grid-template-columns: 1fr;
+    max-width:620px;
+}
+
+.modal-box.forgot-modal .modal-main{
+    padding:36px 34px 34px;
+}
+
+.modal-box.forgot-modal .modal-title{
+    margin-bottom:8px;
+    font-size:28px;
+}
+
+.modal-box.forgot-modal .modal-subtitle{
+    margin-bottom:24px;
+}
+
+.forgot-form{
+    display:grid;
+    gap:16px;
+}
+
+.forgot-form .input-group{
+    position:relative;
+}
+
+.forgot-form .password-field{
+    position:relative;
+}
+
+.forgot-form .password-field input{
+    padding-right:52px;
+    min-height:48px;
+    line-height:1.2;
+}
+
+.forgot-form .password-toggle{
+    position:absolute;
+    right:10px;
+    top:50%;
+    transform:translateY(-50%);
+    border:none;
+    background:transparent;
+    color:var(--gray);
+    cursor:pointer;
+    width:36px;
+    height:36px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:0;
+}
+
+.forgot-form .submit-row{
+    display:flex;
+    justify-content:flex-end;
+    margin-top:6px;
+}
+
+.forgot-form .submit-btn{
+    width:auto;
+    min-width:180px;
+    margin-top:0;
+}
+
+/* Two-column form inside modal: responsive and centered */
+.modal .form-grid.two-column{ display:flex; gap:16px; align-items:flex-start; }
+.modal .form-grid.two-column > div{ flex:1; min-width:220px; }
+
+.modal-side{
+    background:linear-gradient(
+        180deg,
+        var(--primary),
+        #082d6b
+    );
+
+    color:white;
+    padding:40px 30px;
+    display:flex;
+    flex-direction:column;
+    justify-content:space-between;
+}
+
+.modal-brand h2{
+    font-size:28px;
+    margin-bottom:10px;
+}
+
+.modal-brand p{
+    opacity:.9;
+    line-height:1.7;
+    font-size:14px;
+}
+
+.modal-features{
+    display:flex;
+    flex-direction:column;
+    gap:18px;
+}
+
+.modal-feature{
+    background:rgba(255,255,255,.1);
+    border:1px solid rgba(255,255,255,.12);
+    border-radius:16px;
+    padding:16px;
+}
+
+.modal-feature h4{
+    margin-bottom:6px;
+    font-size:15px;
+}
+
+.modal-feature p{
+    font-size:13px;
+    opacity:.85;
+    line-height:1.6;
+}
+
+.modal-main{
+    padding:35px;
+}
+
+.security-box{
+    margin-top:20px;
+    padding:16px;
+    border-radius:14px;
+    background:#f4f8ff;
+    border:1px solid #d9e7ff;
+}
+
+.security-box h4{
+    color:var(--primary);
+    margin-bottom:8px;
+}
+
+.security-box p{
+    color:var(--gray);
+    line-height:1.7;
+    font-size:14px;
+}
+
+@keyframes popup{
+    from{
+        transform:scale(.9);
+        opacity:0;
+    }
+
+    to{
+        transform:scale(1);
+        opacity:1;
+    }
+}
+
+.close-btn{
+    position:absolute;
+    top:18px;
+    right:18px;
+    width:42px;
+    height:42px;
+    border:none;
+    border-radius:50%;
+    background:#eef3ff;
+    color:var(--primary);
+    cursor:pointer;
+    font-size:18px;
+}
+
+.modal-title{
+    margin-bottom:10px;
+    color:var(--primary);
+    font-size:32px;
+}
+
+.modal-subtitle{
+    color:var(--gray);
+    margin-bottom:30px;
+    line-height:1.7;
+}
+
+.form-grid{
+    display:grid;
+    grid-template-columns:repeat(2,1fr);
+    gap:18px;
+}
+
+.input-group{
+    display:flex;
+    flex-direction:column;
+}
+
+.input-group.full{
+    grid-column:1 / -1;
+}
+
+.input-group label{
+    margin-bottom:8px;
+    font-size:14px;
+    font-weight:600;
+    color:var(--primary);
+}
+
+.input-group input,
+.input-group select{
+    padding:14px;
+    border-radius:12px;
+    border:1px solid var(--border);
+    outline:none;
+    font-size:14px;
+}
+
+.input-group input:focus,
+.input-group select:focus{
+    border-color:var(--secondary);
+}
+
+.submit-btn{
+    width:100%;
+    margin-top:25px;
+    padding:16px;
+    border:none;
+    border-radius:14px;
+    background:var(--primary);
+    color:white;
+    font-weight:700;
+    cursor:pointer;
+}
+
+.note-box{
+    margin-top:20px;
+    padding:18px;
+    border-radius:14px;
+    background:#edf4ff;
+    color:var(--primary);
+    line-height:1.7;
+    font-size:14px;
+}
+
+@media(max-width:900px){
+
+    .hero-container{
+        grid-template-columns:1fr;
+    }
+
+    .hero-text h1{
+        font-size:42px;
+    }
+
+    /* FORM GRID */
+
+    .form-grid{
+        grid-template-columns:1fr;
+        gap:16px;
+    }
+
+    /* MODAL */
+
+    .modal{
+        padding:15px;
+        align-items:flex-start;
+    }
+
+    .modal-box{
+        grid-template-columns:1fr;
+        width:100%;
+        max-width:100%;
+        max-height:none;
+        overflow-y:auto;
+        border-radius:22px;
+    }
+
+    .signup-box{
+        width:100%;
+        max-width:100%;
+    }
+
+    .modal-main{
+        padding:22px;
+        overflow-x:hidden;
+    }
+
+    .modal-side{
+        padding:30px;
+    }
+
+    /* INPUTS */
+
+    .input-group{
+        width:100%;
+    }
+
+    .input-group input,
+    .input-group select{
+        width:100%;
+        min-width:0;
+        font-size:14px;
+    }
+    .input-group select{
+    appearance:none;
+    width:100%;
+}
+
+}
+
+@media(max-width:768px){
+
+    .navbar{
+        flex-direction:column;
+        gap:15px;
+    }
+
+    nav ul{
+        flex-wrap:wrap;
+        justify-content:center;
+    }
+
+    .hero{
+        padding-top:50px;
+    }
+
+    .hero-text h1{
+        font-size:35px;
+    }
+
+    .section-title h2{
+        font-size:32px;
+    }
+
+    .modal-main{
+        padding:25px;
+    }
+
+    .modal-title{
+        font-size:26px;
+    }
+}
+
+.signup-box{
+    display:block;
+    max-width:750px;
+    width:100%;
+
+    max-height:none;
+
+    overflow:visible;
+}
+
+/* ================= ABOUT MODAL ================= */
+
+.about-modal-box{
+    width:100%;
+    max-width:1100px;
+    background:white;
+    border-radius:28px;
+    overflow:hidden;
+    animation:popup .3s ease;
+    position:relative;
+    box-shadow:0 25px 60px rgba(0,0,0,0.18);
+}
+
+.about-header{
+    background:linear-gradient(
+        135deg,
+        var(--primary),
+        #082d6b
+    );
+
+    color:white;
+    padding:60px 50px;
+}
+
+.about-header h1{
+    font-size:42px;
+    margin-bottom:15px;
+}
+
+.about-header p{
+    max-width:800px;
+    line-height:1.8;
+    opacity:.92;
+}
+
+.about-content{
+    padding:45px;
+    max-height:75vh;
+    overflow-y:auto;
+}
+
+.about-grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(300px,1fr));
+    gap:25px;
+    margin-top:30px;
+}
+
+.about-card{
+    background:#f8fbff;
+    border:1px solid var(--border);
+    border-radius:22px;
+    padding:30px;
+}
+
+.about-card i{
+    font-size:32px;
+    color:var(--primary);
+    margin-bottom:18px;
+}
+
+.about-card h3{
+    color:var(--primary);
+    margin-bottom:15px;
+    font-size:24px;
+}
+
+.about-card p{
+    color:var(--gray);
+    line-height:1.8;
+    font-size:15px;
+}
+
+.about-section{
+    margin-top:45px;
+}
+
+.about-section h2{
+    color:var(--primary);
+    margin-bottom:15px;
+    font-size:30px;
+}
+
+.about-section p{
+    color:var(--gray);
+    line-height:1.9;
+    margin-bottom:15px;
+}
+
+.about-list{
+    margin-top:20px;
+    display:grid;
+    gap:15px;
+}
+
+.about-list div{
+    background:#f4f8ff;
+    padding:18px;
+    border-radius:16px;
+    border:1px solid #dbe7ff;
+}
+
+.about-list h4{
+    color:var(--primary);
+    margin-bottom:8px;
+}
+
+.about-list p{
+    margin:0;
+}
+
+@media(max-width:768px){
+
+    .about-header{
+        padding:40px 30px;
+    }
+
+    .about-header h1{
+        font-size:32px;
+    }
+
+    .about-content{
+        padding:30px 22px;
+    }
+
+}
+
+/* ================= CUSTOM AMS ALERT ================= */
+
+.ams-alert{
+    position:fixed;
+    top:30px;
+    right:30px;
+    min-width:340px;
+    max-width:420px;
+    background:white;
+    border-radius:20px;
+    padding:22px;
+    box-shadow:0 20px 45px rgba(0,0,0,0.15);
+    border-left:6px solid var(--primary);
+    z-index:99999;
+
+    display:flex;
+    gap:18px;
+    align-items:flex-start;
+
+    transform:translateX(500px);
+    opacity:0;
+
+    transition:.4s ease;
+}
+
+.ams-alert.show{
+    transform:translateX(0);
+    opacity:1;
+}
+
+.ams-alert.success{
+    border-left-color:#16a34a;
+}
+
+.ams-alert.error{
+    border-left-color:#dc2626;
+}
+
+.ams-alert.warning{
+    border-left-color:#f59e0b;
+}
+
+.alert-icon{
+    width:55px;
+    height:55px;
+    border-radius:16px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-size:24px;
+    flex-shrink:0;
+}
+
+.success .alert-icon{
+    background:#dcfce7;
+    color:#16a34a;
+}
+
+.error .alert-icon{
+    background:#fee2e2;
+    color:#dc2626;
+}
+
+.warning .alert-icon{
+    background:#fef3c7;
+    color:#f59e0b;
+}
+
+.alert-content h3{
+    margin-bottom:8px;
+    font-size:18px;
+    color:var(--primary);
+}
+
+.alert-content p{
+    color:var(--gray);
+    line-height:1.7;
+    font-size:14px;
+}
+
+.alert-close{
+    margin-left:auto;
+    background:none;
+    border:none;
+    font-size:18px;
+    cursor:pointer;
+    color:#94a3b8;
+}
+
+@media(max-width:600px){
+
+    .ams-alert{
+        left:20px;
+        right:20px;
+        min-width:auto;
+        max-width:none;
+    }
+
+}
+
+</style>
+</head>
+<body>
+
+<header>
+    <div class="navbar">
+
+        <div class="logo">
+            <img src="school_logo.png" alt="School Logo">
+
+            <div class="logo-text">
+                <h1>Academic Monitoring System</h1>
+                <p>Talisay City College</p>
+            </div>
+        </div>
+
+        <nav>
+            <ul>
+                <li><a href="#home">Home</a></li>
+                <li><a href="#portals">Portals</a></li>
+                <li><a href="#features">Features</a></li>
+                <li><a href="#footer">Contact</a></li>
+            </ul>
+        </nav>
+
+    </div>
+</header>
+
+<section class="hero" id="home">
+
+    <div class="hero-container">
+
+        <div class="hero-text">
+            <h1>Modern Academic Monitoring Platform</h1>
+
+            <p>
+                A professional academic evaluation and monitoring system designed for students, teachers, and administrators of Talisay City College. The platform centralizes academic monitoring, approval management, and student performance tracking in one secure system.
+            </p>
+
+            <div class="hero-buttons">
+                <button class="primary-btn" onclick="document.getElementById('portals').scrollIntoView()">
+                    Access Portals
+                </button>
+
+                <button class="secondary-btn"
+onclick="openAboutModal()">
+
+    Learn More
+
+</button>
+            </div>
+        </div>
+
+        <div class="hero-image">
+            <img src="campus-sample.png" alt="Campus Image">
+        </div>
+
+    </div>
+
+</section>
+
+<section class="portal-section" id="portals">
+
+    <div class="section-container">
+
+        <div class="section-title">
+            <h2>System Access Portals</h2>
+
+            <p>
+                Select the appropriate portal to access the Academic Monitoring System. Students and teachers may create accounts and wait for administrator approval before accessing the system.
+            </p>
+        </div>
+
+        <div class="portal-grid">
+
+            <div class="portal-card">
+
+                <div class="portal-icon">
+                    <i class="fa-solid fa-user-graduate"></i>
+                </div>
+
+                <h3>Student Portal</h3>
+
+                <p>
+                    Students can monitor grades, evaluation results, academic status, and missing requirements through the student dashboard.
+                </p>
+
+                <div class="card-buttons">
+                    <button class="card-btn login-btn" onclick="openLogin('Student')">
+                        Login
+                    </button>
+
+                    <button class="card-btn signup-btn" onclick="openSignup('Student')">
+                        Sign Up
+                    </button>
+                </div>
+
+            </div>
+
+            <div class="portal-card">
+
+                <div class="portal-icon">
+                    <i class="fa-solid fa-chalkboard-user"></i>
+                </div>
+
+                <h3>Teacher Portal</h3>
+
+                <p>
+                    Teachers can manage evaluations, update academic records, and monitor student progress securely.
+                </p>
+
+                <div class="card-buttons">
+                    <button class="card-btn login-btn" onclick="openLogin('Teacher')">
+                        Login
+                    </button>
+
+                    <button class="card-btn signup-btn" onclick="openSignup('Teacher')">
+                        Sign Up
+                    </button>
+                </div>
+
+            </div>
+
+            <div class="portal-card">
+
+                <div class="portal-icon">
+                    <i class="fa-solid fa-user-shield"></i>
+                </div>
+
+                <h3>Administrator Portal</h3>
+
+                <p>
+                    Administrators manage approvals, departments, majors, sections, and overall system operations.
+                </p>
+
+                <div class="card-buttons">
+                    <button class="card-btn login-btn" onclick="openLogin('Admin')">
+                        Login
+                    </button>
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</section>
+
+<section class="features" id="features">
+
+    <div class="section-container">
+
+        <div class="section-title">
+            <h2>Core System Features</h2>
+            <p>
+                The system is designed to support academic evaluation workflows while maintaining security, organization, and accessibility.
+            </p>
+        </div>
+
+        <div class="feature-grid">
+
+            <div class="feature-box">
+                <i class="fa-solid fa-user-check"></i>
+                <h4>Account Approval</h4>
+                <p>
+                    Student and teacher accounts remain pending until approved by the administrator.
+                </p>
+            </div>
+
+            <div class="feature-box">
+                <i class="fa-solid fa-building"></i>
+                <h4>Department Management</h4>
+                <p>
+                    Departments, majors, and sections are fully controlled by the administrator dashboard.
+                </p>
+            </div>
+
+            <div class="feature-box">
+                <i class="fa-solid fa-envelope"></i>
+                <h4>Email Notification</h4>
+                <p>
+                    Approved users automatically receive confirmation emails with their account details.
+                </p>
+            </div>
+
+            <div class="feature-box">
+                <i class="fa-solid fa-chart-line"></i>
+                <h4>Academic Monitoring</h4>
+                <p>
+                    Students can easily monitor evaluation status, grades, and academic standing.
+                </p>
+            </div>
+
+        </div>
+
+    </div>
+
+</section>
+
+<footer id="footer">
+
+    <div class="footer-container">
+
+        <div class="footer-grid">
+
+            <div class="footer-box">
+                <h3>Academic Monitoring System</h3>
+                <p>
+                    A capstone project developed for Talisay City College to modernize academic evaluation and monitoring processes.
+                </p>
+            </div>
+
+            <div class="footer-box">
+                <h3>Navigation</h3>
+                <a href="#home">Home</a>
+                <a href="#portals">Portals</a>
+                <a href="#features">Features</a>
+            </div>
+
+            <div class="footer-box">
+                <h3>Contact Information</h3>
+                <p>Email: talisaycitycollege2004@gmail.com</p>
+                <p>Phone: +63 900 000 0000</p>
+            </div>
+
+            <div class="footer-box">
+                <h3>Location</h3>
+                <p>Talisay City College</p>
+                <p>V.H. Garces St., Poblacion, Talisay, Philippines, 6045</p>
+            </div>
+
+        </div>
+
+        <div class="footer-bottom">
+            © 2026 Academic Monitoring System | All Rights Reserved
+        </div>
+
+    </div>
+
+</footer>
+
+
+
+    <div class="modal" id="loginModal">
+
+    <div class="modal-box">
+
+        <!-- LEFT SIDE -->
+        <div class="modal-side">
+
+            <div class="modal-brand">
+
+                <h2>AMS Portal</h2>
+
+                <p>
+                    Secure access portal for students, teachers,
+                    and administrators of Talisay City College.
+                </p>
+
+            </div>
+
+            <div class="modal-features">
+
+                <div class="modal-feature">
+                    <h4>Secure Login</h4>
+                    <p>
+                        User accounts are protected and verified
+                        by the administration.
+                    </p>
+                </div>
+
+                <div class="modal-feature">
+                    <h4>Academic Monitoring</h4>
+                    <p>
+                        Easily monitor evaluations, grades,
+                        and academic records.
+                    </p>
+                </div>
+
+                <div class="modal-feature">
+                    <h4>Approval System</h4>
+                    <p>
+                        Student and teacher accounts remain pending
+                        until officially approved.
+                    </p>
+                </div>
+
+            </div>
+
+        </div>
+
+        <!-- RIGHT SIDE -->
+        <div class="modal-main">
+
+            <button class="close-btn" onclick="closeModal()">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+
+            <h2 class="modal-title" id="modalTitle">
+                Login
+            </h2>
+
+            <p class="modal-subtitle" id="modalSubtitle">
+                Access your system account.
+            </p>
+
+            <form id="loginForm">
+
+                <div class="form-grid" id="loginFields">
+
+                    <div class="input-group full">
+                        <label>User ID / Email</label>
+
+                        <input
+                            type="text"
+                            placeholder="Enter your credentials"
+                        >
+                    </div>
+
+                    <div class="input-group full">
+                        <label>Password</label>
+
+                        <input
+                            type="password"
+                            placeholder="Enter your password"
+                        >
+                    </div>
+
+                </div>
+
+                <button type="submit" class="submit-btn">
+                    Login Account
+                </button>
+
+                <div class="security-box">
+
+                    <h4>System Notice</h4>
+
+                    <p>
+                        Unauthorized access to this system is strictly prohibited.
+                        All login attempts and account approvals are monitored
+                        by the administrator.
+                    </p>
+
+                </div>
+
+            </form>
+
+        </div>
+
+    </div>
+
+</div>
+
+
+        <div class="modal" id="forgotModal">
+
+            <div class="modal-box forgot-modal">
+
+                <div class="modal-main">
+
+                    <button class="close-btn" onclick="closeForgotModal()">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+
+                    <h2 class="modal-title">Reset Password</h2>
+
+                    <p class="modal-subtitle" id="forgotSubtitle">Enter your registered email, student ID, and a new password to update your account directly from the app.</p>
+
+                    <form id="forgotForm" class="forgot-form">
+
+                        <div class="input-group">
+                            <label>Email Address</label>
+                            <input type="email" id="forgotEmail" placeholder="you@example.com">
+                        </div>
+
+                        <div class="input-group">
+                            <label id="forgotIdentifierLabel">Student ID</label>
+                            <input type="text" id="forgotIdentifier" placeholder="Enter your Student ID">
+                        </div>
+
+                        <div class="input-group password-field">
+                            <label>New Password</label>
+                            <input type="password" id="forgotNewPassword" placeholder="Create new password">
+                            <button type="button" class="password-toggle" onclick="togglePasswordById('forgotNewPassword', this)" aria-label="Toggle password visibility">
+                                <i class="fa-solid fa-eye"></i>
+                            </button>
+                        </div>
+
+                        <div class="submit-row">
+                            <button type="button" class="submit-btn" onclick="sendPasswordReset()">Update Password</button>
+                        </div>
+
+                    </form>
+
+                </div>
+
+            </div>
+
+        </div>
+
+<div class="modal" id="signupModal">
+
+    <div class="modal-box signup-box">
+
+        <button class="close-btn" onclick="closeSignup()">
+            <i class="fa-solid fa-xmark"></i>
+        </button>
+
+        <div class="modal-main">
+
+            <h2 class="modal-title" id="signupTitle">
+                Student Registration
+            </h2>
+
+            <p class="modal-subtitle" id="signupSubtitle">
+                Complete the registration form for account approval.
+            </p>
+
+            <form id="signupForm">
+
+                <div class="form-grid" id="signupFields">
+
+                </div>
+
+                <button type="submit" class="submit-btn">
+                    Submit Registration
+                </button>
+
+                <div class="note-box">
+                    Submitted accounts will remain pending until verified and approved by the administrator.
+                </div>
+
+            </form>
+
+        </div>
+
+    </div>
+
+</div>
+
+<!-- ================= ABOUT MODAL ================= -->
+
+<div class="modal" id="aboutModal">
+
+    <div class="about-modal-box">
+
+        <button class="close-btn"
+        onclick="closeAboutModal()">
+
+            <i class="fa-solid fa-xmark"></i>
+
+        </button>
+
+        <!-- HEADER -->
+
+        <div class="about-header">
+
+            <h1>
+                About Talisay City College
+            </h1>
+
+            <p>
+                Welcome to the Academic Monitoring System of
+                Talisay City College. This platform is designed
+                to modernize academic evaluation, monitoring,
+                communication, and administrative processes
+                for students, teachers, and administrators.
+            </p>
+
+        </div>
+
+        <!-- CONTENT -->
+
+        <div class="about-content">
+
+            <div class="about-grid">
+
+                <div class="about-card">
+
+                    <i class="fa-solid fa-bullseye"></i>
+
+                    <h3>Mission</h3>
+
+                    <p>
+                        Sample mission statement.
+                        Replace this content with the official
+                        mission of your school later.
+                    </p>
+
+                </div>
+
+                <div class="about-card">
+
+                    <i class="fa-solid fa-eye"></i>
+
+                    <h3>Vision</h3>
+
+                    <p>
+                        Sample vision statement.
+                        Replace this section with the official
+                        vision statement of Talisay City College.
+                    </p>
+
+                </div>
+
+                <div class="about-card">
+
+                    <i class="fa-solid fa-flag"></i>
+
+                    <h3>Goals</h3>
+
+                    <p>
+                        Sample goals and objectives of the school.
+                        You may add educational goals, student
+                        development goals, and institutional plans.
+                    </p>
+
+                </div>
+
+            </div>
+
+            <!-- AMS -->
+
+            <div class="about-section">
+
+                <h2>
+                    About the Academic Monitoring System
+                </h2>
+
+                <p>
+                    The Academic Monitoring System (AMS) is a
+                    centralized platform created to improve
+                    academic management and monitoring within
+                    Talisay City College.
+                </p>
+
+                <p>
+                    The system allows administrators to manage
+                    departments, approve accounts, configure
+                    sections, assign teachers, and monitor
+                    system activity efficiently.
+                </p>
+
+                <p>
+                    Students can monitor their academic records,
+                    grades, evaluations, and requirements while
+                    teachers can manage academic performance
+                    and student progress securely.
+                </p>
+
+            </div>
+
+            <!-- FEATURES -->
+
+            <div class="about-section">
+
+                <h2>
+                    Key Features
+                </h2>
+
+                <div class="about-list">
+
+                    <div>
+
+                        <h4>
+                            Account Approval System
+                        </h4>
+
+                        <p>
+                            All student and teacher accounts
+                            require administrator approval
+                            before gaining access.
+                        </p>
+
+                    </div>
+
+                    <div>
+
+                        <h4>
+                            Academic Monitoring
+                        </h4>
+
+                        <p>
+                            Monitor evaluations, grades,
+                            academic standing, and student
+                            performance in real time.
+                        </p>
+
+                    </div>
+
+                    <div>
+
+                        <h4>
+                            Department & Section Management
+                        </h4>
+
+                        <p>
+                            Administrators can organize
+                            departments, majors, year levels,
+                            sections, and subject assignments.
+                        </p>
+
+                    </div>
+
+                    <div>
+
+                        <h4>
+                            Secure Access
+                        </h4>
+
+                        <p>
+                            User authentication and monitoring
+                            help maintain system security and
+                            accountability.
+                        </p>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+            <!-- CONTACT -->
+
+            <div class="about-section">
+
+                <h2>
+                    School Information
+                </h2>
+
+                <p>
+                    <strong>School:</strong>
+                    Talisay City College
+                </p>
+
+                <p>
+                    <strong>Location:</strong>
+                    V.H. Garces St., Poblacion, Talisay, Philippines, 6045
+                </p>
+
+                <p>
+                    <strong>Email:</strong>
+                    talisaycitycollege2004@gmail.com
+                </p>
+
+                <p>
+                    <strong>Contact Number:</strong>
+                    +63 900 000 0000
+                </p>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+<script>
+let selectedLoginRole = null;
+let selectedSignupRole = null;
+
+function openLogin(role){
+    selectedLoginRole = role;
+
+    document.getElementById('loginModal').style.display = 'flex';
+
+    document.getElementById('modalTitle').innerText =
+    role + ' Login';
+
+    const loginFields =
+    document.getElementById('loginFields');
+
+    if(role === 'Admin'){
+
+        document.getElementById('modalSubtitle').innerText =
+        'Administrator secured access.';
+
+        loginFields.innerHTML = `
+
+
+        <div class="input-group full" style="position:relative;">
+
+            <label>Administrator Password</label>
+
+            <input
+                type="password"
+                id="adminPassword"
+                placeholder="Enter admin password"
+            >
+
+            <button type="button" class="password-toggle" onclick="togglePasswordById('adminPassword', this)" aria-label="Toggle password visibility" style="position:absolute; right:12px; top:36px; border:none; background:transparent;">
+                <i class="fa-solid fa-eye"></i>
+            </button>
+
+        </div>
+
+        `;
+    }
+
+    else{
+
+        document.getElementById('modalSubtitle').innerText =
+        'Enter your credentials to access the dashboard.';
+
+        loginFields.innerHTML = `
+
+        <div class="input-group full">
+
+            <label>Email Address</label>
+
+            <input
+                type="text"
+                id="loginEmail"
+                placeholder="Enter your credentials"
+            >
+
+        </div>
+
+
+        <div class="input-group full" style="position:relative;">
+
+            <label>Password</label>
+
+            <input
+                type="password"
+                id="loginPassword"
+                placeholder="Enter your password"
+            >
+
+            <button type="button" class="password-toggle" onclick="togglePasswordById('loginPassword', this)" aria-label="Toggle password visibility" style="position:absolute; right:12px; top:36px; border:none; background:transparent;">
+                <i class="fa-solid fa-eye"></i>
+            </button>
+
+            <div style="position:absolute; right:8px; top:68px;">
+                <a href="#" onclick="openForgotModal(selectedLoginRole); return false;">Forgot password?</a>
+            </div>
+
+        </div>
+
+        `;
+    }
+}
+
+function closeModal(){
+    document.getElementById('loginModal').style.display = 'none';
+    selectedLoginRole = null;
+}
+
+function closeSignup(){
+    document.getElementById('signupModal').style.display = 'none';
+    selectedSignupRole = null;
+}
+
+function openSignup(role){
+    selectedSignupRole = role;
+
+    const fields = document.getElementById('signupFields');
+
+    document.getElementById('signupModal').style.display = 'flex';
+
+    document.getElementById('signupTitle').innerText =
+    role + ' Registration';
+
+    fields.innerHTML = '';
+
+    // =========================================
+    // STUDENT FORM
+    // =========================================
+
+   if(role === 'Student'){
+
+    fields.innerHTML = `
+
+    <div class="input-group">
+        <label>First Name</label>
+        <input type="text" id="studentFirstName" placeholder="Enter first name">    
+    </div>
+
+    <div class="input-group">
+        <label>Last Name</label>
+        <input type="text" id="studentLastName" placeholder="Enter last name">
+    </div>
+
+    <div class="input-group">
+        <label>Middle Initial</label>
+        <input type="text" id="studentMiddleInitial" placeholder="M.I">
+    </div>
+
+    <div class="input-group">
+        <label>Student ID</label>
+        <input type="text" id="studentNumber" placeholder="Enter student ID">
+    </div>
+
+    <div class="input-group full">
+        <label>Gmail Address</label>
+        <input type="email" id="studentEmail" placeholder="example@gmail.com">
+    </div>
+
+    <div class="input-group full">
+        <label>Password</label>
+        <input type="password" id="studentPassword" placeholder="Create password">
+    </div>
+
+    <!-- DEPARTMENT -->
+
+    <div class="input-group">
+        <label>Department</label>
+
+        <select id="departmentSelect">
+
+            <option value="">Select Department</option>
+
+        </select>
+    </div>
+
+    <!-- MAJOR -->
+
+    <div class="input-group">
+        <label>Major</label>
+
+        <select id="majorSelect">
+
+            <option value="">
+                Select Major
+            </option>
+
+        </select>
+    </div>
+
+   <!-- YEAR LEVEL -->
+
+<div class="input-group">
+    <label>Year Level</label>
+
+    <select id="yearLevelSelect">
+
+        <option value="">
+            Select Year Level
+        </option>
+
+        <option value="1st Year">
+            1st Year
+        </option>
+
+        <option value="2nd Year">
+            2nd Year
+        </option>
+
+        <option value="3rd Year">
+            3rd Year
+        </option>
+
+        <option value="4th Year">
+            4th Year
+        </option>
+
+    </select>
+</div>
+
+<!-- SECTION -->
+
+<div class="input-group">
+    <label>Section</label>
+
+    <select id="sectionSelect">
+
+        <option value="">
+            Select Section
+        </option>
+
+    </select>
+</div>
+    <div class="input-group full">
+        <label>Upload Study Load or School ID</label>
+        <input type="file" id="studentFile">
+    </div>
+
+    `;
+
+    // =========================================
+    // ELEMENTS
+    // =========================================
+
+    const departmentSelect =
+    document.getElementById('departmentSelect');
+
+    const majorSelect =
+    document.getElementById('majorSelect');
+
+    const yearLevelSelect =
+    document.getElementById('yearLevelSelect');
+
+    const sectionSelect =
+    document.getElementById('sectionSelect');
+
+    loadDepartments();
+
+    // ==========================
+    // DEPARTMENT CHANGE
+    // ==========================
+
+    departmentSelect.addEventListener(
+    'change',
+    function(){
+
+        loadMajors(this.value);
+
+        sectionSelect.innerHTML =
+        '<option value="">Select Section</option>';
+
+    });
+
+    // ==========================
+    // MAJOR CHANGE
+    // ==========================
+
+    majorSelect.addEventListener(
+    'change',
+    function(){
+
+        loadSections();
+
+    });
+
+    // ==========================
+    // YEAR LEVEL CHANGE
+    // ==========================
+
+    yearLevelSelect.addEventListener(
+    'change',
+    function(){
+
+        loadSections();
+
+    });
+
+}
+    // =========================================
+    // TEACHER FORM
+    // =========================================
+
+    if(role === 'Teacher'){
+
+        fields.innerHTML = `
+
+        <div class="input-group">
+            <label>First Name</label>
+            <input type="text" id="teacherFirstName" placeholder="Enter first name">
+        </div>
+
+        <div class="input-group">
+            <label>Last Name</label>
+            <input type="text" id="teacherLastName" placeholder="Enter last name">
+        </div>
+
+        <div class="input-group">
+            <label>Middle Initial</label>
+            <input type="text" id="teacherMiddleInitial" placeholder="M.I">
+        </div>
+
+        <div class="input-group">
+            <label>Teacher ID</label>
+            <input type="text" id="teacherNumber" placeholder="Enter teacher ID">
+        </div>
+
+        <div class="input-group full">
+            <label>Gmail Address</label>
+            <input type="email" id="teacherEmail" placeholder="example@gmail.com">
+        </div>
+
+        <div class="input-group full">
+            <label>Password</label>
+            <input type="password" id="teacherPassword" placeholder="Create password">
+        </div>
+
+        <div class="input-group full">
+            <label>Upload Teacher ID</label>
+            <input type="file" id="teacherFile">
+        </div>
+
+        `;
+
+        }
+}
+
+window.onclick = function(event){
+
+    const loginModal = document.getElementById('loginModal');
+    const signupModal = document.getElementById('signupModal');
+
+    if(event.target === loginModal){
+        closeModal();
+    }
+
+    if(event.target === signupModal){
+        closeSignup();
+    }
+}
+</script>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<script>
+
+const loginForm =
+document.getElementById('loginForm');
+
+loginForm.addEventListener(
+'submit',
+async function(event){
+
+event.preventDefault();
+
+const selectedRole = selectedLoginRole ||
+    document.getElementById('modalTitle').innerText.trim().split(' ')[0];
+
+const inputs =
+loginForm.querySelectorAll('input');
+
+
+// ==========================
+// ADMIN LOGIN
+// ==========================
+
+const title = document.getElementById('modalTitle').innerText.trim();
+
+if(title.includes('Admin')){
+
+const adminPassword =
+inputs[0].value;
+
+const { data: adminData, error: adminError } =
+await supabaseClient
+.from('admins')
+.select('*')
+.eq('admin_password', adminPassword)
+.single();
+
+if(adminError || !adminData){
+
+showAlert(
+'error',
+'Access Denied',
+'Invalid administrator password.'
+);
+
+return;
+
+}
+
+showAlert(
+'success',
+'Login Successful',
+'Welcome Administrator.'
+);
+
+setTimeout(() => {
+
+window.location.href =
+'admin_dashboard.html';
+
+}, 1500);
+
+return;
+
+}
+
+
+// ==========================
+// STUDENT / TEACHER LOGIN
+// ==========================
+
+const email =
+inputs[0].value;
+
+const password =
+inputs[1].value;
+
+
+// ==========================
+// AUTH LOGIN
+// ==========================
+
+const { data, error } =
+await supabaseClient.auth.signInWithPassword({
+
+email: email,
+password: password
+
+});
+
+if(error){
+
+showAlert(
+'error',
+'Login Failed',
+error.message
+);
+
+return;
+
+}
+
+
+// ==========================
+// GET USER RECORD
+// ==========================
+
+const userId =
+data.user.id;
+
+const { data: userData, error: userError } =
+await supabaseClient
+.from('users')
+.select('*')
+.eq('user_id', userId)
+.maybeSingle();
+
+if(userError || !userData){
+
+showAlert(
+'error',
+'User Not Found',
+'User record was not found in the database.'
+);
+
+return;
+
+}
+
+
+// ==========================
+// CHECK PORTAL ROLE MATCH
+// ==========================
+
+const expectedRoleId = selectedRole === 'Teacher' ? 2 : selectedRole === 'Student' ? 3 : null;
+const actualRoleName = userData.role_id === 2 ? 'Teacher' : userData.role_id === 3 ? 'Student' : 'correct';
+
+if(expectedRoleId && userData.role_id !== expectedRoleId){
+    showAlert(
+        'error',
+        'Portal Mismatch',
+        `Please use the ${actualRoleName} portal to sign in.`
+    );
+    return;
+}
+
+// ==========================
+// CHECK APPROVAL STATUS
+// ==========================
+
+if(userData.approval_status !== 'approved'){
+
+showAlert(
+'warning',
+'Account Pending',
+'Your account is still waiting for administrator approval.'
+);
+
+return;
+
+}
+
+
+// ==========================
+// LOGIN SUCCESS
+// ==========================
+
+showAlert(
+'success',
+'Login Successful',
+'Welcome to the Academic Monitoring System.'
+);
+
+
+// ==========================
+// REDIRECT
+// ==========================
+
+setTimeout(() => {
+
+if(userData.role_id == 3){
+
+window.location.href =
+'student_dashboard.html';
+
+}
+
+else if(userData.role_id == 2){
+
+window.location.href =
+'teacher_dashboard.html';
+
+}
+
+}, 1500);
+
+});
+
+</script>
+
+<script>
+
+/* ABOUT MODAL */
+
+function openAboutModal(){
+
+    document.getElementById('aboutModal')
+    .style.display = 'flex';
+
+}
+
+function closeAboutModal(){
+
+    document.getElementById('aboutModal')
+    .style.display = 'none';
+
+}
+
+</script>
+
+
+<script>
+
+const SUPABASE_URL =
+'https://nrqrsolfowebujogawti.supabase.co';
+
+const SUPABASE_ANON_KEY =
+'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5ycXJzb2xmb3dlYnVqb2dhd3RpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkyODE2NjksImV4cCI6MjA5NDg1NzY2OX0.XcawTf9niOIZbG0hBTtwSXjySWfdVl3LAClbWdZmfl8';
+
+const supabaseClient = window.supabase.createClient(
+    SUPABASE_URL,
+    SUPABASE_ANON_KEY
+);
+
+const RESET_PASSWORD_FUNCTION_URL = `${SUPABASE_URL.replace(/\/$/, '')}/functions/v1/reset-password`;
+
+console.log("Supabase Connected!");
+</script>
+
+<script>
+let selectedForgotRole = null;
+
+function togglePasswordById(id, btn){
+    const el = document.getElementById(id);
+    if(!el) return;
+    try{
+        const wasPassword = el.type === 'password';
+        el.type = wasPassword ? 'text' : 'password';
+
+        if(btn && btn.querySelector){
+            const icon = btn.querySelector('i');
+            if(icon){
+                if(wasPassword){
+                    icon.classList.remove('fa-eye');
+                    icon.classList.add('fa-eye-slash');
+                } else {
+                    icon.classList.remove('fa-eye-slash');
+                    icon.classList.add('fa-eye');
+                }
+            }
+        } else {
+            const link = document.getElementById('togglePasswordLink'); if(link) link.innerText = el.type === 'text' ? 'Hide password' : 'Show password';
+        }
+    }catch(e){console.warn(e)}
+}
+
+function resetForgotForm(){
+    const forgotForm = document.getElementById('forgotForm');
+    if(forgotForm){
+        forgotForm.reset();
+    }
+
+    const fields = [
+        document.getElementById('forgotEmail'),
+        document.getElementById('forgotIdentifier'),
+        document.getElementById('forgotNewPassword')
+    ];
+
+    fields.forEach((field) => {
+        if(field){
+            field.value = '';
+        }
+    });
+
+    const passwordInput = document.getElementById('forgotNewPassword');
+    if(passwordInput){
+        passwordInput.type = 'password';
+    }
+
+    const toggleButton = document.querySelector('#forgotModal .password-toggle');
+    if(toggleButton){
+        const icon = toggleButton.querySelector('i');
+        if(icon){
+            icon.className = 'fa-solid fa-eye';
+        }
+    }
+}
+
+function openForgotModal(role){
+    const sourceRole = role || selectedLoginRole || (document.getElementById('modalTitle')?.innerText.includes('Teacher') ? 'Teacher' : 'Student');
+    selectedForgotRole = sourceRole;
+    const forgot = document.getElementById('forgotModal');
+    if(!forgot) return;
+
+    resetForgotForm();
+
+    const isTeacher = selectedForgotRole === 'Teacher';
+    const labelEl = document.getElementById('forgotIdentifierLabel');
+    const inputEl = document.getElementById('forgotIdentifier');
+    const subtitleEl = document.getElementById('forgotSubtitle');
+
+    if(labelEl){
+        labelEl.innerText = isTeacher ? 'Teacher ID' : 'Student ID';
+    }
+
+    if(inputEl){
+        inputEl.placeholder = isTeacher ? 'Enter your Teacher ID' : 'Enter your Student ID';
+    }
+
+    if(subtitleEl){
+        subtitleEl.innerText = `Enter your registered email, ${isTeacher ? 'teacher' : 'student'} ID, and a new password to update your account directly from the app.` + (selectedForgotRole ? (' (' + selectedForgotRole + ')') : '');
+    }
+
+    const loginEmailEl = document.getElementById('loginEmail');
+    const forgotEmailEl = document.getElementById('forgotEmail');
+    if(loginEmailEl && forgotEmailEl){
+        forgotEmailEl.value = loginEmailEl.value || '';
+    }
+
+    const loginIdEl = document.getElementById('loginStudentId');
+    if(loginIdEl && inputEl){
+        inputEl.value = loginIdEl.value || '';
+    }
+
+    forgot.style.display = 'flex';
+}
+
+function closeForgotModal(){
+    const forgot = document.getElementById('forgotModal');
+    resetForgotForm();
+    if(forgot) forgot.style.display = 'none';
+}
+
+async function sendPasswordReset(){
+    const email = (document.getElementById('forgotEmail')?.value || '').trim();
+    const identifier = (document.getElementById('forgotIdentifier')?.value || '').trim();
+    const newPassword = (document.getElementById('forgotNewPassword')?.value || '').trim();
+    const accountType = selectedForgotRole === 'Teacher' ? 'teacher' : 'student';
+    const isTeacherFlow = accountType === 'teacher';
+
+    if(!email || !identifier || !newPassword){
+        return showAlert('warning','Validation', `Please enter email, ${isTeacherFlow ? 'Teacher ID' : 'Student ID'}, and a new password`);
+    }
+
+    if(newPassword.length < 8){
+        return showAlert('warning','Weak Password','Password must be at least 8 characters');
+    }
+
+    try{
+        const response = await fetch(RESET_PASSWORD_FUNCTION_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'apikey': SUPABASE_ANON_KEY,
+                'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+            },
+            body: JSON.stringify({
+                email,
+                studentId: identifier,
+                identifier,
+                accountType,
+                role: accountType,
+                newPassword
+            })
+        });
+
+        const result = await response.json().catch(() => ({}));
+
+        if(!response.ok){
+            console.error('Reset password failed', response.status, result);
+            if(response.status === 404){
+                const message = result?.message || '';
+                if(message.toLowerCase().includes('teacher id') || message.toLowerCase().includes('student id')){
+                    return showAlert('error', 'Account Not Found', `${isTeacherFlow ? 'Teacher' : 'Student'} ID not found. Please check the ID and try again.`);
+                }
+                return showAlert('error','Reset Service Not Available','The reset-password edge function is not deployed or the URL is incorrect. Deploy the edge function in Supabase and try again.');
+            }
+            if(result?.message){
+                return showAlert('error','Unable to Update Password', result.message);
+            }
+            return showAlert('error','Unable to Update Password', `Request failed with status ${response.status}`);
+        }
+
+        showAlert('success','Password Updated','Your password was updated successfully. You can now sign in with the new password.');
+        resetForgotForm();
+        closeForgotModal();
+
+    }catch(e){
+        console.error(e);
+        showAlert('error','Error','Unable to update password');
+    }
+}
+</script>
+
+</script>
+
+<script>
+
+async function loadDepartments(){
+
+const departmentSelect =
+document.getElementById('departmentSelect');
+
+if(!departmentSelect) return;
+
+const { data, error } =
+await supabaseClient
+.from('departments')
+.select('*')
+.order('department_name');
+
+if(error){
+
+console.log(error);
+return;
+
+}
+
+departmentSelect.innerHTML =
+'<option value="">Select Department</option>';
+
+data.forEach(department => {
+
+departmentSelect.innerHTML += `
+
+<option value="${department.department_id}">
+${department.department_name}
+</option>
+
+`;
+
+});
+
+}
+
+
+
+async function loadMajors(departmentId){
+
+const majorSelect =
+document.getElementById('majorSelect');
+
+const sectionSelect =
+document.getElementById('sectionSelect');
+
+sectionSelect.innerHTML =
+'<option value="">Select Section</option>';
+
+const { data, error } =
+await supabaseClient
+.from('majors')
+.select('*')
+.eq('department_id', departmentId)
+.order('major_name');
+
+if(error){
+
+console.log(error);
+return;
+
+}
+
+majorSelect.innerHTML =
+'<option value="">Select Major</option>';
+
+data.forEach(major => {
+
+majorSelect.innerHTML += `
+
+<option value="${major.major_id}">
+${major.major_name}
+</option>
+
+`;
+
+});
+
+}
+
+
+
+async function loadSections(){
+
+const majorId =
+document.getElementById('majorSelect').value;
+
+const yearLevel =
+document.getElementById('yearLevelSelect').value;
+
+const sectionSelect =
+document.getElementById('sectionSelect');
+
+if(!majorId || !yearLevel){
+
+sectionSelect.innerHTML =
+'<option value="">Select Section</option>';
+
+return;
+
+}
+
+const { data, error } =
+await supabaseClient
+.from('sections')
+.select('*')
+.eq('major_id', majorId)
+.eq('year_level', yearLevel)
+.order('section_name');
+
+if(error){
+
+console.log(error);
+return;
+
+}
+
+sectionSelect.innerHTML =
+'<option value="">Select Section</option>';
+
+data.forEach(section => {
+
+sectionSelect.innerHTML += `
+
+<option value="${section.section_id}">
+${section.section_name}
+</option>
+
+`;
+
+});
+
+}
+</script>
+
+<script>
+
+const signupForm =
+document.getElementById('signupForm');
+
+signupForm.addEventListener(
+'submit',
+async function(event){
+
+event.preventDefault();
+
+try{
+
+// =====================
+// CAPITALIZE NAME HELPER
+// =====================
+function capitalizeName(name) {
+    if (!name) return '';
+    return name.charAt(0).toUpperCase() + name.slice(1).toLowerCase();
+}
+
+// =====================
+// DETECT ROLE
+// =====================
+
+const role = selectedSignupRole || (document.getElementById('studentFirstName') ? 'Student' : document.getElementById('teacherFirstName') ? 'Teacher' : '');
+
+let firstName = '';
+let lastName = '';
+let middleInitial = '';
+let idNumber = '';
+let email = '';
+let password = '';
+let sectionId = null;
+let uploadFile = null;
+
+if(role === 'Student'){
+
+    firstName = capitalizeName(
+    document.getElementById('studentFirstName').value.trim());
+
+    lastName = capitalizeName(
+    document.getElementById('studentLastName').value.trim());
+
+    middleInitial = capitalizeName(
+    document.getElementById('studentMiddleInitial').value.trim());
+
+    idNumber =
+    document.getElementById('studentNumber').value.trim();
+
+    email =
+    document.getElementById('studentEmail').value.trim();
+
+    password =
+    document.getElementById('studentPassword').value;
+
+    sectionId =
+    document.getElementById('sectionSelect').value;
+
+    uploadFile =
+    document.getElementById('studentFile').files[0];
+
+}
+
+else if(role === 'Teacher'){
+
+    firstName = capitalizeName(
+    document.getElementById('teacherFirstName').value.trim());
+
+    lastName = capitalizeName(
+    document.getElementById('teacherLastName').value.trim());
+
+    middleInitial = capitalizeName(
+    document.getElementById('teacherMiddleInitial').value.trim());
+
+    idNumber =
+    document.getElementById('teacherNumber').value.trim();
+
+    email =
+    document.getElementById('teacherEmail').value.trim();
+
+    password =
+    document.getElementById('teacherPassword').value;
+
+    uploadFile =
+    document.getElementById('teacherFile').files[0];
+
+}
+else {
+    showAlert(
+        'error',
+        'Role Required',
+        'Please open a Student or Teacher registration form.'
+    );
+    return;
+}
+
+
+// =====================================
+// VALIDATION
+// =====================================
+
+// =====================================
+// VALIDATION
+// =====================================
+
+if(
+!firstName ||
+!lastName ||
+!idNumber ||
+!email ||
+!password
+){
+
+showAlert(
+'warning',
+'Missing Fields',
+'Please complete all required fields.'
+);
+
+return;
+
+}
+
+
+// =====================================
+// EMAIL VALIDATION
+// =====================================
+
+if(!email.endsWith('@gmail.com')){
+
+showAlert(
+'warning',
+'Invalid Email',
+'Please use a valid Gmail address.'
+);
+
+return;
+
+}
+
+
+// =====================================
+// PASSWORD VALIDATION
+// =====================================
+
+if(password.length < 8){
+
+showAlert(
+'warning',
+'Weak Password',
+'Password must be at least 8 characters long.'
+);
+
+return;
+
+}
+
+
+// =====================================
+// STUDENT SECTION VALIDATION
+// =====================================
+
+// =====================================
+// STUDENT SECTION VALIDATION
+// =====================================
+
+if(role === 'Student' && !sectionId){
+
+showAlert(
+'warning',
+'Section Required',
+'Please select your department, major, and section.'
+);
+
+return;
+
+}
+
+// =====================================
+// GET FILE
+// =====================================
+
+if(!uploadFile){
+
+showAlert(
+'warning',
+'Missing File',
+'Please upload required document.'
+);
+
+return;
+
+}
+
+
+// =====================================
+// CREATE AUTH ACCOUNT
+// =====================================
+
+const { data: authData, error: authError } =
+await supabaseClient.auth.signUp({
+
+email: email,
+password: password
+
+});
+
+if(authError){
+
+showAlert(
+'error',
+'Signup Failed',
+authError.message
+);
+
+return;
+
+}
+
+
+// =====================================
+// GET AUTH USER ID
+// =====================================
+if(!authData.user){
+
+showAlert(
+'error',
+'Signup Failed',
+'User account was not created.'
+);
+
+return;
+
+}
+const authUserId =
+authData.user.id;
+
+// =====================================
+// UPLOAD FILE TO STORAGE
+// =====================================
+
+const fileName =
+Date.now() + "_" + uploadFile.name;
+
+const { data: uploadData, error: uploadError } =
+await supabaseClient.storage
+.from('documents')
+.upload(fileName, uploadFile);
+
+if(uploadError){
+
+// DELETE AUTH ACCOUNT SESSION
+await supabaseClient.auth.signOut();
+
+showAlert(
+'error',
+'Upload Failed',
+'Document upload failed. Please try again.'
+);
+
+return;
+
+}
+
+// =====================================
+// GET PUBLIC FILE URL
+// =====================================
+
+const { data: publicUrlData } =
+supabaseClient.storage
+.from('documents')
+.getPublicUrl(fileName);
+
+const fileUrl =
+publicUrlData.publicUrl;
+// =====================================
+// INSERT INTO USERS TABLE
+// =====================================
+
+let roleId = 3;
+
+if(role === 'Teacher'){
+    roleId = 2;
+}
+
+const { error: usersError } =
+await supabaseClient
+.from('users')
+.insert([{
+
+user_id: authUserId,
+email: email,
+role_id: roleId,
+approval_status: 'pending'
+
+}]);
+
+
+if(usersError){
+
+showAlert(
+'error',
+'Users Table Error',
+usersError.message
+);
+
+return;
+
+}
+
+
+// =====================================
+// INSERT INTO STUDENTS TABLE
+// =====================================
+
+if(role === 'Student'){
+
+const { error: studentError } =
+await supabaseClient
+.from('students')
+.insert([{
+
+user_id: authUserId,
+student_number: idNumber,
+first_name: firstName,
+last_name: lastName,
+middle_initial: middleInitial,
+section_id: parseInt(sectionId),
+document_url: fileUrl
+
+}]);
+
+if(studentError){
+
+showAlert(
+'error',
+'Student Table Error',
+studentError.message
+);
+
+return;
+
+}
+
+}
+
+else if(role === 'Teacher'){
+
+const { error: teacherError } =
+await supabaseClient
+.from('teachers')
+.insert([{
+
+user_id: authUserId,
+teacher_number: idNumber,
+first_name: firstName,
+last_name: lastName,
+middle_initial: middleInitial,
+document_url: fileUrl
+
+}]);
+
+if(teacherError){
+
+showAlert(
+'error',
+'Teacher Table Error',
+teacherError.message
+);
+
+return;
+
+}
+
+}
+
+
+// =====================================
+// SUCCESS
+// =====================================
+
+showAlert(
+'success',
+'Registration Successful',
+'Your account is pending for administrator approval.'
+);
+
+signupForm.reset();
+
+closeSignup();
+
+}
+
+catch(err){
+
+console.log(err);
+
+showAlert(
+'error',
+'System Error',
+err.message
+);
+
+}
+
+});
+
+</script>
+
+<!-- ================= AMS ALERT ================= -->
+
+<div class="ams-alert" id="amsAlert">
+
+    <div class="alert-icon" id="alertIcon">
+        <i class="fa-solid fa-circle-check"></i>
+    </div>
+
+    <div class="alert-content">
+
+        <h3 id="alertTitle">
+            Success
+        </h3>
+
+        <p id="alertMessage">
+            Message here
+        </p>
+
+    </div>
+
+    <button class="alert-close"
+    onclick="closeAlert()">
+
+        <i class="fa-solid fa-xmark"></i>
+
+    </button>
+
+</div>
+
+<script>
+
+/* ================= ALERT FUNCTION ================= */
+
+function showAlert(type, title, message){
+
+    const alertBox =
+    document.getElementById('amsAlert');
+
+    const alertTitle =
+    document.getElementById('alertTitle');
+
+    const alertMessage =
+    document.getElementById('alertMessage');
+
+    const alertIcon =
+    document.getElementById('alertIcon');
+
+    // RESET CLASSES
+
+    alertBox.className = 'ams-alert';
+
+    // TYPE
+
+    alertBox.classList.add(type);
+
+    // CONTENT
+
+    alertTitle.innerText = title;
+
+    alertMessage.innerText = message;
+
+    // ICONS
+
+    if(type === 'success'){
+
+        alertIcon.innerHTML =
+        '<i class="fa-solid fa-circle-check"></i>';
+
+    }
+
+    else if(type === 'error'){
+
+        alertIcon.innerHTML =
+        '<i class="fa-solid fa-circle-xmark"></i>';
+
+    }
+
+    else if(type === 'warning'){
+
+        alertIcon.innerHTML =
+        '<i class="fa-solid fa-triangle-exclamation"></i>';
+
+    }
+
+    // SHOW
+
+    setTimeout(() => {
+
+        alertBox.classList.add('show');
+
+    }, 100);
+
+    // AUTO CLOSE
+
+    setTimeout(() => {
+
+        closeAlert();
+
+    }, 4000);
+
+}
+
+/* CLOSE ALERT */
+
+function closeAlert(){
+
+    document
+    .getElementById('amsAlert')
+    .classList.remove('show');
+
+}
+</script>
+</body>
+</html>

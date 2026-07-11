@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Student Profile</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+
+<style>
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+    font-family:'Inter',sans-serif;
+}
+:root{
+    --primary:#0b3d91;
+    --secondary:#1f6bff;
+    --light:#f4f7fc;
+    --white:#ffffff;
+    --text:#1e293b;
+    --gray:#64748b;
+    --border:#dbe4f0;
+    --success:#16a34a;
+    --warning:#f59e0b;
+    --danger:#dc2626;
+}
+body{
+    background:var(--light);
+    display:flex;
+}
+.sidebar{
+    width:270px;
+    height:100vh;
+    background:var(--primary);
+    color:white;
+    position:fixed;
+    left:0;
+    top:0;
+    padding:30px 20px;
+    overflow-y:auto;
+}
+.logo{
+    margin-bottom:40px;
+}
+.logo h2{
+    font-size:24px;
+}
+.logo p{
+    font-size:13px;
+    opacity:.8;
+    margin-top:5px;
+}
+.menu{
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+}
+.menu a{
+    text-decoration:none;
+    color:white;
+    padding:14px;
+    border-radius:12px;
+    transition:.3s;
+    font-weight:500;
+}
+.menu a:hover,
+.menu a.active{
+    background:rgba(255,255,255,.15);
+}
+.menu i{
+    margin-right:10px;
+}
+.main{
+    margin-left:270px;
+    width:calc(100% - 270px);
+    padding:30px;
+}
+.topbar{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    margin-bottom:30px;
+    flex-wrap:wrap;
+    gap:20px;
+}
+.welcome-label{
+    color:var(--gray);
+    font-size:13px;
+    text-transform:uppercase;
+    letter-spacing:2px;
+    margin-bottom:10px;
+}
+.topbar h1{
+    color:var(--primary);
+    margin-bottom:8px;
+}
+.student-info{
+    color:var(--gray);
+    font-size:14px;
+}
+.profile-mini{
+    display:flex;
+    align-items:center;
+    gap:14px;
+    background:white;
+    padding:14px 18px;
+    border-radius:16px;
+    border:1px solid var(--border);
+}
+.profile-mini img{
+    width:50px;
+    height:50px;
+    border-radius:50%;
+}
+.table-section{
+    background:white;
+    border-radius:20px;
+    padding:25px;
+    border:1px solid var(--border);
+    margin-bottom:30px;
+    overflow-x:auto;
+}
+.section-header{
+    margin-bottom:20px;
+}
+.section-header h2{
+    color:var(--primary);
+    margin-bottom:8px;
+}
+.section-header p{
+    color:var(--gray);
+}
+.profile-wrapper{
+    display:grid;
+    grid-template-columns:1fr;
+    gap:25px;
+}
+.profile-info-card{
+    background:white;
+    border-radius:20px;
+    padding:30px;
+    text-align:center;
+    border:1px solid var(--border);
+    height:fit-content;
+}
+.profile-info-card img{
+    width:120px;
+    height:120px;
+    border-radius:50%;
+    margin-bottom:15px;
+}
+.profile-info-card h2{
+    color:var(--primary);
+    margin-bottom:10px;
+}
+.profile-info-card p{
+    color:var(--gray);
+    font-size:14px;
+}
+.profile-details{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
+    gap:20px;
+}
+.info-box{
+    background:white;
+    border-radius:18px;
+    padding:20px;
+    border:1px solid var(--border);
+    box-shadow:0 8px 20px rgba(0,0,0,.04);
+}
+.info-box h4{
+    color:var(--gray);
+    font-size:13px;
+    margin-bottom:10px;
+}
+.info-box p{
+    color:var(--primary);
+    font-size:17px;
+    font-weight:700;
+}
+.pass-text{
+    color:var(--success);
+    font-weight:700;
+}
+@media(max-width:900px){
+    .profile-wrapper{
+        grid-template-columns:1fr;
+    }
+}
+</style>
+<link rel="stylesheet" href="mobile_fix.css">
+</head>
+<body>
+
+<div class="sidebar">
+    <div class="logo">
+        <h2>AMS Student</h2>
+        <p>Talisay City College</p>
+    </div>
+    <div class="menu">
+        <a href="student_dashboard.html" class="nav-link">
+            <i class="fa-solid fa-house"></i>
+            Dashboard
+        </a>
+        <a href="student_subjects.html" class="nav-link">
+            <i class="fa-solid fa-book"></i>
+            My Subjects
+        </a>
+        <a href="student_academic.html" class="nav-link">
+            <i class="fa-solid fa-chart-column"></i>
+            Academic Status
+        </a>
+        <a href="student_requirements.html" class="nav-link">
+            <i class="fa-solid fa-file-lines"></i>
+            Missing Requirements
+        </a>
+        <a href="student_profile.html" class="active nav-link">
+            <i class="fa-solid fa-user"></i>
+            Profile
+        </a>
+        <a href="login.html">
+            <i class="fa-solid fa-right-from-bracket"></i>
+            Logout
+        </a>
+    </div>
+</div>
+
+<div class="main">
+    <div class="topbar">
+        <div>
+            <h1>Student Profile</h1>
+            <p>Student personal and academic details</p>
+        </div>
+    </div>
+
+    <div class="profile-wrapper">
+        <div class="table-section">
+            <div class="section-header">
+                <h2>Student Information</h2>
+                <p>Basic student profile details</p>
+            </div>
+            <div class="profile-details">
+                <div class="info-box"><h4>Student ID</h4><p id="studentNumber">Loading...</p></div>
+                <div class="info-box"><h4>Course</h4><p id="studentCourse">Loading...</p></div>
+                <div class="info-box"><h4>Year & Section</h4><p id="studentYearSection">Loading...</p></div>
+                <div class="info-box"><h4>Email Address</h4><p id="studentEmail">Loading...</p></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+const SUPABASE_URL = "https://nrqrsolfowebujogawti.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5ycXJzb2xmb3dlYnVqb2dhd3RpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkyODE2NjksImV4cCI6MjA5NDg1NzY2OX0.XcawTf9niOIZbG0hBTtwSXjySWfdVl3LAClbWdZmfl8";
+const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+async function loadStudentProfile() {
+    try {
+        const { data: sessionData, error: sessionError } = await supabaseClient.auth.getSession();
+        if (sessionError) {
+            console.error("Failed to get session", sessionError);
+        }
+
+        let user = sessionData?.session?.user;
+
+        if (!user) {
+            const {
+                data: { user: authUser },
+                error: authError
+            } = await supabaseClient.auth.getUser();
+
+            if (authError || !authUser) {
+                console.error("No authenticated user found", authError || "No user");
+                setProfileFields("-", "-", "-", "-");
+                return;
+            }
+
+            user = authUser;
+        }
+
+        const { data: studentData, error: studentError } = await supabaseClient
+            .from("students")
+            .select("student_number, section_id")
+            .eq("user_id", user.id)
+            .single();
+
+        if (studentError || !studentData) {
+            console.error("Failed to load student profile", studentError);
+            setProfileFields("-", "-", "-", user.email || "-");
+            return;
+        }
+
+        let majorName = "-";
+        let sectionLabel = "-";
+
+        if (studentData.section_id) {
+            const { data: sectionData, error: sectionError } = await supabaseClient
+                .from("sections")
+                .select("section_name, year_level, major_id")
+                .eq("section_id", studentData.section_id)
+                .single();
+
+            if (!sectionError && sectionData) {
+                sectionLabel = `${sectionData.year_level || ""} ${sectionData.section_name || ""}`.trim() || "-";
+
+                if (sectionData.major_id) {
+                    const { data: majorData, error: majorError } = await supabaseClient
+                        .from("majors")
+                        .select("major_name")
+                        .eq("major_id", sectionData.major_id)
+                        .single();
+
+                    if (!majorError && majorData) {
+                        majorName = majorData.major_name || "-";
+                    }
+                }
+            }
+        }
+
+        setProfileFields(
+            studentData.student_number || "-",
+            majorName,
+            sectionLabel,
+            user.email || "-"
+        );
+    } catch (err) {
+        console.error("Error loading student profile", err);
+        setProfileFields("-", "-", "-", "-");
+    }
+}
+
+function setProfileFields(studentNumber, course, yearSection, email) {
+    document.getElementById("studentNumber").innerText = studentNumber;
+    document.getElementById("studentCourse").innerText = course;
+    document.getElementById("studentYearSection").innerText = yearSection;
+    document.getElementById("studentEmail").innerText = email;
+}
+
+window.addEventListener("DOMContentLoaded", loadStudentProfile);
+</script>
+</body>
+</html>

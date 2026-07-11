@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Student Academic Status</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+
+<style>
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+    font-family:'Inter',sans-serif;
+}
+:root{
+    --primary:#0b3d91;
+    --secondary:#1f6bff;
+    --light:#f4f7fc;
+    --white:#ffffff;
+    --text:#1e293b;
+    --gray:#64748b;
+    --border:#dbe4f0;
+    --success:#16a34a;
+    --warning:#f59e0b;
+    --danger:#dc2626;
+}
+body{
+    background:var(--light);
+    display:flex;
+}
+.sidebar{
+    width:270px;
+    height:100vh;
+    background:var(--primary);
+    color:white;
+    position:fixed;
+    left:0;
+    top:0;
+    padding:30px 20px;
+    overflow-y:auto;
+}
+.logo{
+    margin-bottom:40px;
+}
+.logo h2{
+    font-size:24px;
+}
+.logo p{
+    font-size:13px;
+    opacity:.8;
+    margin-top:5px;
+}
+.menu{
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+}
+.menu a{
+    text-decoration:none;
+    color:white;
+    padding:14px;
+    border-radius:12px;
+    transition:.3s;
+    font-weight:500;
+}
+.menu a:hover,
+.menu a.active{
+    background:rgba(255,255,255,.15);
+}
+.menu i{
+    margin-right:10px;
+}
+.main{
+    margin-left:270px;
+    width:calc(100% - 270px);
+    padding:30px;
+}
+.topbar{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    margin-bottom:30px;
+    flex-wrap:wrap;
+    gap:20px;
+}
+.welcome-label{
+    color:var(--gray);
+    font-size:13px;
+    text-transform:uppercase;
+    letter-spacing:2px;
+    margin-bottom:10px;
+}
+.topbar h1{
+    color:var(--primary);
+    margin-bottom:8px;
+}
+.student-info{
+    color:var(--gray);
+    font-size:14px;
+}
+.profile-mini{
+    display:flex;
+    align-items:center;
+    gap:14px;
+    background:white;
+    padding:14px 18px;
+    border-radius:16px;
+    border:1px solid var(--border);
+}
+.profile-mini img{
+    width:50px;
+    height:50px;
+    border-radius:50%;
+}
+.table-section{
+    background:white;
+    border-radius:20px;
+    padding:25px;
+    border:1px solid var(--border);
+    margin-bottom:30px;
+    overflow-x:auto;
+}
+.table-section h2{
+    color:var(--primary);
+    margin-bottom:20px;
+}
+table{
+    width:100%;
+    border-collapse:collapse;
+}
+table th{
+    background:#eef4ff;
+    color:var(--primary);
+    padding:14px;
+    text-align:left;
+    font-size:14px;
+}
+table td{
+    padding:14px;
+    border-bottom:1px solid #edf2f7;
+    font-size:14px;
+}
+table tr:hover{
+    background:#f8fbff;
+}
+.small-grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(180px,1fr));
+    gap:18px;
+    margin-bottom:25px;
+}
+.small-card{
+    background:white;
+    border-radius:18px;
+    padding:20px;
+    border:1px solid var(--border);
+    box-shadow:0 8px 20px rgba(0,0,0,.04);
+}
+.small-card h4{
+    color:var(--gray);
+    margin-bottom:10px;
+    font-size:14px;
+}
+.small-card h3{
+    color:var(--primary);
+    font-size:28px;
+}
+.pass-text{
+    color:var(--success);
+    font-weight:700;
+}
+.warning-text{
+    color:var(--warning);
+    font-weight:700;
+}
+.danger-text{
+    color:var(--danger);
+    font-weight:700;
+}
+</style>
+<link rel="stylesheet" href="mobile_fix.css">
+</head>
+<body>
+
+<div class="sidebar">
+    <div class="logo">
+        <h2>AMS Student</h2>
+        <p>Talisay City College</p>
+    </div>
+    <div class="menu">
+        <a href="student_dashboard.html" class="nav-link">
+            <i class="fa-solid fa-house"></i>
+            Dashboard
+        </a>
+        <a href="student_subjects.html" class="nav-link">
+            <i class="fa-solid fa-book"></i>
+            My Subjects
+        </a>
+        <a href="student_academic.html" class="active nav-link">
+            <i class="fa-solid fa-chart-column"></i>
+            Academic Status
+        </a>
+        <a href="student_requirements.html" class="nav-link">
+            <i class="fa-solid fa-file-lines"></i>
+            Missing Requirements
+        </a>
+        <a href="student_profile.html" class="nav-link">
+            <i class="fa-solid fa-user"></i>
+            Profile
+        </a>
+        <a href="login.html">
+            <i class="fa-solid fa-right-from-bracket"></i>
+            Logout
+        </a>
+    </div>
+</div>
+
+<div class="main">
+    <div class="small-grid">
+        <div class="small-card">
+            <h4>Passed</h4>
+            <h3 class="pass-text" id="passedCount">0</h3>
+        </div>
+        <div class="small-card">
+            <h4>Incomplete</h4>
+            <h3 class="warning-text" id="incompleteCount">0</h3>
+        </div>
+        <div class="small-card">
+            <h4>Failed</h4>
+            <h3 class="danger-text" id="failedCount">0</h3>
+        </div>
+    </div>
+
+    <div class="table-section">
+        <div class="section-header">
+            <div>
+                <h2>Academic Grades & Status</h2>
+                <p>Semester academic evaluation records</p>
+            </div>
+        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th>Subject</th>
+                    <th>Prelim</th>
+                    <th>Midterm</th>
+                    <th>Final</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody id="gradesTableBody">
+                <tr>
+                    <td colspan="5" class="empty">Loading grades...</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+const SUPABASE_URL = "https://nrqrsolfowebujogawti.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5ycXJzb2xmb3dlYnVqb2dhd3RpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkyODE2NjksImV4cCI6MjA5NDg1NzY2OX0.XcawTf9niOIZbG0hBTtwSXjySWfdVl3LAClbWdZmfl8";
+const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+async function loadAcademicStatus() {
+    try {
+        const { data: sessionData } = await supabaseClient.auth.getSession();
+        let user = sessionData?.session?.user;
+
+        if (!user) {
+            const { data: userData } = await supabaseClient.auth.getUser();
+            user = userData?.user;
+        }
+
+        if (!user) {
+            renderAcademic([], "No authenticated user.");
+            return;
+        }
+
+        const { data: student, error: studentError } = await supabaseClient
+            .from("students")
+            .select("student_id")
+            .eq("user_id", user.id)
+            .single();
+
+        if (studentError || !student) {
+            console.error("Student lookup failed", studentError);
+            renderAcademic([], "Student record not found.");
+            return;
+        }
+
+        const { data: grades, error: gradesError } = await supabaseClient
+            .from("student_grades")
+            .select(`prelim, midterm, final, status, subjects(subject_code, subject_name)`)            
+            .eq("student_id", student.student_id);
+
+        if (gradesError) {
+            console.error("Failed to load grades", gradesError);
+            renderAcademic([], "Failed to load grades.");
+            return;
+        }
+
+        renderAcademic(grades || []);
+    } catch (err) {
+        console.error("Error loading academic status", err);
+        renderAcademic([], "Error loading academic status.");
+    }
+}
+
+function renderAcademic(grades, message) {
+    const tableBody = document.getElementById("gradesTableBody");
+    const passedCount = grades.filter((item) => item.status === "PASSED").length;
+    const incompleteCount = grades.filter((item) => item.status === "INCOMPLETE").length;
+    const failedCount = grades.filter((item) => item.status === "FAILED").length;
+
+    document.getElementById("passedCount").innerText = passedCount;
+    document.getElementById("incompleteCount").innerText = incompleteCount;
+    document.getElementById("failedCount").innerText = failedCount;
+
+    if (!grades.length) {
+        tableBody.innerHTML = `
+            <tr>
+                <td colspan="5">${message || "No academic records found."}</td>
+            </tr>
+        `;
+        return;
+    }
+
+    tableBody.innerHTML = grades.map((grade) => {
+        const subject = grade.subjects || {};
+        const statusClass = grade.status === "PASSED" ? "pass-text" : grade.status === "INCOMPLETE" ? "warning-text" : "danger-text";
+        return `
+            <tr>
+                <td>${subject.subject_name || "-"}</td>
+                <td>${grade.prelim ?? "-"}</td>
+                <td>${grade.midterm ?? "-"}</td>
+                <td>${grade.final ?? "-"}</td>
+                <td class="${statusClass}">${grade.status || "-"}</td>
+            </tr>
+        `;
+    }).join("");
+}
+
+window.addEventListener("DOMContentLoaded", loadAcademicStatus);
+</script>
