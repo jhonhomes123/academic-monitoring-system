@@ -339,7 +339,7 @@ async function loadStudentRequirements() {
         }
 
         // Get student record with section and major info
-        const { data: student, error: studentError } = await supabaseClient
+        let { data: student, error: studentError } = await supabaseClient
             .from('students')
             .select(`
                 student_id,
@@ -354,6 +354,20 @@ async function loadStudentRequirements() {
             `)
             .eq('user_id', user.id)
             .maybeSingle();
+
+        if (!student && !studentError) {
+            try {
+                const displayName = (user.user_metadata && (user.user_metadata.full_name || user.user_metadata.name)) || '';
+                const [firstName, ...rest] = (displayName || user.email || '').split(' ');
+                const lastName = rest.join(' ');
+                const { error: createErr } = await supabaseClient.from('students').insert([{ user_id: user.id, student_number: `S-${Date.now()}`, first_name: firstName || 'Student', last_name: lastName || '', section_id: null }]);
+                if (createErr) console.error('Failed to create minimal student', createErr);
+                const re = await supabaseClient.from('students').select('student_id, first_name, last_name, section_id, sections(section_name, year_level, majors(major_name))').eq('user_id', user.id).maybeSingle();
+                student = re.data; studentError = re.error;
+            } catch (err) {
+                console.error('Error creating student record', err);
+            }
+        }
 
         if (studentError || !student) {
             console.error('Student record not found', studentError, student);

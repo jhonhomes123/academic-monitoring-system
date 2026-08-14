@@ -288,11 +288,35 @@ async function loadStudentProfile() {
             user = authUser;
         }
 
-        const { data: studentData, error: studentError } = await supabaseClient
+        let { data: studentData, error: studentError } = await supabaseClient
             .from("students")
-            .select("student_number, section_id")
+            .select("student_number, section_id, first_name, last_name")
             .eq("user_id", user.id)
-            .single();
+            .maybeSingle();
+
+        if (!studentData && !studentError) {
+            try {
+                const displayName = (user.user_metadata && (user.user_metadata.full_name || user.user_metadata.name)) || '';
+                const [firstName, ...rest] = (displayName || user.email || '').split(' ');
+                const lastName = rest.join(' ');
+
+                const { error: createErr } = await supabaseClient
+                    .from('students')
+                    .insert([{ user_id: user.id, student_number: `S-${Date.now()}`, first_name: firstName || 'Student', last_name: lastName || '', section_id: null }]);
+
+                if (createErr) console.error('Failed to create minimal student', createErr);
+
+                const re = await supabaseClient
+                    .from('students')
+                    .select('student_number, section_id, first_name, last_name')
+                    .eq('user_id', user.id)
+                    .maybeSingle();
+
+                studentData = re.data; studentError = re.error;
+            } catch (err) {
+                console.error('Error creating student record', err);
+            }
+        }
 
         if (studentError || !studentData) {
             console.error("Failed to load student profile", studentError);

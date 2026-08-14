@@ -914,14 +914,40 @@ async function loadStudentDashboard() {
         let total = 0, passed = 0, incomplete = 0, failed = 0;
         let rows = '';
 
+        let subjectAssignmentsMap = {};
+
         if (grades && grades.length) {
             total = grades.length;
+
+            // collect subject ids
+            const subjectIds = grades.map(g => g.subjects?.subject_id || g.subject_id).filter(Boolean);
+
+            if (subjectIds.length) {
+                const { data: assignments } = await supabaseClient
+                    .from('teacher_subject_assignments')
+                    .select('assignment_id, subject_id, teachers(teacher_id, first_name, last_name), teacher_section_assignments(section_id)')
+                    .in('subject_id', subjectIds);
+
+                // build map: subject_id -> assignment matching student's section if available
+                (assignments || []).forEach(a => {
+                    subjectAssignmentsMap[a.subject_id] = subjectAssignmentsMap[a.subject_id] || [];
+                    subjectAssignmentsMap[a.subject_id].push(a);
+                });
+            }
+
             for (const g of grades) {
                 const subj = g.subjects || {};
+                const subjectId = subj.subject_id || g.subject_id;
                 const subjectName = subj.subject_name || subj.subject_code || 'Unknown Subject';
-                const teacherAssign = subj.teacher_subject_assignments || [];
-                const teacher = teacherAssign[0]?.teachers;
-                const instructor = teacher ? `${teacher.first_name || ''} ${teacher.last_name || ''}`.trim() : 'TBD';
+
+                // choose assignment for this student's section
+                let instructor = 'TBD';
+                const assigns = subjectAssignmentsMap[subjectId] || [];
+                // prefer assignment linked to the student's section (match various shapes), do NOT fallback to another section's teacher
+                let chosen = assigns.find(a => (a.teacher_section_assignments || []).some(ts => String(ts.section_id || ts.sections?.section_id) === String(student.section_id)));
+                const teacher = chosen?.teachers;
+                if (teacher) instructor = `${teacher.first_name || ''} ${teacher.last_name || ''}`.trim();
+
                 const statusRaw = (g.status || '').toString().toUpperCase() || 'PENDING';
                 let statusClass = 'warning-text';
                 if (statusRaw === 'PASSED') { statusClass = 'pass-text'; passed++; }
@@ -952,8 +978,26 @@ async function loadStudentDashboard() {
                 } else if (sectionSubjects && sectionSubjects.length) {
                     rows = '';
                     total = sectionSubjects.length;
+                    // lookup assignments for section subjects
+                    const subjectIds = sectionSubjects.map(s => s.subject_id).filter(Boolean);
+                    let assignments = [];
+                    if (subjectIds.length) {
+                        const resp = await supabaseClient
+                            .from('teacher_subject_assignments')
+                            .select('assignment_id, subject_id, teachers(teacher_id, first_name, last_name), teacher_section_assignments(section_id)')
+                            .in('subject_id', subjectIds);
+                        assignments = resp.data || [];
+                    }
+
                     sectionSubjects.forEach(sub => {
-                        rows += `\n<tr>\n<td>${sub.subject_code}</td>\n<td>${sub.subject_name}</td>\n<td></td>\n</tr>`;
+                        let instructor = 'TBD';
+                        const assigns = (assignments || []).filter(a => a.subject_id === sub.subject_id);
+                        // strictly match assignment to student's section only
+                        let chosen = assigns.find(a => (a.teacher_section_assignments || []).some(ts => String(ts.section_id || ts.sections?.section_id) === String(student.section_id)));
+                        const teacher = chosen?.teachers;
+                        if (teacher) instructor = `${teacher.first_name || ''} ${teacher.last_name || ''}`.trim();
+
+                        rows += `\n<tr>\n<td>${sub.subject_code}</td>\n<td>${instructor}</td>\n<td></td>\n</tr>`;
                     });
 
                     if (enrolledBody) enrolledBody.innerHTML = rows;
