@@ -820,7 +820,7 @@ async function loadStudentDashboard() {
             return;
         }
 
-        const { data: student, error: studentError } = await supabaseClient
+        let { data: student, error: studentError } = await supabaseClient
             .from('students')
             .select(`
                 student_id,
@@ -828,13 +828,61 @@ async function loadStudentDashboard() {
                 last_name,
                 section_id,
                 sections(
+                    section_id,
                     section_name,
                     year_level,
-                    majors(major_name)
+                    majors(major_id, major_name)
                 )
             `)
             .eq('user_id', user.id)
             .maybeSingle();
+
+        // If student row missing, create a minimal record so dashboard actions can proceed
+        if (!student && !studentError) {
+            try {
+                const displayName = (user.user_metadata && (user.user_metadata.full_name || user.user_metadata.name)) || '';
+                const [firstName, ...rest] = (displayName || user.email || '').split(' ');
+                const lastName = rest.join(' ');
+
+                const { error: createErr } = await supabaseClient
+                    .from('students')
+                    .insert([
+                        {
+                            user_id: user.id,
+                            student_number: `S-${Date.now()}`,
+                            first_name: firstName || 'Student',
+                            last_name: lastName || '',
+                            section_id: null
+                        }
+                    ]);
+
+                if (createErr) console.error('Failed to create minimal student record', createErr);
+
+                // re-fetch student
+                const re = await supabaseClient
+                    .from('students')
+                    .select(`
+                        student_id,
+                        first_name,
+                        last_name,
+                        section_id,
+                        sections(
+                            section_id,
+                            section_name,
+                            year_level,
+                            majors(major_id, major_name)
+                        )
+                    `)
+                    .eq('user_id', user.id)
+                    .maybeSingle();
+
+                student = re.data;
+                studentError = re.error;
+            } catch (err) {
+                console.error('Error ensuring student row', err);
+                return;
+            }
+        }
 
         if (studentError || !student) {
             console.error('Student record not found', studentError);
@@ -884,6 +932,39 @@ async function loadStudentDashboard() {
             }
         } else {
             rows = '<tr><td colspan="3" class="empty">No enrolled subjects</td></tr>';
+        }
+
+        // If no enrolled subjects (grades) exist, load subjects offered for the student's section
+        if ((!grades || !grades.length) && student.sections && student.sections.majors) {
+            try {
+                const majorId = student.sections.majors.major_id;
+                const yearLevel = student.sections.year_level;
+
+                const { data: sectionSubjects, error: sectionSubjectsError } = await supabaseClient
+                    .from('subjects')
+                    .select('subject_id, subject_code, subject_name')
+                    .eq('major_id', majorId)
+                    .eq('year_level', yearLevel)
+                    .order('subject_name');
+
+                if (sectionSubjectsError) {
+                    console.error('Error loading section subjects', sectionSubjectsError);
+                } else if (sectionSubjects && sectionSubjects.length) {
+                    rows = '';
+                    total = sectionSubjects.length;
+                    sectionSubjects.forEach(sub => {
+                        rows += `\n<tr>\n<td>${sub.subject_code}</td>\n<td>${sub.subject_name}</td>\n<td></td>\n</tr>`;
+                    });
+
+                    if (enrolledBody) enrolledBody.innerHTML = rows;
+                    if (totalSubjectsEl) totalSubjectsEl.textContent = total;
+                    if (passedEl) passedEl.textContent = passed;
+                    if (incEl) incEl.textContent = incomplete;
+                    if (failedEl) failedEl.textContent = failed;
+                }
+            } catch (err) {
+                console.error('Failed to load section subjects', err);
+            }
         }
 
         if (enrolledBody) enrolledBody.innerHTML = rows;
