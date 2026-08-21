@@ -677,10 +677,9 @@ table select{
                 <tr>
 
                     <th>Student Name</th>
-                    <th>Prelim</th>
-                    <th>Midterm</th>
-                    <th>Final</th>
-                    <th>Term Status</th>
+                    <th>Prelim / Status</th>
+                    <th>Midterm / Status</th>
+                    <th>Final / Status</th>
                     <th>Action</th>
 
                 </tr>
@@ -1433,21 +1432,32 @@ async function loadStudents(){
 
         </td>
 
-        <td><input type="number" step="0.1" id="prelim-${student.student_id}" value="${formatGradeInput(grade?.prelim)}"></td>
-        <td><input type="number" step="0.1" id="midterm-${student.student_id}" value="${formatGradeInput(grade?.midterm)}"></td>
-        <td><input type="number" step="0.1" id="final-${student.student_id}" value="${formatGradeInput(grade?.final)}"></td>
-
         <td>
-            ${["prelim", "midterm", "final"].map(term => `
-                <label class="term-status-label">${term[0].toUpperCase() + term.slice(1)}
-                    <select id="${term}-status-${student.student_id}" onchange="updateStatusColor(this)">
-                        <option value="">Pending</option>
-                        <option value="PASSED" ${grade?.[`${term}_status`] === "PASSED" ? "selected" : ""}>Passed</option>
-                        <option value="FAILED" ${grade?.[`${term}_status`] === "FAILED" ? "selected" : ""}>Failed</option>
-                        <option value="INCOMPLETE" ${grade?.[`${term}_status`] === "INCOMPLETE" ? "selected" : ""}>Incomplete</option>
-                    </select>
-                </label>
-            `).join("")}
+            <input type="number" step="0.1" id="prelim-${student.student_id}" value="${formatGradeInput(grade?.prelim)}">
+            <select id="prelim-status-${student.student_id}" onchange="updateStatusColor(this)">
+                <option value="">Pending</option>
+                <option value="PASSED" ${grade?.prelim_status === "PASSED" ? "selected" : ""}>Passed</option>
+                <option value="FAILED" ${grade?.prelim_status === "FAILED" ? "selected" : ""}>Failed</option>
+                <option value="INCOMPLETE" ${grade?.prelim_status === "INCOMPLETE" ? "selected" : ""}>Incomplete</option>
+            </select>
+        </td>
+        <td>
+            <input type="number" step="0.1" id="midterm-${student.student_id}" value="${formatGradeInput(grade?.midterm)}">
+            <select id="midterm-status-${student.student_id}" onchange="updateStatusColor(this)">
+                <option value="">Pending</option>
+                <option value="PASSED" ${grade?.midterm_status === "PASSED" ? "selected" : ""}>Passed</option>
+                <option value="FAILED" ${grade?.midterm_status === "FAILED" ? "selected" : ""}>Failed</option>
+                <option value="INCOMPLETE" ${grade?.midterm_status === "INCOMPLETE" ? "selected" : ""}>Incomplete</option>
+            </select>
+        </td>
+        <td>
+            <input type="number" step="0.1" id="final-${student.student_id}" value="${formatGradeInput(grade?.final)}">
+            <select id="final-status-${student.student_id}" onchange="updateStatusColor(this)">
+                <option value="">Pending</option>
+                <option value="PASSED" ${grade?.final_status === "PASSED" ? "selected" : ""}>Passed</option>
+                <option value="FAILED" ${grade?.final_status === "FAILED" ? "selected" : ""}>Failed</option>
+                <option value="INCOMPLETE" ${grade?.final_status === "INCOMPLETE" ? "selected" : ""}>Incomplete</option>
+            </select>
         </td>
 
         <td>

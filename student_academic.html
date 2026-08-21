@@ -253,12 +253,11 @@ table tr:hover{
                     <th>Prelim</th>
                     <th>Midterm</th>
                     <th>Final</th>
-                    <th>Status</th>
                 </tr>
             </thead>
             <tbody id="gradesTableBody">
                 <tr>
-                    <td colspan="5" class="empty">Loading grades...</td>
+                    <td colspan="4" class="empty">Loading grades...</td>
                 </tr>
             </tbody>
         </table>
@@ -390,7 +389,7 @@ function renderAcademic(grades, message) {
     if (!grades.length) {
         tableBody.innerHTML = `
             <tr>
-                <td colspan="5">${message || "No academic records found."}</td>
+                <td colspan="4">${message || "No academic records found."}</td>
             </tr>
         `;
         return;
@@ -398,7 +397,6 @@ function renderAcademic(grades, message) {
 
     tableBody.innerHTML = grades.map((grade) => {
         const subject = grade.subjects || {};
-        const statusClass = grade.status === "PASSED" ? "pass-text" : grade.status === "INCOMPLETE" ? "warning-text" : grade.status === "FAILED" ? "danger-text" : "";
         const termCell = (value, status) => `${formatGrade(value)} <small class="${status === "PASSED" ? "pass-text" : status === "FAILED" ? "danger-text" : status === "INCOMPLETE" ? "warning-text" : ""}">${status || "Pending"}</small>`;
         return `
             <tr>
@@ -406,7 +404,6 @@ function renderAcademic(grades, message) {
                 <td>${termCell(grade.prelim, grade.prelim_status)}</td>
                 <td>${termCell(grade.midterm, grade.midterm_status)}</td>
                 <td>${termCell(grade.final, grade.final_status)}</td>
-                <td class="${statusClass}">${grade.status || "-"}</td>
             </tr>
         `;
     }).join("");

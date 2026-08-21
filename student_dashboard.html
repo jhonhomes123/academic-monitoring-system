@@ -683,7 +683,7 @@ table tr:hover{
                     <tr>
                         <th>Subject</th>
                         <th>Instructor</th>
-                        <th>Status</th>
+                        <th>Term Status</th>
                     </tr>
 
                 </thead>
@@ -954,7 +954,8 @@ async function loadStudentDashboard() {
                 else if (statusRaw === 'FAILED') { statusClass = 'danger-text'; failed++; }
                 else { statusClass = 'warning-text'; incomplete++; }
 
-                const termStatus = (label, value) => `${label}: ${value || 'PENDING'}`;
+                const hasTermStatuses = g.prelim_status || g.midterm_status || g.final_status;
+                const termStatus = (label, value) => `${label}: ${value || (!hasTermStatuses ? statusRaw : 'PENDING')}`;
                 rows += `<tr><td>${subjectName}</td><td>${instructor}</td><td class="${statusClass}">${termStatus('Prelim', g.prelim_status)}<br>${termStatus('Midterm', g.midterm_status)}<br>${termStatus('Final', g.final_status)}</td></tr>`;
             }
         } else {
@@ -998,7 +999,7 @@ async function loadStudentDashboard() {
                         const teacher = chosen?.teachers;
                         if (teacher) instructor = `${teacher.first_name || ''} ${teacher.last_name || ''}`.trim();
 
-                        rows += `\n<tr>\n<td>${sub.subject_code}</td>\n<td>${instructor}</td>\n<td></td>\n</tr>`;
+                        rows += `\n<tr>\n<td>${sub.subject_code}</td>\n<td>${instructor}</td>\n<td class="warning-text">Prelim: PENDING<br>Midterm: PENDING<br>Final: PENDING</td>\n</tr>`;
                     });
 
                     if (enrolledBody) enrolledBody.innerHTML = rows;
