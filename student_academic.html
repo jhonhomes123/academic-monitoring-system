@@ -322,7 +322,7 @@ async function loadAcademicStatus() {
 
         let { data: grades, error: gradesError } = await supabaseClient
             .from("student_grades")
-            .select(`prelim, midterm, final, status, subjects(subject_code, subject_name)`)            
+            .select(`prelim, prelim_status, midterm, midterm_status, final, final_status, status, subjects(subject_code, subject_name)`)            
             .eq("student_id", student.student_id);
 
         if (gradesError) {
@@ -358,7 +358,7 @@ async function loadAcademicStatus() {
                     }
 
                     // Map to grade-like objects for rendering and include assignments
-                    grades = sectionSubjects.map(s => ({ subject_id: s.subject_id, subjects: { subject_code: s.subject_code, subject_name: s.subject_name, teacher_subject_assignments: (assignments.filter(a => a.subject_id === s.subject_id) || []) }, prelim: null, midterm: null, final: null, status: null }));
+                    grades = sectionSubjects.map(s => ({ subject_id: s.subject_id, subjects: { subject_code: s.subject_code, subject_name: s.subject_name, teacher_subject_assignments: (assignments.filter(a => a.subject_id === s.subject_id) || []) }, prelim: null, prelim_status: null, midterm: null, midterm_status: null, final: null, final_status: null, status: null }));
                 }
             } catch (err) {
                 console.error('Failed to load section subjects', err);
@@ -374,6 +374,11 @@ async function loadAcademicStatus() {
 
 function renderAcademic(grades, message) {
     const tableBody = document.getElementById("gradesTableBody");
+    const formatGrade = (value) => {
+        if (value === null || value === undefined || value === "") return "-";
+        const numericValue = Number(value);
+        return Number.isFinite(numericValue) ? numericValue.toFixed(1) : value;
+    };
     const passedCount = grades.filter((item) => item.status === "PASSED").length;
     const incompleteCount = grades.filter((item) => item.status === "INCOMPLETE").length;
     const failedCount = grades.filter((item) => item.status === "FAILED").length;
@@ -393,13 +398,14 @@ function renderAcademic(grades, message) {
 
     tableBody.innerHTML = grades.map((grade) => {
         const subject = grade.subjects || {};
-        const statusClass = grade.status === "PASSED" ? "pass-text" : grade.status === "INCOMPLETE" ? "warning-text" : "danger-text";
+        const statusClass = grade.status === "PASSED" ? "pass-text" : grade.status === "INCOMPLETE" ? "warning-text" : grade.status === "FAILED" ? "danger-text" : "";
+        const termCell = (value, status) => `${formatGrade(value)} <small class="${status === "PASSED" ? "pass-text" : status === "FAILED" ? "danger-text" : status === "INCOMPLETE" ? "warning-text" : ""}">${status || "Pending"}</small>`;
         return `
             <tr>
                 <td>${subject.subject_name || "-"}</td>
-                <td>${grade.prelim ?? "-"}</td>
-                <td>${grade.midterm ?? "-"}</td>
-                <td>${grade.final ?? "-"}</td>
+                <td>${termCell(grade.prelim, grade.prelim_status)}</td>
+                <td>${termCell(grade.midterm, grade.midterm_status)}</td>
+                <td>${termCell(grade.final, grade.final_status)}</td>
                 <td class="${statusClass}">${grade.status || "-"}</td>
             </tr>
         `;

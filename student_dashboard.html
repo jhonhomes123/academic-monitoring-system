@@ -900,7 +900,7 @@ async function loadStudentDashboard() {
         // Load student grades and subjects
         const { data: grades, error: gradesError } = await supabaseClient
             .from('student_grades')
-            .select(`status, subject_id, subjects(subject_name, subject_code, teacher_subject_assignments(teachers(first_name, last_name)))`)
+            .select(`status, prelim_status, midterm_status, final_status, subject_id, subjects(subject_name, subject_code, teacher_subject_assignments(teachers(first_name, last_name)))`)
             .eq('student_id', studentId);
 
         if (gradesError) console.error('Error loading grades', gradesError);
@@ -954,7 +954,8 @@ async function loadStudentDashboard() {
                 else if (statusRaw === 'FAILED') { statusClass = 'danger-text'; failed++; }
                 else { statusClass = 'warning-text'; incomplete++; }
 
-                rows += `<tr><td>${subjectName}</td><td>${instructor}</td><td class="${statusClass}">${statusRaw}</td></tr>`;
+                const termStatus = (label, value) => `${label}: ${value || 'PENDING'}`;
+                rows += `<tr><td>${subjectName}</td><td>${instructor}</td><td class="${statusClass}">${termStatus('Prelim', g.prelim_status)}<br>${termStatus('Midterm', g.midterm_status)}<br>${termStatus('Final', g.final_status)}</td></tr>`;
             }
         } else {
             rows = '<tr><td colspan="3" class="empty">No enrolled subjects</td></tr>';
