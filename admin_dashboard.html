@@ -7446,7 +7446,7 @@ async function deleteStudent(
                         'student_id',
                         studentId
                     )
-                    .single();
+                    .maybeSingle();
 
                 /* ERROR */
 
@@ -7466,52 +7466,111 @@ async function deleteStudent(
 
                 }
 
-                /* ======================
-                   DELETE AUTH USER
-                ====================== */
+                const studentWasAlreadyDeleted =
+                    !studentData;
 
-                const response =
-                    await fetch(
+                /* Keep audit history while releasing the user FK. */
 
-                        'https://nrqrsolfowebujogawti.supabase.co/functions/v1/delete-user',
+                const {
 
-                        {
+                    error:
+                        activityLogUpdateError
 
-                            method: 'POST',
+                } = await supabaseClient
 
-                            headers: {
-
-                                'Content-Type':
-                                    'application/json',
-
-                                'apikey':
-                                    SUPABASE_ANON_KEY,
-
-                                'Authorization':
-                                    `Bearer ${SUPABASE_ANON_KEY}`
-
-                            },
-
-                            body: JSON.stringify({
-
-                                user_id:
-                                    userId
-
-                            })
-
-                        }
-
+                    .from('activity_logs')
+                    .update({
+                        user_id: null
+                    })
+                    .eq(
+                        'user_id',
+                        userId
                     );
 
-                const result =
-                    await response.json();
-
-                /* ERROR */
-
-                if (!response.ok) {
+                if (activityLogUpdateError) {
 
                     throw new Error(
-                        result.error
+                        activityLogUpdateError.message
+                    );
+
+                }
+
+                /* ======================
+                   DELETE REQUIREMENTS
+                ====================== */
+
+                const {
+
+                    data: studentRequirements,
+                    error:
+                        requirementsLoadError
+
+                } = await supabaseClient
+
+                    .from('student_requirements')
+                    .select('requirement_id')
+                    .eq(
+                        'student_id',
+                        studentId
+                    );
+
+                if (requirementsLoadError) {
+
+                    throw new Error(
+                        requirementsLoadError.message
+                    );
+
+                }
+
+                const requirementIds =
+                    (studentRequirements || [])
+                        .map(requirement => requirement.requirement_id)
+                        .filter(requirementId => requirementId != null);
+
+                if (requirementIds.length > 0) {
+
+                    const {
+
+                        error:
+                            instructionFilesDeleteError
+
+                    } = await supabaseClient
+
+                        .from('subject_instruction_files')
+                        .delete()
+                        .in(
+                            'requirement_id',
+                            requirementIds
+                        );
+
+                    if (instructionFilesDeleteError) {
+
+                        throw new Error(
+                            instructionFilesDeleteError.message
+                        );
+
+                    }
+
+                }
+
+                const {
+
+                    error:
+                        requirementsDeleteError
+
+                } = await supabaseClient
+
+                    .from('student_requirements')
+                    .delete()
+                    .eq(
+                        'student_id',
+                        studentId
+                    );
+
+                if (requirementsDeleteError) {
+
+                    throw new Error(
+                        requirementsDeleteError.message
                     );
 
                 }
@@ -7573,6 +7632,59 @@ async function deleteStudent(
                 }
 
                 /* ======================
+                   DELETE AUTH USER
+                ====================== */
+
+                if (!studentWasAlreadyDeleted) {
+
+                    const response =
+                        await fetch(
+
+                            'https://nrqrsolfowebujogawti.supabase.co/functions/v1/delete-user',
+
+                            {
+
+                                method: 'POST',
+
+                                headers: {
+
+                                    'Content-Type':
+                                        'application/json',
+
+                                    'apikey':
+                                        SUPABASE_ANON_KEY,
+
+                                    'Authorization':
+                                        `Bearer ${SUPABASE_ANON_KEY}`
+
+                                },
+
+                                body: JSON.stringify({
+
+                                    user_id:
+                                        userId
+
+                                })
+
+                            }
+
+                        );
+
+                    const result =
+                        await response.json();
+
+                    if (!response.ok) {
+
+                        throw new Error(
+                            result.error ||
+                            'Unable to delete the authentication account.'
+                        );
+
+                    }
+
+                }
+
+                /* ======================
                    SAVE LOG
                 ====================== */
 
@@ -7583,7 +7695,7 @@ async function deleteStudent(
                         user_id: null,
 
                        activity:
-    `Deleted student ${studentData.first_name} ${studentData.last_name} [${studentData.student_number}]`
+    `Deleted student ${studentData?.first_name || 'Unknown'} ${studentData?.last_name || 'student'} [${studentData?.student_number || studentId}]`
 
                     }]);
 
@@ -7594,7 +7706,9 @@ async function deleteStudent(
                 showAlert(
                     'success',
                     'Student Deleted',
-                    `${studentData.first_name} ${studentData.last_name} deleted successfully`
+                    studentData
+                        ? `${studentData.first_name} ${studentData.last_name} deleted successfully`
+                        : 'The remaining student records were deleted successfully'
                 );
 
                 /* ======================
