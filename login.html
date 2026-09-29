@@ -1324,7 +1324,7 @@ onclick="openAboutModal()">
 
                     <h2 class="modal-title">Reset Password</h2>
 
-                    <p class="modal-subtitle" id="forgotSubtitle">Enter your registered email, student ID, and a new password to update your account directly from the app.</p>
+                    <p class="modal-subtitle" id="forgotSubtitle">Enter your registered email and account ID. We will email you a verification code.</p>
 
                     <form id="forgotForm" class="forgot-form">
 
@@ -1338,16 +1338,37 @@ onclick="openAboutModal()">
                             <input type="text" id="forgotIdentifier" placeholder="Enter your Student ID">
                         </div>
 
-                        <div class="input-group password-field">
-                            <label>New Password</label>
-                            <input type="password" id="forgotNewPassword" placeholder="Create new password">
-                            <button type="button" class="password-toggle" onclick="togglePasswordById('forgotNewPassword', this)" aria-label="Toggle password visibility">
-                                <i class="fa-solid fa-eye"></i>
-                            </button>
+                        <div class="submit-row" id="requestCodeRow">
+                            <button type="button" class="submit-btn" onclick="requestPasswordCode()">Get Code</button>
                         </div>
 
-                        <div class="submit-row">
-                            <button type="button" class="submit-btn" onclick="sendPasswordReset()">Update Password</button>
+                        <div class="input-group full" id="verificationCodeGroup" style="display:none;">
+                            <label for="forgotCode">Email Verification Code</label>
+                            <input type="text" id="forgotCode" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="Enter the 6-digit code">
+                        </div>
+
+                        <div class="submit-row" id="verifyCodeRow" style="display:none;">
+                            <button type="button" class="submit-btn" onclick="verifyPasswordCode()">Verify Code</button>
+                            <button type="button" class="submit-btn secondary-btn" onclick="requestPasswordCode()">Resend Code</button>
+                        </div>
+
+                        <div id="newPasswordFields" style="display:none;">
+                            <div class="input-group password-field">
+                                <label for="forgotNewPassword">New Password</label>
+                                <input type="password" id="forgotNewPassword" autocomplete="new-password" placeholder="Create new password">
+                                <button type="button" class="password-toggle" onclick="togglePasswordById('forgotNewPassword', this)" aria-label="Toggle password visibility">
+                                    <i class="fa-solid fa-eye"></i>
+                                </button>
+                            </div>
+
+                            <div class="input-group password-field">
+                                <label for="forgotConfirmPassword">Confirm New Password</label>
+                                <input type="password" id="forgotConfirmPassword" autocomplete="new-password" placeholder="Enter the new password again">
+                            </div>
+
+                            <div class="submit-row">
+                                <button type="button" class="submit-btn" onclick="sendPasswordReset()">Update Password</button>
+                            </div>
                         </div>
 
                     </form>
@@ -2232,6 +2253,7 @@ console.log("Supabase Connected!");
 
 <script>
 let selectedForgotRole = null;
+let verifiedPasswordResetToken = null;
 
 function togglePasswordById(id, btn){
     const el = document.getElementById(id);
@@ -2258,6 +2280,7 @@ function togglePasswordById(id, btn){
 }
 
 function resetForgotForm(){
+    verifiedPasswordResetToken = null;
     const forgotForm = document.getElementById('forgotForm');
     if(forgotForm){
         forgotForm.reset();
@@ -2266,7 +2289,9 @@ function resetForgotForm(){
     const fields = [
         document.getElementById('forgotEmail'),
         document.getElementById('forgotIdentifier'),
-        document.getElementById('forgotNewPassword')
+        document.getElementById('forgotCode'),
+        document.getElementById('forgotNewPassword'),
+        document.getElementById('forgotConfirmPassword')
     ];
 
     fields.forEach((field) => {
@@ -2279,6 +2304,13 @@ function resetForgotForm(){
     if(passwordInput){
         passwordInput.type = 'password';
     }
+
+    document.getElementById('forgotEmail').readOnly = false;
+    document.getElementById('forgotIdentifier').readOnly = false;
+    document.getElementById('requestCodeRow').style.display = 'flex';
+    document.getElementById('verificationCodeGroup').style.display = 'none';
+    document.getElementById('verifyCodeRow').style.display = 'none';
+    document.getElementById('newPasswordFields').style.display = 'none';
 
     const toggleButton = document.querySelector('#forgotModal .password-toggle');
     if(toggleButton){
@@ -2311,7 +2343,7 @@ function openForgotModal(role){
     }
 
     if(subtitleEl){
-        subtitleEl.innerText = `Enter your registered email, ${isTeacher ? 'teacher' : 'student'} ID, and a new password to update your account directly from the app.` + (selectedForgotRole ? (' (' + selectedForgotRole + ')') : '');
+        subtitleEl.innerText = `Enter your registered email and ${isTeacher ? 'teacher' : 'student'} ID. We will email you a verification code.`;
     }
 
     const loginEmailEl = document.getElementById('loginEmail');
@@ -2337,12 +2369,20 @@ function closeForgotModal(){
 async function sendPasswordReset(){
     const email = (document.getElementById('forgotEmail')?.value || '').trim();
     const identifier = (document.getElementById('forgotIdentifier')?.value || '').trim();
-    const newPassword = (document.getElementById('forgotNewPassword')?.value || '').trim();
+    const newPassword = document.getElementById('forgotNewPassword')?.value || '';
+    const confirmPassword = document.getElementById('forgotConfirmPassword')?.value || '';
     const accountType = selectedForgotRole === 'Teacher' ? 'teacher' : 'student';
-    const isTeacherFlow = accountType === 'teacher';
 
-    if(!email || !identifier || !newPassword){
-        return showAlert('warning','Validation', `Please enter email, ${isTeacherFlow ? 'Teacher ID' : 'Student ID'}, and a new password`);
+    if(!verifiedPasswordResetToken){
+        return showAlert('warning', 'Verify Code', 'Verify the email code before choosing a new password.');
+    }
+
+    if(!newPassword || !confirmPassword){
+        return showAlert('warning', 'Validation', 'Enter and confirm your new password.');
+    }
+
+    if(newPassword !== confirmPassword){
+        return showAlert('warning', 'Passwords Do Not Match', 'Please enter the same password in both fields.');
     }
 
     if(newPassword.length < 8){
@@ -2358,11 +2398,11 @@ async function sendPasswordReset(){
                 'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
             },
             body: JSON.stringify({
+                action: 'reset-password',
                 email,
-                studentId: identifier,
                 identifier,
-                accountType,
                 role: accountType,
+                resetToken: verifiedPasswordResetToken,
                 newPassword
             })
         });
@@ -2372,14 +2412,10 @@ async function sendPasswordReset(){
         if(!response.ok){
             console.error('Reset password failed', response.status, result);
             if(response.status === 404){
-                const message = result?.message || '';
-                if(message.toLowerCase().includes('teacher id') || message.toLowerCase().includes('student id')){
-                    return showAlert('error', 'Account Not Found', `${isTeacherFlow ? 'Teacher' : 'Student'} ID not found. Please check the ID and try again.`);
-                }
                 return showAlert('error','Reset Service Not Available','The reset-password edge function is not deployed or the URL is incorrect. Deploy the edge function in Supabase and try again.');
             }
-            if(result?.message){
-                return showAlert('error','Unable to Update Password', result.message);
+            if(result?.error){
+                return showAlert('error','Unable to Update Password', result.error);
             }
             return showAlert('error','Unable to Update Password', `Request failed with status ${response.status}`);
         }
@@ -2391,6 +2427,80 @@ async function sendPasswordReset(){
     }catch(e){
         console.error(e);
         showAlert('error','Error','Unable to update password');
+    }
+}
+
+async function requestPasswordCode(){
+    const email = (document.getElementById('forgotEmail')?.value || '').trim();
+    const identifier = (document.getElementById('forgotIdentifier')?.value || '').trim();
+    const role = selectedForgotRole === 'Teacher' ? 'teacher' : 'student';
+
+    if(!email || !identifier){
+        return showAlert('warning', 'Missing Information', `Enter your email and ${role} ID.`);
+    }
+
+    try{
+        const response = await fetch(RESET_PASSWORD_FUNCTION_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                apikey: SUPABASE_ANON_KEY,
+                Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+            },
+            body: JSON.stringify({ action: 'send-code', email, identifier, role })
+        });
+        const result = await response.json().catch(() => ({}));
+        if(!response.ok){
+            return showAlert('error', 'Unable to Send Code', result.error || 'Please try again later.');
+        }
+
+        document.getElementById('requestCodeRow').style.display = 'none';
+        document.getElementById('verificationCodeGroup').style.display = 'block';
+        document.getElementById('verifyCodeRow').style.display = 'flex';
+        document.getElementById('forgotSubtitle').innerText = 'If the details match an account, a verification code will arrive by email. The code expires in 10 minutes.';
+        showAlert('success', 'Check Your Email', result.message || 'If the details match, a verification code was sent.');
+    }catch(error){
+        console.error(error);
+        showAlert('error', 'Unable to Send Code', 'Please try again later.');
+    }
+}
+
+async function verifyPasswordCode(){
+    const email = (document.getElementById('forgotEmail')?.value || '').trim();
+    const identifier = (document.getElementById('forgotIdentifier')?.value || '').trim();
+    const code = (document.getElementById('forgotCode')?.value || '').trim();
+    const role = selectedForgotRole === 'Teacher' ? 'teacher' : 'student';
+
+    if(!/^\d{6}$/.test(code)){
+        return showAlert('warning', 'Invalid Code', 'Enter the 6-digit code from your email.');
+    }
+
+    try{
+        const response = await fetch(RESET_PASSWORD_FUNCTION_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                apikey: SUPABASE_ANON_KEY,
+                Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+            },
+            body: JSON.stringify({ action: 'verify-code', email, identifier, role, code })
+        });
+        const result = await response.json().catch(() => ({}));
+        if(!response.ok){
+            return showAlert('error', 'Code Not Accepted', result.error || 'The code is invalid or expired.');
+        }
+
+        verifiedPasswordResetToken = result.resetToken;
+        document.getElementById('forgotEmail').readOnly = true;
+        document.getElementById('forgotIdentifier').readOnly = true;
+        document.getElementById('verificationCodeGroup').style.display = 'none';
+        document.getElementById('verifyCodeRow').style.display = 'none';
+        document.getElementById('newPasswordFields').style.display = 'block';
+        document.getElementById('forgotSubtitle').innerText = 'Email verified. Choose a new password for your account.';
+        showAlert('success', 'Email Verified', 'Now enter and confirm your new password.');
+    }catch(error){
+        console.error(error);
+        showAlert('error', 'Verification Failed', 'Please try again.');
     }
 }
 </script>
