@@ -1638,6 +1638,19 @@ function openLogin(role){
 
         loginFields.innerHTML = `
 
+        <div class="input-group full">
+
+            <label>Administrator Email</label>
+
+            <input
+                type="email"
+                id="adminEmail"
+                placeholder="Enter administrator email"
+                autocomplete="username"
+            >
+
+        </div>
+
 
         <div class="input-group full" style="position:relative;">
 
@@ -1647,6 +1660,7 @@ function openLogin(role){
                 type="password"
                 id="adminPassword"
                 placeholder="Enter admin password"
+                autocomplete="current-password"
             >
 
             <button type="button" class="password-toggle" onclick="togglePasswordById('adminPassword', this)" aria-label="Toggle password visibility" style="position:absolute; right:12px; top:36px; border:none; background:transparent;">
@@ -1987,22 +2001,39 @@ const title = document.getElementById('modalTitle').innerText.trim();
 
 if(title.includes('Admin')){
 
+const adminEmail =
+document.getElementById('adminEmail').value.trim();
+
 const adminPassword =
-inputs[0].value;
+document.getElementById('adminPassword').value;
 
-const { data: adminData, error: adminError } =
-await supabaseClient
-.from('admins')
-.select('*')
-.eq('admin_password', adminPassword)
-.single();
+const { data: authData, error: adminError } =
+await supabaseClient.auth.signInWithPassword({
+    email: adminEmail,
+    password: adminPassword
+});
 
-if(adminError || !adminData){
+let isAdmin = false;
+
+if(!adminError && authData.user){
+    const { data: adminRecord } = await supabaseClient
+        .from('admins')
+        .select('id')
+        .eq('auth_user_id', authData.user.id)
+        .maybeSingle();
+    isAdmin = Boolean(adminRecord);
+}
+
+if(adminError || !isAdmin){
+
+if(authData?.session){
+    await supabaseClient.auth.signOut();
+}
 
 showAlert(
 'error',
 'Access Denied',
-'Invalid administrator password.'
+'Invalid administrator credentials or this account is not registered as an administrator.'
 );
 
 return;
@@ -2879,6 +2910,27 @@ return;
 
 }
 
+}
+
+try {
+    const notificationResponse = await fetch(
+        `${SUPABASE_URL}/functions/v1/account-notifications`,
+        {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                apikey: SUPABASE_ANON_KEY,
+                Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+            },
+            body: JSON.stringify({ action: 'pending', user_id: authUserId })
+        }
+    );
+    const notificationResult = await notificationResponse.json();
+    if (!notificationResponse.ok) {
+        console.warn('Registration email was not sent:', notificationResult.error);
+    }
+} catch (notificationError) {
+    console.warn('Registration email was not sent:', notificationError);
 }
 
 

@@ -3335,32 +3335,26 @@ style="
 
 async function approveAccount(id) {
 
-    /* ======================
-       APPROVE USER
-    ====================== */
-
-    const { error } =
-        await supabaseClient
-            .from('users')
-            .update({
-                approval_status: 'approved'
-            })
-            .eq('user_id', id);
-
-    /* ERROR */
-
-    if (error) {
-
-        console.log(error);
-
-        showAlert(
-            'error',
-            'System Error',
-            error.message
-        );
-
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    if (!session) {
+        showAlert('error', 'Sign In Required', 'Please sign in again as an administrator.');
+        window.location.href = 'login.html';
         return;
+    }
 
+    const response = await fetch(`${SUPABASE_URL}/functions/v1/account-notifications`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            apikey: SUPABASE_ANON_KEY,
+            Authorization: `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({ action: 'approve', user_id: id })
+    });
+    const result = await response.json();
+    if (!response.ok) {
+        showAlert('error', 'Approval Failed', result.error || 'Unable to approve this account.');
+        return;
     }
 
     /* ======================
@@ -10015,40 +10009,24 @@ async function submitRejectAccount() {
                    SEND REJECT REQUEST
                 ====================== */
 
-                const response =
-                    await fetch(
+                const { data: { session } } = await supabaseClient.auth.getSession();
+                if (!session) {
+                    throw new Error('Please sign in again as an administrator.');
+                }
 
-                        'https://nrqrsolfowebujogawti.supabase.co/functions/v1/delete-rejected-user',
-
-                        {
-
-                            method: 'POST',
-
-                            headers: {
-
-                                'Content-Type':
-                                    'application/json',
-
-                                'apikey':
-                                    SUPABASE_ANON_KEY,
-
-                                'Authorization':
-                                    `Bearer ${SUPABASE_ANON_KEY}`
-
-                            },
-
-                            body: JSON.stringify({
-
-                                user_id:
-                                    currentRejectUserId,
-
-                                reason: reason
-
-                            })
-
-                        }
-
-                    );
+                const response = await fetch(`${SUPABASE_URL}/functions/v1/account-notifications`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        apikey: SUPABASE_ANON_KEY,
+                        Authorization: `Bearer ${session.access_token}`
+                    },
+                    body: JSON.stringify({
+                        action: 'reject',
+                        user_id: currentRejectUserId,
+                        reason
+                    })
+                });
 
                 const result =
                     await response.json();
