@@ -266,6 +266,16 @@ const SUPABASE_URL = "https://nrqrsolfowebujogawti.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5ycXJzb2xmb3dlYnVqb2dhd3RpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkyODE2NjksImV4cCI6MjA5NDg1NzY2OX0.XcawTf9niOIZbG0hBTtwSXjySWfdVl3LAClbWdZmfl8";
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+async function getActiveSemesterId() {
+    const { data, error } = await supabaseClient
+        .from('semesters')
+        .select('semester_id')
+        .eq('is_active', true)
+        .maybeSingle();
+    if (error) throw error;
+    return data?.semester_id || null;
+}
+
 async function loadStudentSubjects() {
     try {
         const { data: sessionData } = await supabaseClient.auth.getSession();
@@ -305,6 +315,19 @@ async function loadStudentSubjects() {
             return;
         }
 
+        const activeSemesterId = await getActiveSemesterId();
+        if (!activeSemesterId) {
+            renderSubjects([], 'No active semester is set by the administrator.');
+            return;
+        }
+
+        const { data: activeSubjects, error: activeSubjectsError } = await supabaseClient
+            .from('subjects')
+            .select('subject_id')
+            .eq('semester_id', activeSemesterId);
+        if (activeSubjectsError) throw activeSubjectsError;
+        const activeSubjectIds = new Set((activeSubjects || []).map(subject => String(subject.subject_id)));
+
         let { data: grades, error: gradesError } = await supabaseClient
             .from("student_grades")
             .select(`subject_id, subjects(subject_code, subject_name, teacher_subject_assignments(teachers(first_name, last_name)))`)
@@ -315,6 +338,7 @@ async function loadStudentSubjects() {
             renderSubjects([], "Failed to load subjects.");
             return;
         }
+        grades = (grades || []).filter(grade => activeSubjectIds.has(String(grade.subject_id)));
 
         // fallback to section subjects when no grades
         if ((!grades || !grades.length) && student.sections && student.sections.majors) {
@@ -326,6 +350,7 @@ async function loadStudentSubjects() {
                     .select('subject_id, subject_code, subject_name')
                     .eq('major_id', majorId)
                     .eq('year_level', yearLevel)
+                    .eq('semester_id', activeSemesterId)
                     .order('subject_name');
 
                 if (sectionSubjectsError) {

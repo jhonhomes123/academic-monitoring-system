@@ -897,13 +897,30 @@ async function loadStudentDashboard() {
         if (welcomeEl) welcomeEl.textContent = `Welcome, ${student.first_name} ${student.last_name}`;
         if (sectionEl) sectionEl.textContent = `${student.sections?.majors?.major_name || ''} ${student.sections?.year_level || ''} • ${student.sections?.section_name || ''}`;
 
-        // Load student grades and subjects
-        const { data: grades, error: gradesError } = await supabaseClient
+        const { data: activeSemester, error: semesterError } = await supabaseClient
+            .from('semesters')
+            .select('semester_id, semester_name')
+            .eq('is_active', true)
+            .maybeSingle();
+        if (semesterError) throw semesterError;
+
+        const { data: activeSubjects, error: activeSubjectsError } = activeSemester
+            ? await supabaseClient
+                .from('subjects')
+                .select('subject_id')
+                .eq('semester_id', activeSemester.semester_id)
+            : { data: [], error: null };
+        if (activeSubjectsError) throw activeSubjectsError;
+        const activeSubjectIds = new Set((activeSubjects || []).map(subject => String(subject.subject_id)));
+
+        // Load student grades and subjects for the active semester
+        const { data: gradeRows, error: gradesError } = await supabaseClient
             .from('student_grades')
             .select(`status, prelim_status, midterm_status, final_status, subject_id, subjects(subject_name, subject_code, teacher_subject_assignments(teachers(first_name, last_name)))`)
             .eq('student_id', studentId);
 
         if (gradesError) console.error('Error loading grades', gradesError);
+        const grades = (gradeRows || []).filter(grade => activeSubjectIds.has(String(grade.subject_id)));
 
         const enrolledBody = document.getElementById('enrolledTableBody');
         const totalSubjectsEl = document.getElementById('totalSubjects');
@@ -973,6 +990,7 @@ async function loadStudentDashboard() {
                     .select('subject_id, subject_code, subject_name')
                     .eq('major_id', majorId)
                     .eq('year_level', yearLevel)
+                    .eq('semester_id', activeSemester?.semester_id || -1)
                     .order('subject_name');
 
                 if (sectionSubjectsError) {
@@ -1020,12 +1038,15 @@ async function loadStudentDashboard() {
         if (failedEl) failedEl.textContent = String(failed);
 
         // Load recent missing requirements
-        const { data: reqs, error: reqErr } = await supabaseClient
-            .from('student_requirements')
-            .select('requirement_id, requirement_title, deadline, subject_id, subjects(subject_name)')
-            .eq('student_id', studentId)
-            .order('deadline', { ascending: true })
-            .limit(10);
+        const { data: reqs, error: reqErr } = activeSubjectIds.size
+            ? await supabaseClient
+                .from('student_requirements')
+                .select('requirement_id, requirement_title, deadline, subject_id, subjects(subject_name)')
+                .eq('student_id', studentId)
+                .in('subject_id', Array.from(activeSubjectIds))
+                .order('deadline', { ascending: true })
+                .limit(10)
+            : { data: [], error: null };
 
         if (reqErr) console.error('Error loading requirements', reqErr);
 

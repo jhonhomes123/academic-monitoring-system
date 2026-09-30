@@ -383,9 +383,25 @@ async function loadStudentRequirements() {
         const sectionEl = document.getElementById('studentSection');
         if (sectionEl) sectionEl.textContent = sectionInfo;
 
-        // Load requirements with subject info
+        const { data: activeSemester, error: semesterError } = await supabaseClient
+            .from('semesters')
+            .select('semester_id')
+            .eq('is_active', true)
+            .maybeSingle();
+        if (semesterError) throw semesterError;
+
+        const { data: activeSubjects, error: activeSubjectsError } = activeSemester
+            ? await supabaseClient
+                .from('subjects')
+                .select('subject_id')
+                .eq('semester_id', activeSemester.semester_id)
+            : { data: [], error: null };
+        if (activeSubjectsError) throw activeSubjectsError;
+        const activeSubjectIds = new Set((activeSubjects || []).map(subject => String(subject.subject_id)));
+
+        // Load requirements for the active semester only
         const studentId = student.student_id ?? student.id;
-        const { data: requirements, error: reqError } = await supabaseClient
+        const { data: requirementRows, error: reqError } = await supabaseClient
             .from('student_requirements')
             .select(`
                 requirement_id,
@@ -401,6 +417,7 @@ async function loadStudentRequirements() {
             console.error('Error loading requirements', reqError);
             return;
         }
+        const requirements = (requirementRows || []).filter(requirement => activeSubjectIds.has(String(requirement.subject_id)));
 
         // Load all files for this student's requirements (guard empty requirement list)
         let files = [];

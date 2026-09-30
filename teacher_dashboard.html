@@ -873,6 +873,23 @@ let teacherId = null;
 let teacherLastName = '';
 let teacherEmail = '';
 
+async function getActiveSubjectIds() {
+    const { data: semester, error: semesterError } = await supabaseClient
+        .from('semesters')
+        .select('semester_id')
+        .eq('is_active', true)
+        .maybeSingle();
+    if (semesterError) throw semesterError;
+    if (!semester) return new Set();
+
+    const { data: subjects, error } = await supabaseClient
+        .from('subjects')
+        .select('subject_id')
+        .eq('semester_id', semester.semester_id);
+    if (error) throw error;
+    return new Set((subjects || []).map(subject => String(subject.subject_id)));
+}
+
 async function initializeTeacherDashboard() {
     const { data: { user }, error } = await supabaseClient.auth.getUser();
     if (error || !user) {
@@ -951,10 +968,11 @@ async function loadTeacherSummary() {
     const sectionRows = [];
     const subjectIds = new Set();
     const departmentIds = new Set();
+    const activeSubjectIds = await getActiveSubjectIds();
 
     (data || []).forEach(assign => {
         const subject = assign.subjects;
-        if (!subject) return;
+        if (!subject || !activeSubjectIds.has(String(subject.subject_id))) return;
 
         subjectIds.add(subject.subject_id);
 

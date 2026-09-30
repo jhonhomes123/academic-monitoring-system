@@ -489,6 +489,17 @@ supabase.createClient(
     SUPABASE_ANON_KEY
 );
 
+async function getActiveSubjectIds(){
+    const { data: semester, error: semesterError } = await supabaseClient
+        .from('semesters').select('semester_id').eq('is_active', true).maybeSingle();
+    if(semesterError) throw semesterError;
+    if(!semester) return new Set();
+    const { data: subjects, error } = await supabaseClient
+        .from('subjects').select('subject_id').eq('semester_id', semester.semester_id);
+    if(error) throw error;
+    return new Set((subjects || []).map(subject => String(subject.subject_id)));
+}
+
 /* =====================================================
 SAMPLE TEACHER EMAIL
 ===================================================== */
@@ -683,10 +694,11 @@ async function loadDepartments(yearLevel){
         return;
     }
 
+    const activeSubjectIds = await getActiveSubjectIds();
     const departments = {};
     data?.forEach(item => {
         const subject = item.subjects;
-        if (!subject || subject.year_level !== yearLevel) return;
+        if (!subject || !activeSubjectIds.has(String(subject.subject_id)) || subject.year_level !== yearLevel) return;
 
         const department = subject.majors?.departments;
         if (department) {
@@ -740,10 +752,11 @@ departmentFilter.addEventListener(
             return;
         }
 
+        const activeSubjectIds = await getActiveSubjectIds();
         const majors = {};
         data?.forEach(item => {
             const subject = item.subjects;
-            if (!subject || subject.year_level !== yearLevel) return;
+            if (!subject || !activeSubjectIds.has(String(subject.subject_id)) || subject.year_level !== yearLevel) return;
             if (String(subject.majors?.department_id) !== String(departmentId)) return;
             const major = subject.majors;
             if (major) majors[major.major_id] = major;
@@ -788,10 +801,11 @@ majorFilter.addEventListener(
             return;
         }
 
+        const activeSubjectIds = await getActiveSubjectIds();
         const subjects = {};
         data?.forEach(item => {
             const subject = item.subjects;
-            if (!subject || subject.year_level !== yearLevel) return;
+            if (!subject || !activeSubjectIds.has(String(subject.subject_id)) || subject.year_level !== yearLevel) return;
             if (String(subject.major_id) !== String(majorId)) return;
             subjects[subject.subject_id] = subject;
         });
@@ -846,6 +860,11 @@ async function loadTeacherSubjects(){
 
     console.log("ASSIGNED SUBJECTS:", data);
 
+    const activeSubjectIds = await getActiveSubjectIds();
+    const activeAssignments = (data || []).filter(item =>
+        item.subjects && activeSubjectIds.has(String(item.subjects.subject_id))
+    );
+
     subjectFilter.innerHTML = `
     
         <option value="">
@@ -854,7 +873,7 @@ async function loadTeacherSubjects(){
     
     `;
 
-    if(!data.length){
+    if(!activeAssignments.length){
 
         subjectFilter.innerHTML += `
         
@@ -868,7 +887,7 @@ async function loadTeacherSubjects(){
 
     }
 
-    data.forEach(item => {
+    activeAssignments.forEach(item => {
 
         if(!item.subjects) return;
 

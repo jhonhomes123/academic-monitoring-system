@@ -929,6 +929,17 @@ supabase.createClient(
     SUPABASE_ANON_KEY
 );
 
+async function getActiveSubjectIds(){
+    const { data: semester, error: semesterError } = await supabaseClient
+        .from('semesters').select('semester_id').eq('is_active', true).maybeSingle();
+    if(semesterError) throw semesterError;
+    if(!semester) return new Set();
+    const { data: subjects, error } = await supabaseClient
+        .from('subjects').select('subject_id').eq('semester_id', semester.semester_id);
+    if(error) throw error;
+    return new Set((subjects || []).map(subject => String(subject.subject_id)));
+}
+
 let teacherId = null;
 let teacherEmail = "";
 
@@ -1106,11 +1117,12 @@ async function loadDepartments(yearLevel){
         return;
     }
 
+    const activeSubjectIds = await getActiveSubjectIds();
     const departments = {};
 
     data.forEach(item => {
         const subject = item.subjects;
-        if(!subject || subject.year_level !== yearLevel) return;
+        if(!subject || !activeSubjectIds.has(String(subject.subject_id)) || subject.year_level !== yearLevel) return;
         const department = subject.majors?.departments;
         if(department){
             departments[department.department_id] = department;
@@ -1179,11 +1191,12 @@ async function loadMajors(departmentId){
         return;
     }
 
+    const activeSubjectIds = await getActiveSubjectIds();
     const majors = {};
 
     data.forEach(item => {
         const subject = item.subjects;
-        if(!subject || subject.year_level !== yearLevel) return;
+        if(!subject || !activeSubjectIds.has(String(subject.subject_id)) || subject.year_level !== yearLevel) return;
         if(String(subject.majors?.department_id) !== String(departmentId)) return;
         const major = subject.majors;
         if(major){
@@ -1246,11 +1259,12 @@ async function loadSubjects(majorId){
         return;
     }
 
+    const activeSubjectIds = await getActiveSubjectIds();
     const subjects = {};
 
     data.forEach(item => {
         const subject = item.subjects;
-        if(!subject || subject.year_level !== yearLevel) return;
+        if(!subject || !activeSubjectIds.has(String(subject.subject_id)) || subject.year_level !== yearLevel) return;
         if(String(subject.major_id) !== String(majorId)) return;
         subjects[subject.subject_id] = subject;
     });
