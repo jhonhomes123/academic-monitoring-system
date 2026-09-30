@@ -378,6 +378,36 @@ table td{
             cursor: pointer;
         }
 
+        #teacherAssignmentModal {
+            padding: 16px;
+        }
+
+        #teacherAssignmentModal .modal-content {
+            width: min(1400px, 100%);
+            max-width: 100%;
+            height: min(85vh, 900px);
+            min-height: 0;
+            overflow: hidden;
+        }
+
+        #teacherAssignmentModal .modal-header {
+            position: sticky;
+            top: 0;
+            z-index: 2;
+            flex: 0 0 auto;
+            background: white;
+        }
+
+        #teacherAssignmentModal .modal-body {
+            min-height: 0;
+            flex: 1 1 auto;
+            overflow: auto;
+        }
+
+        #teacherAssignmentModal .modal-header .close-btn {
+            flex: 0 0 auto;
+        }
+
         .modal-body {
             display: flex;
             flex-direction: column;
@@ -941,7 +971,10 @@ table td{
 
         <div class="logo">
             <h2>AMS Admin</h2>
-            <p>Talisay City College</p>
+            <div class="school-brand">
+                <img src="school_logo.png" alt="">
+                <p>Talisay City College</p>
+            </div>
         </div>
 
         <div class="menu">
@@ -2465,13 +2498,7 @@ onchange="loadSubjectsForTeacherAssign()">
 
 <div class="modal" id="teacherAssignmentModal">
 
-    <div class="modal-content"
-style="
-    width:90%;
-    max-width:1400px;
-    height:85vh;
-    overflow-y:auto;
-">
+    <div class="modal-content">
 
         <div class="modal-header">
 

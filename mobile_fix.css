@@ -3,6 +3,24 @@ GLOBAL MOBILE FIXES
 FOR ADMIN + TEACHER
 ===================================================== */
 
+.school-brand{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    margin-top:5px;
+}
+
+.school-brand img{
+    width:28px;
+    height:28px;
+    object-fit:contain;
+    flex-shrink:0;
+}
+
+.school-brand p{
+    margin:0;
+}
+
 @media(max-width:768px){
 
     body{
