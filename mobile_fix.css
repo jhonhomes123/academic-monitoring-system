@@ -80,18 +80,31 @@ FOR ADMIN + TEACHER
 
         overflow-x:auto;
         overflow-y:hidden;
+        overscroll-behavior-x:contain;
+        scrollbar-width:thin;
+        scrollbar-color:rgba(255,255,255,.55) rgba(255,255,255,.12);
 
         gap:10px;
 
-        padding-bottom:5px;
-
-        scrollbar-width:none;
+        padding-bottom:9px;
 
     }
 
     .menu::-webkit-scrollbar{
+        display:block;
+        height:6px;
 
-        display:none;
+    }
+
+    .menu::-webkit-scrollbar-track{
+        background:rgba(255,255,255,.12);
+        border-radius:6px;
+
+    }
+
+    .menu::-webkit-scrollbar-thumb{
+        background:rgba(255,255,255,.55);
+        border-radius:6px;
 
     }
 
