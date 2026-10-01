@@ -593,7 +593,7 @@ table select{
             Profile
         </a>
 
-        <a href="login.html">
+        <a href="login.html" onclick="logoutAndRedirect(event, supabaseClient)">
             <i class="fa-solid fa-right-from-bracket"></i>
             Logout
         </a>
@@ -1610,5 +1610,6 @@ studentId
 }
 
 </script>
+<script src="auth-session.js"></script>
 </body>
 </html>

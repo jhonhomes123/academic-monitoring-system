@@ -2131,6 +2131,8 @@ await supabaseClient
 
 if(userError || !userData){
 
+await supabaseClient.auth.signOut();
+
 showAlert(
 'error',
 'User Not Found',
@@ -2150,6 +2152,7 @@ const expectedRoleId = selectedRole === 'Teacher' ? 2 : selectedRole === 'Studen
 const actualRoleName = userData.role_id === 2 ? 'Teacher' : userData.role_id === 3 ? 'Student' : 'correct';
 
 if(expectedRoleId && userData.role_id !== expectedRoleId){
+    await supabaseClient.auth.signOut();
     showAlert(
         'error',
         'Portal Mismatch',
@@ -2163,6 +2166,8 @@ if(expectedRoleId && userData.role_id !== expectedRoleId){
 // ==========================
 
 if(userData.approval_status !== 'approved'){
+
+await supabaseClient.auth.signOut();
 
 showAlert(
 'warning',

@@ -547,7 +547,7 @@ table td{
 
         </a>
 
-        <a href="login.html">
+        <a href="login.html" onclick="logoutAndRedirect(event, supabaseClient)">
 
             <i class="fa-solid fa-right-from-bracket"></i>
 
@@ -1049,5 +1049,6 @@ async function loadTeacherSummary() {
 
 initializeTeacherDashboard();
 </script>
+<script src="auth-session.js"></script>
 </body>
 </html>

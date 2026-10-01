@@ -219,7 +219,7 @@ table tr:hover{
             <i class="fa-solid fa-user"></i>
             Profile
         </a>
-        <a href="login.html">
+        <a href="login.html" onclick="logoutAndRedirect(event, supabaseClient)">
             <i class="fa-solid fa-right-from-bracket"></i>
             Logout
         </a>
@@ -439,3 +439,4 @@ function renderAcademic(grades, message) {
 
 window.addEventListener("DOMContentLoaded", loadAcademicStatus);
 </script>
+<script src="auth-session.js"></script>
