@@ -2956,7 +2956,7 @@ onchange="loadSubjectsForTeacherAssign()">
                     .select('*')
                     .ilike('approval_status', 'approved')
                     .order('created_at', { ascending: false })
-                    .limit(5);
+                    .limit(25);
 
             if (error) {
 
@@ -2987,11 +2987,14 @@ onchange="loadSubjectsForTeacherAssign()">
             }
 
             table.innerHTML = '';
+            let visibleUserCount = 0;
 
             for (const user of users) {
 
+                if (visibleUserCount >= 5) break;
+
                 let role = 'Unknown';
-                let fullName = 'N/A';
+                let fullName = '';
 
                 /* =========================
                    STUDENT
@@ -3001,7 +3004,7 @@ onchange="loadSubjectsForTeacherAssign()">
 
                     role = 'Student';
 
-                    const { data: student } =
+                    const { data: student, error: studentError } =
                         await supabaseClient
                             .from('students')
                             .select(`
@@ -3010,9 +3013,9 @@ onchange="loadSubjectsForTeacherAssign()">
                         last_name
                     `)
                             .eq('user_id', user.user_id)
-                            .single();
+                        .maybeSingle();
 
-                    if (student) {
+                    if (student && !studentError) {
 
                         fullName = formatName(
                             student.first_name,
@@ -3020,7 +3023,7 @@ onchange="loadSubjectsForTeacherAssign()">
                             student.last_name
                         );
 
-                    }
+                    } else continue;
 
                 }
 
@@ -3032,7 +3035,7 @@ onchange="loadSubjectsForTeacherAssign()">
 
                     role = 'Teacher';
 
-                    const { data: teacher } =
+                    const { data: teacher, error: teacherError } =
                         await supabaseClient
                             .from('teachers')
                             .select(`
@@ -3041,9 +3044,9 @@ onchange="loadSubjectsForTeacherAssign()">
                         last_name
                     `)
                             .eq('user_id', user.user_id)
-                            .single();
+                        .maybeSingle();
 
-                    if (teacher) {
+                    if (teacher && !teacherError) {
 
                         fullName = formatName(
                             teacher.first_name,
@@ -3051,7 +3054,7 @@ onchange="loadSubjectsForTeacherAssign()">
                             teacher.last_name
                         );
 
-                    }
+                    } else continue;
 
                 }
 
@@ -3061,10 +3064,11 @@ onchange="loadSubjectsForTeacherAssign()">
 
                 else if (Number(user.role_id) === 1) {
 
-                    role = 'Admin';
-                    fullName = 'Administrator';
+                    continue;
 
                 }
+
+                else continue;
 
                 table.innerHTML += `
 
@@ -3084,6 +3088,16 @@ onchange="loadSubjectsForTeacherAssign()">
 
         `;
 
+                visibleUserCount++;
+
+            }
+
+            if (!visibleUserCount) {
+                table.innerHTML = `
+                    <tr>
+                        <td colspan="4">No approved users found</td>
+                    </tr>
+                `;
             }
 
         }
