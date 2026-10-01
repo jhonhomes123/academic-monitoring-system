@@ -701,6 +701,10 @@
 Manage student requirements and instructions
 </p>
 
+<button class="btn" type="button" onclick="openRequirementModal()">
+    Add to Multiple Students
+</button>
+
 </div>
 
 <table>
@@ -753,7 +757,14 @@ Select Subject and Section
 
                 <div class="modal-body">
 
-                    <input type="hidden" id="studentId">
+                    <div>
+                        <strong id="requirementStudentCount">Choose students</strong>
+                        <div style="display:flex; gap:8px; margin:8px 0; flex-wrap:wrap;">
+                            <button class="btn" type="button" onclick="selectRequirementStudents(true)">Select All</button>
+                            <button class="btn secondary-btn" type="button" onclick="selectRequirementStudents(false)">Clear</button>
+                        </div>
+                        <div id="requirementStudentList" style="max-height:180px; overflow-y:auto; border:1px solid #dbe4f0; border-radius:8px; padding:8px;"></div>
+                    </div>
 
                     <input type="text" id="requirementTitle" placeholder="Project Name">
 
@@ -824,6 +835,7 @@ Select Subject and Section
 
             let teacherId = null;
             let teacherEmail = '';
+            let currentRequirementStudents = [];
 
             async function loadTeacher() {
                 const { data, error } = await supabaseClient
@@ -1044,6 +1056,7 @@ Select Subject and Section
                 const studentsTable = document.getElementById('studentsTable');
 
                 if (!sectionId || !subjectId) {
+                    currentRequirementStudents = [];
                     studentsTable.innerHTML = `
                         <tr>
                             <td colspan="3">Select Subject and Section</td>
@@ -1061,12 +1074,15 @@ Select Subject and Section
                 }
 
                 if (!students?.length) {
+                    currentRequirementStudents = [];
                     studentsTable.innerHTML = `
                         <tr>
                             <td colspan="3">No students found</td>
                         </tr>`;
                     return;
                 }
+
+                currentRequirementStudents = students;
 
                 // fetch instructor uploaded files for this subject (once)
                 const { data: uploadedFiles } = await supabaseClient
@@ -1144,27 +1160,29 @@ Select Subject and Section
             }
 
             async function saveRequirement() {
-                const studentId = document.getElementById('studentId').value;
+                const studentIds = Array.from(document.querySelectorAll('.requirement-student-check:checked'))
+                    .map(input => Number(input.value))
+                    .filter(Number.isFinite);
                 const subjectId = document.getElementById('subjectSelect').value;
                 const title = document.getElementById('requirementTitle').value.trim();
                 const description = document.getElementById('requirementDescription').value.trim();
                 const deadline = document.getElementById('requirementDeadline').value;
                 const file = document.getElementById('requirementFile').files[0];
 
-                if (!studentId || !subjectId || !title) {
-                    return showAlert('warning', 'Validation', 'Please select a student and enter a title.');
+                if (!studentIds.length || !subjectId || !title) {
+                    return showAlert('warning', 'Validation', 'Select at least one student and enter a requirement title.');
                 }
 
                 const { data: insertedData, error } = await supabaseClient
                     .from('student_requirements')
-                    .insert({
+                    .insert(studentIds.map(studentId => ({
                         student_id: studentId,
-                        subject_id: subjectId,
+                        subject_id: Number(subjectId),
                         requirement_title: title,
                         requirement_description: description,
                         deadline: deadline || null
-                    })
-                    .select('requirement_id');
+                    })))
+                    .select('requirement_id, student_id');
 
                 if (error) {
                     console.error("INSERT ERROR:", error);
@@ -1176,10 +1194,8 @@ Select Subject and Section
                     return;
                 }
 
-                const requirementId = insertedData?.[0]?.requirement_id;
-
                 // Upload file if provided
-                if (file && requirementId) {
+                if (file && insertedData?.length) {
                     const fileName = `${Date.now()}_${file.name}`;
                     const bucketCandidates = ['instruction-files'];
                     let uploadError = null;
@@ -1221,16 +1237,17 @@ Select Subject and Section
                         return;
                     }
 
-                    const { error: fileError } = await supabaseClient
-                        .from('subject_instruction_files')
-                        .insert({
+                    const fileRecords = insertedData.map(requirement => ({
                             subject_id: subjectId,
                             teacher_id: teacherId,
                             file_name: file.name,
                             file_url: publicUrlData.publicUrl,
-                            student_id: studentId,
-                            requirement_id: requirementId
-                        });
+                            student_id: requirement.student_id,
+                            requirement_id: requirement.requirement_id
+                        }));
+                    const { error: fileError } = await supabaseClient
+                        .from('subject_instruction_files')
+                        .insert(fileRecords);
 
                     if (fileError) {
                         console.error("File record error:", fileError);
@@ -1238,7 +1255,7 @@ Select Subject and Section
                     }
                 }
 
-                showAlert('success', 'Success', 'Requirement Added');
+                showAlert('success', 'Requirements Added', `Added "${title}" for ${insertedData.length} student${insertedData.length === 1 ? '' : 's'}.`);
                 closeRequirementModal();
                 await loadStudents();
             }
@@ -1590,16 +1607,49 @@ Select Subject and Section
                 ).classList.remove('show');
 
             }
-            function openRequirementModal(studentId) {
+            function updateRequirementStudentCount() {
+                const selectedCount = document.querySelectorAll('.requirement-student-check:checked').length;
+                const countLabel = document.getElementById('requirementStudentCount');
+                countLabel.innerText = selectedCount
+                    ? `${selectedCount} student${selectedCount === 1 ? '' : 's'} selected`
+                    : 'Choose students';
+            }
 
-                document.getElementById(
-                    "studentId"
-                ).value = studentId;
+            function openRequirementModal(studentId = null) {
+                if (!currentRequirementStudents.length) {
+                    return showAlert('warning', 'No Students', 'Select a subject and section with students first.');
+                }
 
-                document.getElementById(
-                    "requirementModal"
-                ).style.display = "flex";
+                const list = document.getElementById('requirementStudentList');
+                list.innerHTML = '';
 
+                currentRequirementStudents.forEach(student => {
+                    const label = document.createElement('label');
+                    label.style.cssText = 'display:flex;align-items:center;gap:8px;padding:7px 4px;cursor:pointer;';
+
+                    const checkbox = document.createElement('input');
+                    checkbox.type = 'checkbox';
+                    checkbox.className = 'requirement-student-check';
+                    checkbox.value = student.student_id;
+                    checkbox.checked = studentId !== null && String(student.student_id) === String(studentId);
+                    checkbox.addEventListener('change', updateRequirementStudentCount);
+
+                    const name = document.createElement('span');
+                    name.textContent = `${student.last_name || ''}, ${student.first_name || ''}`.trim();
+
+                    label.append(checkbox, name);
+                    list.appendChild(label);
+                });
+
+                document.getElementById('requirementModal').style.display = 'flex';
+                updateRequirementStudentCount();
+            }
+
+            function selectRequirementStudents(checked) {
+                document.querySelectorAll('.requirement-student-check').forEach(input => {
+                    input.checked = checked;
+                });
+                updateRequirementStudentCount();
             }
 
             function closeRequirementModal() {
@@ -1609,7 +1659,8 @@ Select Subject and Section
                 document.getElementById('requirementDescription').value = '';
                 document.getElementById('requirementDeadline').value = '';
                 document.getElementById('requirementFile').value = '';
-                document.getElementById('studentId').value = '';
+                document.getElementById('requirementStudentList').innerHTML = '';
+                document.getElementById('requirementStudentCount').innerText = 'Choose students';
             }
             let selectedSubjectId = null;
             let selectedStudentId = null;
