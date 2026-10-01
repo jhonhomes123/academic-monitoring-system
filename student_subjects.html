@@ -333,7 +333,7 @@ async function loadStudentSubjects() {
 
         let { data: grades, error: gradesError } = await supabaseClient
             .from("student_grades")
-            .select(`subject_id, subjects(subject_code, subject_name, teacher_subject_assignments(teachers(first_name, last_name)))`)
+            .select(`subject_id, subjects(subject_code, subject_name, teacher_subject_assignments(teachers(first_name, last_name), teacher_section_assignments(section_id)))`)
             .eq("student_id", student.student_id);
 
         if (gradesError) {

@@ -347,7 +347,7 @@ async function loadAcademicStatus() {
 
         let { data: grades, error: gradesError } = await supabaseClient
             .from("student_grades")
-            .select(`prelim, prelim_status, midterm, midterm_status, final, final_status, status, subjects(subject_code, subject_name)`)            
+            .select(`subject_id, prelim, prelim_status, midterm, midterm_status, final, final_status, status, subjects(subject_code, subject_name)`)
             .eq("student_id", student.student_id);
 
         if (gradesError) {
