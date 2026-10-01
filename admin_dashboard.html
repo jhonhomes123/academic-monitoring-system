@@ -1821,6 +1821,7 @@ table td{
                         </option>
 
                     </select>
+                    <p id="subjectSemesterHint" style="margin:0; color:var(--gray); font-size:13px;">New subjects default to the active semester.</p>
 
                     <select id="subjectYearSelect">
 
@@ -3639,21 +3640,34 @@ let currentManageTeacherId = null;
 
         async function loadSubjectSemesterOptions() {
             const select = document.getElementById('subjectSemesterSelect');
-            const { data, error } = await supabaseClient
+            const [{ data, error }, { data: activeSemester, error: activeError }] = await Promise.all([
+                supabaseClient
                 .from('semesters')
                 .select('semester_id, semester_name')
-                .order('semester_id');
+                .order('semester_id'),
+                supabaseClient
+                    .from('semesters')
+                    .select('semester_id, semester_name')
+                    .eq('is_active', true)
+                    .maybeSingle()
+            ]);
 
-            if (error) {
-                console.error(error);
+            if (error || activeError) {
+                console.error(error || activeError);
                 showAlert('error', 'Semester Error', 'Unable to load semesters.');
                 return;
             }
 
             select.innerHTML = '<option value="">Select Semester</option>';
             (data || []).forEach(semester => {
-                select.innerHTML += `<option value="${semester.semester_id}">${semester.semester_name}</option>`;
+                const isActive = String(semester.semester_id) === String(activeSemester?.semester_id);
+                select.innerHTML += `<option value="${semester.semester_id}">${semester.semester_name}${isActive ? ' (Active)' : ''}</option>`;
             });
+
+            select.value = activeSemester?.semester_id || '';
+            document.getElementById('subjectSemesterHint').textContent = activeSemester
+                ? `New subjects default to ${activeSemester.semester_name}, currently active for students.`
+                : 'No semester is currently active. Choose a semester and activate it for students to see its subjects.';
         }
 
 
@@ -4540,12 +4554,14 @@ async function refreshCurrentExplorer() {
            RESET ALL TO FALSE
         ====================== */
 
-        await supabaseClient
+        const { error: deactivateError } = await supabaseClient
             .from('semesters')
             .update({
                 is_active: false
             })
             .neq('semester_id', 0);
+
+        if (deactivateError) throw deactivateError;
 
         /* ======================
            SET ACTIVE SEMESTER

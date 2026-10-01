@@ -672,7 +672,7 @@ table tr:hover{
                 <div>
                     <h2>Enrolled Subjects</h2>
 
-                    <p>
+                    <p id="activeSemesterSummary">
                         Current subjects and instructor status
                     </p>
                 </div>
@@ -906,6 +906,12 @@ async function loadStudentDashboard() {
             .eq('is_active', true)
             .maybeSingle();
         if (semesterError) throw semesterError;
+        const semesterSummary = document.getElementById('activeSemesterSummary');
+        if (semesterSummary) {
+            semesterSummary.textContent = activeSemester
+                ? `Current subjects and instructor status for ${activeSemester.semester_name}`
+                : 'No active semester is set by the administrator';
+        }
 
         const { data: activeSubjects, error: activeSubjectsError } = activeSemester
             ? await supabaseClient

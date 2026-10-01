@@ -246,7 +246,7 @@ table tr:hover{
         <div class="section-header">
             <div>
                 <h2>Academic Grades & Status</h2>
-                <p>Semester academic evaluation records</p>
+                <p id="activeSemesterLabel">Semester academic evaluation records</p>
             </div>
         </div>
         <table>
@@ -276,11 +276,11 @@ const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_
 async function getActiveSemesterId() {
     const { data, error } = await supabaseClient
         .from('semesters')
-        .select('semester_id')
+        .select('semester_id, semester_name')
         .eq('is_active', true)
         .maybeSingle();
     if (error) throw error;
-    return data?.semester_id || null;
+    return data || null;
 }
 
 async function loadAcademicStatus() {
@@ -332,16 +332,17 @@ async function loadAcademicStatus() {
             return;
         }
 
-        const activeSemesterId = await getActiveSemesterId();
-        if (!activeSemesterId) {
+        const activeSemester = await getActiveSemesterId();
+        if (!activeSemester) {
             renderAcademic([], 'No active semester is set by the administrator.');
             return;
         }
+        document.getElementById('activeSemesterLabel').textContent = `Showing grades for ${activeSemester.semester_name}`;
 
         const { data: activeSubjects, error: activeSubjectsError } = await supabaseClient
             .from('subjects')
             .select('subject_id')
-            .eq('semester_id', activeSemesterId);
+            .eq('semester_id', activeSemester.semester_id);
         if (activeSubjectsError) throw activeSubjectsError;
         const activeSubjectIds = new Set((activeSubjects || []).map(subject => String(subject.subject_id)));
 
@@ -367,7 +368,7 @@ async function loadAcademicStatus() {
                     .select('subject_id, subject_code, subject_name')
                     .eq('major_id', majorId)
                     .eq('year_level', yearLevel)
-                    .eq('semester_id', activeSemesterId)
+                    .eq('semester_id', activeSemester.semester_id)
                     .order('subject_name');
 
                 if (sectionSubjectsError) {
