@@ -7841,6 +7841,10 @@ async function dropAllStudents() {
                 async () => {
 
                     try {
+                        const { data: { session } } = await supabaseClient.auth.getSession();
+                        if (!session) {
+                            throw new Error('Please sign in again as an administrator.');
+                        }
 
                         /* ======================
                            DELETE ALL STUDENTS
@@ -7864,7 +7868,7 @@ async function dropAllStudents() {
                                             SUPABASE_ANON_KEY,
 
                                         'Authorization':
-                                            `Bearer ${SUPABASE_ANON_KEY}`
+                                            `Bearer ${session.access_token}`
 
                                     }
 
