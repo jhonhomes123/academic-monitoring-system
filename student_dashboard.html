@@ -913,23 +913,36 @@ async function loadStudentDashboard() {
                 : 'No active semester is set by the administrator';
         }
 
-        const { data: activeSubjects, error: activeSubjectsError } = activeSemester
+        const { data: sectionSubjects, error: sectionSubjectsError } = activeSemester && student.sections?.majors
             ? await supabaseClient
                 .from('subjects')
-                .select('subject_id')
+                .select('subject_id, subject_code, subject_name')
+                .eq('major_id', student.sections.majors.major_id)
+                .eq('year_level', student.sections.year_level)
                 .eq('semester_id', activeSemester.semester_id)
+                .order('subject_name')
             : { data: [], error: null };
-        if (activeSubjectsError) throw activeSubjectsError;
-        const activeSubjectIds = new Set((activeSubjects || []).map(subject => String(subject.subject_id)));
+        if (sectionSubjectsError) throw sectionSubjectsError;
 
-        // Load student grades and subjects for the active semester
-        const { data: gradeRows, error: gradesError } = await supabaseClient
-            .from('student_grades')
-            .select(`status, prelim_status, midterm_status, final_status, subject_id, subjects(subject_name, subject_code, teacher_subject_assignments(teachers(first_name, last_name)))`)
-            .eq('student_id', studentId);
+        const subjectIds = (sectionSubjects || []).map(subject => subject.subject_id);
+        const activeSubjectIds = new Set(subjectIds.map(String));
+        const [{ data: gradeRows, error: gradesError }, { data: assignments, error: assignmentsError }] = subjectIds.length
+            ? await Promise.all([
+                supabaseClient
+                    .from('student_grades')
+                    .select('status, prelim_status, midterm_status, final_status, subject_id')
+                    .eq('student_id', studentId)
+                    .in('subject_id', subjectIds),
+                supabaseClient
+                    .from('teacher_subject_assignments')
+                    .select('subject_id, teachers(first_name, last_name), teacher_section_assignments(section_id)')
+                    .in('subject_id', subjectIds)
+            ])
+            : [{ data: [], error: null }, { data: [], error: null }];
+        if (gradesError) throw gradesError;
+        if (assignmentsError) throw assignmentsError;
 
-        if (gradesError) console.error('Error loading grades', gradesError);
-        const grades = (gradeRows || []).filter(grade => activeSubjectIds.has(String(grade.subject_id)));
+        const gradesBySubject = new Map((gradeRows || []).map(grade => [String(grade.subject_id), grade]));
 
         const enrolledBody = document.getElementById('enrolledTableBody');
         const totalSubjectsEl = document.getElementById('totalSubjects');
@@ -937,108 +950,29 @@ async function loadStudentDashboard() {
         const incEl = document.getElementById('incompleteCount');
         const failedEl = document.getElementById('failedCount');
 
-        let total = 0, passed = 0, incomplete = 0, failed = 0;
-        let rows = '';
+        let passed = 0, incomplete = 0, failed = 0;
+        const rows = (sectionSubjects || []).map(subject => {
+            const grade = gradesBySubject.get(String(subject.subject_id)) || {};
+            const assignment = (assignments || []).find(item =>
+                String(item.subject_id) === String(subject.subject_id)
+                && (item.teacher_section_assignments || []).some(sectionAssignment =>
+                    String(sectionAssignment.section_id) === String(student.section_id)
+                )
+            );
+            const teacher = assignment?.teachers;
+            const instructor = teacher
+                ? `${teacher.first_name || ''} ${teacher.last_name || ''}`.trim()
+                : 'TBD';
+            const statusRaw = (grade.status || '').toString().toUpperCase();
+            let statusClass = 'warning-text';
+            if (statusRaw === 'PASSED') { statusClass = 'pass-text'; passed++; }
+            else if (statusRaw === 'FAILED') { statusClass = 'danger-text'; failed++; }
+            else if (statusRaw === 'INCOMPLETE') { incomplete++; }
 
-        let subjectAssignmentsMap = {};
-
-        if (grades && grades.length) {
-            total = grades.length;
-
-            // collect subject ids
-            const subjectIds = grades.map(g => g.subjects?.subject_id || g.subject_id).filter(Boolean);
-
-            if (subjectIds.length) {
-                const { data: assignments } = await supabaseClient
-                    .from('teacher_subject_assignments')
-                    .select('assignment_id, subject_id, teachers(teacher_id, first_name, last_name), teacher_section_assignments(section_id)')
-                    .in('subject_id', subjectIds);
-
-                // build map: subject_id -> assignment matching student's section if available
-                (assignments || []).forEach(a => {
-                    subjectAssignmentsMap[a.subject_id] = subjectAssignmentsMap[a.subject_id] || [];
-                    subjectAssignmentsMap[a.subject_id].push(a);
-                });
-            }
-
-            for (const g of grades) {
-                const subj = g.subjects || {};
-                const subjectId = subj.subject_id || g.subject_id;
-                const subjectName = subj.subject_name || subj.subject_code || 'Unknown Subject';
-
-                // choose assignment for this student's section
-                let instructor = 'TBD';
-                const assigns = subjectAssignmentsMap[subjectId] || [];
-                // prefer assignment linked to the student's section (match various shapes), do NOT fallback to another section's teacher
-                let chosen = assigns.find(a => (a.teacher_section_assignments || []).some(ts => String(ts.section_id || ts.sections?.section_id) === String(student.section_id)));
-                const teacher = chosen?.teachers;
-                if (teacher) instructor = `${teacher.first_name || ''} ${teacher.last_name || ''}`.trim();
-
-                const statusRaw = (g.status || '').toString().toUpperCase() || 'PENDING';
-                let statusClass = 'warning-text';
-                if (statusRaw === 'PASSED') { statusClass = 'pass-text'; passed++; }
-                else if (statusRaw === 'FAILED') { statusClass = 'danger-text'; failed++; }
-                else { statusClass = 'warning-text'; incomplete++; }
-
-                const hasTermStatuses = g.prelim_status || g.midterm_status || g.final_status;
-                const termStatus = (label, value) => `${label}: ${value || (!hasTermStatuses ? statusRaw : 'PENDING')}`;
-                rows += `<tr><td>${subjectName}</td><td>${instructor}</td><td class="${statusClass}">${termStatus('Prelim', g.prelim_status)}<br>${termStatus('Midterm', g.midterm_status)}<br>${termStatus('Final', g.final_status)}</td></tr>`;
-            }
-        } else {
-            rows = '<tr><td colspan="3" class="empty">No enrolled subjects</td></tr>';
-        }
-
-        // If no enrolled subjects (grades) exist, load subjects offered for the student's section
-        if ((!grades || !grades.length) && student.sections && student.sections.majors) {
-            try {
-                const majorId = student.sections.majors.major_id;
-                const yearLevel = student.sections.year_level;
-
-                const { data: sectionSubjects, error: sectionSubjectsError } = await supabaseClient
-                    .from('subjects')
-                    .select('subject_id, subject_code, subject_name')
-                    .eq('major_id', majorId)
-                    .eq('year_level', yearLevel)
-                    .eq('semester_id', activeSemester?.semester_id || -1)
-                    .order('subject_name');
-
-                if (sectionSubjectsError) {
-                    console.error('Error loading section subjects', sectionSubjectsError);
-                } else if (sectionSubjects && sectionSubjects.length) {
-                    rows = '';
-                    total = sectionSubjects.length;
-                    // lookup assignments for section subjects
-                    const subjectIds = sectionSubjects.map(s => s.subject_id).filter(Boolean);
-                    let assignments = [];
-                    if (subjectIds.length) {
-                        const resp = await supabaseClient
-                            .from('teacher_subject_assignments')
-                            .select('assignment_id, subject_id, teachers(teacher_id, first_name, last_name), teacher_section_assignments(section_id)')
-                            .in('subject_id', subjectIds);
-                        assignments = resp.data || [];
-                    }
-
-                    sectionSubjects.forEach(sub => {
-                        let instructor = 'TBD';
-                        const assigns = (assignments || []).filter(a => a.subject_id === sub.subject_id);
-                        // strictly match assignment to student's section only
-                        let chosen = assigns.find(a => (a.teacher_section_assignments || []).some(ts => String(ts.section_id || ts.sections?.section_id) === String(student.section_id)));
-                        const teacher = chosen?.teachers;
-                        if (teacher) instructor = `${teacher.first_name || ''} ${teacher.last_name || ''}`.trim();
-
-                        rows += `\n<tr>\n<td>${sub.subject_code}</td>\n<td>${instructor}</td>\n<td class="warning-text">Prelim: PENDING<br>Midterm: PENDING<br>Final: PENDING</td>\n</tr>`;
-                    });
-
-                    if (enrolledBody) enrolledBody.innerHTML = rows;
-                    if (totalSubjectsEl) totalSubjectsEl.textContent = total;
-                    if (passedEl) passedEl.textContent = passed;
-                    if (incEl) incEl.textContent = incomplete;
-                    if (failedEl) failedEl.textContent = failed;
-                }
-            } catch (err) {
-                console.error('Failed to load section subjects', err);
-            }
-        }
+            const termStatus = (value) => value || statusRaw || 'PENDING';
+            return `<tr><td>${subject.subject_name || subject.subject_code}</td><td>${instructor}</td><td class="${statusClass}">Prelim: ${termStatus(grade.prelim_status)}<br>Midterm: ${termStatus(grade.midterm_status)}<br>Final: ${termStatus(grade.final_status)}</td></tr>`;
+        }).join('') || '<tr><td colspan="3" class="empty">No subjects for the active semester</td></tr>';
+        const total = (sectionSubjects || []).length;
 
         if (enrolledBody) enrolledBody.innerHTML = rows;
         if (totalSubjectsEl) totalSubjectsEl.textContent = String(total);
