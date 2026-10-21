@@ -218,11 +218,16 @@
                 });
                 const result=await response.json();
                 if(!response.ok) throw new Error(result.error||'Unable to complete setup.');
-                const loginAlias=`student-${currentStudentNumber.trim().toLowerCase()}@accounts.tcc.invalid`;
                 await supabaseClient.auth.signOut();
-                const {error:loginError}=await supabaseClient.auth.signInWithPassword({email:loginAlias,password});
-                if(loginError) throw new Error('Setup saved, but please sign in again with your new email and password.');
-                window.location.replace('student_dashboard.html');
+                form.innerHTML=`
+                    <div style="padding:24px 16px;text-align:center;">
+                        <div style="font-size:42px;color:#1f6bff;margin-bottom:12px;"><i class="fa-solid fa-circle-check"></i></div>
+                        <h2 style="color:#0b3d91;margin-bottom:10px;">Your information has been saved</h2>
+                        <p style="color:#64748b;line-height:1.6;">Your email and enrollment details are set. Please return to the homepage and log in with your Student ID and new password.</p>
+                        <a href="login.html" class="submit-button" style="display:flex;align-items:center;justify-content:center;text-decoration:none;margin-top:22px;">Return to Homepage</a>
+                    </div>
+                `;
+                setTimeout(()=>window.location.replace('login.html'),5000);
             }catch(error){showError(error);saveButton.disabled=false;saveButton.textContent='Save and Continue';}
         });
 
