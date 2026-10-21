@@ -101,8 +101,34 @@
         }
 
         async function initialize(){
-            const {data:{user},error}=await supabaseClient.auth.getUser();
-            if(error||!user){window.location.replace('login.html');return;}
+            let { data: { session }, error } = await supabaseClient.auth.getSession();
+            let user = session?.user || null;
+            if (!user) {
+                const handoffValue = sessionStorage.getItem('ams_student_setup_session');
+                if (handoffValue) {
+                    sessionStorage.removeItem('ams_student_setup_session');
+                    try {
+                        const handoff = JSON.parse(handoffValue);
+                        const restored = await supabaseClient.auth.setSession(handoff);
+                        session = restored.data?.session || null;
+                        user = session?.user || null;
+                        error = restored.error || error;
+                    } catch (restoreError) {
+                        error = restoreError;
+                    }
+                }
+            }
+            if (!user) {
+                const refreshed = await supabaseClient.auth.refreshSession();
+                session = refreshed.data?.session || null;
+                user = session?.user || null;
+                error = refreshed.error || error;
+            }
+            if (!user) {
+                errorBox.innerHTML = 'Your sign-in session could not be restored. <a href="login.html">Return to Login</a>, sign in again, and complete setup without closing the browser tab.';
+                console.error('Onboarding session could not be restored', error);
+                return;
+            }
             currentUser=user;
             const {data:appUser,error:appError}=await supabaseClient.from('users').select('role_id, email, onboarding_required, force_password_change').eq('user_id',user.id).maybeSingle();
             if(appError||!appUser||Number(appUser.role_id)!==3){errorBox.textContent='This setup page is only for student accounts.';return;}
@@ -145,7 +171,7 @@
             const password=document.getElementById('newPassword').value;
             if(password!==document.getElementById('confirmPassword').value){errorBox.textContent='The passwords do not match.';return;}
             const {data:{session}}=await supabaseClient.auth.getSession();
-            if(!session){window.location.replace('login.html');return;}
+            if(!session){errorBox.textContent='Your sign-in session expired. Return to Login, sign in again, and retry setup.';saveButton.disabled=false;saveButton.textContent='Save and Continue';return;}
             saveButton.disabled=true;
             saveButton.textContent='Saving...';
             try{

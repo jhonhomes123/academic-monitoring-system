@@ -2128,6 +2128,17 @@ return;
 
 }
 
+if (data.session?.access_token && data.session?.refresh_token) {
+    const { error: persistError } = await supabaseClient.auth.setSession({
+        access_token: data.session.access_token,
+        refresh_token: data.session.refresh_token
+    });
+    if (persistError) {
+        showAlert('error', 'Session Error', 'Your sign-in could not be saved. Please try again.');
+        return;
+    }
+}
+
 
 // ==========================
 // GET USER RECORD
@@ -2209,6 +2220,17 @@ const firstLoginSetupRequired = Number(userData.role_id) === 3
 
 if(Number(userData.role_id) === 3 && (onboardingRequired || passwordChangeRequired || firstLoginSetupRequired)){
     showAlert('success', 'Account Setup Required', 'Complete your email, enrollment information, and permanent password.');
+    const activeSession = data.session || (await supabaseClient.auth.getSession()).data.session;
+    if (activeSession?.access_token && activeSession?.refresh_token) {
+        try {
+            sessionStorage.setItem('ams_student_setup_session', JSON.stringify({
+                access_token: activeSession.access_token,
+                refresh_token: activeSession.refresh_token
+            }));
+        } catch (storageError) {
+            console.warn('Temporary setup session handoff unavailable; using the saved Supabase session.', storageError);
+        }
+    }
     setTimeout(() => {
         window.location.href = passwordChangeRequired && !onboardingRequired && !firstLoginSetupRequired
             ? 'student_onboarding.html?mode=password'
