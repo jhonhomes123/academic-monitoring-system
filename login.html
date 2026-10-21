@@ -1048,9 +1048,6 @@ onclick="openAboutModal()">
                         Login
                     </button>
 
-                    <span class="card-btn signup-btn" style="display:inline-flex;align-items:center;justify-content:center;cursor:default;">
-                        Get account from Admin
-                    </span>
                 </div>
 
             </div>
@@ -2196,10 +2193,13 @@ return;
 
 }
 
-if(Number(userData.role_id) === 3 && (userData.onboarding_required || userData.force_password_change)){
+const onboardingRequired = Boolean(userData.onboarding_required || data.user.user_metadata?.onboarding_required);
+const passwordChangeRequired = Boolean(userData.force_password_change || data.user.user_metadata?.force_password_change);
+
+if(Number(userData.role_id) === 3 && (onboardingRequired || passwordChangeRequired)){
     showAlert('success', 'Account Setup Required', 'Complete your email, enrollment information, and permanent password.');
     setTimeout(() => {
-        window.location.href = userData.force_password_change && !userData.onboarding_required
+        window.location.href = passwordChangeRequired && !onboardingRequired
             ? 'student_onboarding.html?mode=password'
             : 'student_onboarding.html';
     }, 800);

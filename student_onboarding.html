@@ -106,9 +106,10 @@
             currentUser=user;
             const {data:appUser,error:appError}=await supabaseClient.from('users').select('role_id, onboarding_required, force_password_change').eq('user_id',user.id).maybeSingle();
             if(appError||!appUser||Number(appUser.role_id)!==3){errorBox.textContent='This setup page is only for student accounts.';return;}
-            passwordOnlyMode=new URLSearchParams(window.location.search).get('mode')==='password';
+            const onboardingRequired=Boolean(appUser.onboarding_required||user.user_metadata?.onboarding_required);
+            const passwordChangeRequired=Boolean(appUser.force_password_change||user.user_metadata?.force_password_change);
+            passwordOnlyMode=passwordChangeRequired&&!onboardingRequired;
             if(passwordOnlyMode){
-                if(!appUser.force_password_change){window.location.replace('student_dashboard.html');return;}
                 document.getElementById('enrollmentFields').style.display='none';
                 document.querySelectorAll('#enrollmentFields [required]').forEach(field=>field.required=false);
                 document.querySelector('.setup-header h1').textContent='Choose a New Password';
@@ -117,7 +118,10 @@
                 document.getElementById('saveButton').textContent='Save New Password';
                 return;
             }
-            if(!appUser.onboarding_required){window.location.replace('student_dashboard.html');return;}
+            if(!onboardingRequired){
+                errorBox.textContent='This account is not marked for first-time setup. Sign in normally or contact the administrator if this is a newly created student account.';
+                return;
+            }
             const {data:profile,error:profileError}=await supabaseClient.from('students').select('student_number, first_name, middle_initial, last_name').eq('user_id',user.id).maybeSingle();
             if(profileError||!profile){errorBox.textContent='Student profile not found. Please contact an administrator.';return;}
             document.getElementById('studentNumber').value=profile.student_number||'';
