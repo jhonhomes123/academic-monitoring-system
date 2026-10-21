@@ -7508,12 +7508,15 @@ async function saveStudentEdits() {
             middle_initial: document.getElementById('editStudentMiddleInitial').value.trim(),
             last_name: document.getElementById('editStudentLastName').value.trim(),
             email: document.getElementById('editStudentEmail').value.trim(),
+            department_id: document.getElementById('editStudentDepartment').value || null,
+            major_id: document.getElementById('editStudentMajor').value || null,
+            year_level: document.getElementById('editStudentYear').value || null,
             section_id: selectedSectionId || null
         });
         if (selectedSectionId && String(result.section_id) !== String(selectedSectionId)) {
             throw new Error('The saved section does not match the selected section. Please reopen Edit Student and verify the enrollment selections.');
         }
-        showAlert('success', 'Student Updated', 'Student details and enrollment were updated.');
+        showAlert('success', 'Student Updated', result.message || 'Student details and enrollment were updated.');
         closeEditStudentModal();
         await loadStudentsBySection();
     } catch (error) {
