@@ -252,7 +252,16 @@
                     });
                     const result=await response.json();
                     if(!response.ok) throw new Error(result.error||'Unable to update password.');
-                    window.location.replace('student_dashboard.html');
+                    await supabaseClient.auth.signOut();
+                    form.innerHTML=`
+                        <div style="padding:24px 16px;text-align:center;">
+                            <div style="font-size:42px;color:#1f6bff;margin-bottom:12px;"><i class="fa-solid fa-circle-check"></i></div>
+                            <h2 style="color:#0b3d91;margin-bottom:10px;">Your password has been saved</h2>
+                            <p style="color:#64748b;line-height:1.6;">Return to the login page and sign in again using your Student ID and new password.</p>
+                            <a href="login.html" class="submit-button" style="display:flex;align-items:center;justify-content:center;text-decoration:none;margin-top:22px;">Return to Login</a>
+                        </div>
+                    `;
+                    setTimeout(()=>window.location.replace('login.html'),5000);
                     return;
                 }
                 const enrollmentAssigned = form.dataset.enrollmentAssigned === 'true';
