@@ -2216,6 +2216,7 @@ if (Number(userData.role_id) === 3) {
     studentProfileNeedsSetup = !studentProfileError && (!studentProfile || studentProfile.section_id == null);
 }
 const firstLoginSetupRequired = Number(userData.role_id) === 3
+    && !passwordChangeRequired
     && (studentProfileNeedsSetup || userData.email?.endsWith('@accounts.tcc.invalid'));
 
 if(Number(userData.role_id) === 3 && (onboardingRequired || passwordChangeRequired || firstLoginSetupRequired)){

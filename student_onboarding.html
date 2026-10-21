@@ -157,8 +157,8 @@
             currentStudentNumber=profile.student_number||'';
             const internalStudentLogin=Boolean(appUser.email?.endsWith('@accounts.tcc.invalid'));
             const requestedSetupMode=new URLSearchParams(window.location.search).get('mode')==='setup';
-            const onboardingRequired=Boolean(requestedSetupMode||appUser.onboarding_required||user.user_metadata?.onboarding_required||internalStudentLogin||profile.section_id==null);
             const passwordChangeRequired=Boolean(appUser.force_password_change||user.user_metadata?.force_password_change);
+            const onboardingRequired=Boolean(requestedSetupMode||appUser.onboarding_required||user.user_metadata?.onboarding_required||(!passwordChangeRequired&&(internalStudentLogin||profile.section_id==null)));
             passwordOnlyMode=passwordChangeRequired&&!onboardingRequired;
             if(passwordOnlyMode){
                 document.getElementById('enrollmentFields').style.display='none';
