@@ -2233,7 +2233,7 @@ if(Number(userData.role_id) === 3 && (onboardingRequired || passwordChangeRequir
         }
     }
     setTimeout(() => {
-        window.location.href = passwordChangeRequired && !onboardingRequired && !firstLoginSetupRequired
+        window.location.href = passwordChangeRequired
             ? 'student_onboarding.html?mode=password'
             : 'student_onboarding.html?mode=setup';
     }, 800);

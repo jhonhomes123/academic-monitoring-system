@@ -175,12 +175,15 @@
             const enrollmentAlreadyAssigned=profile.section_id!==null&&profile.section_id!==undefined;
             form.dataset.enrollmentAssigned=enrollmentAlreadyAssigned?'true':'false';
             const internalStudentLogin=Boolean(appUser.email?.endsWith('@accounts.tcc.invalid'));
-            const requestedSetupMode=new URLSearchParams(window.location.search).get('mode')==='setup';
+            const requestedMode=new URLSearchParams(window.location.search).get('mode');
+            const requestedPasswordMode=requestedMode==='password';
+            const requestedSetupMode=requestedMode==='setup';
             const passwordChangeRequired=Boolean(appUser.force_password_change||user.user_metadata?.force_password_change);
-            const onboardingRequired=Boolean(requestedSetupMode||appUser.onboarding_required||user.user_metadata?.onboarding_required||(!passwordChangeRequired&&(internalStudentLogin||!enrollmentAlreadyAssigned)));
-            passwordOnlyMode=passwordChangeRequired&&!onboardingRequired;
+            const onboardingRequired=!requestedPasswordMode&&Boolean(requestedSetupMode||appUser.onboarding_required||user.user_metadata?.onboarding_required||(!passwordChangeRequired&&(internalStudentLogin||!enrollmentAlreadyAssigned)));
+            passwordOnlyMode=requestedPasswordMode||(passwordChangeRequired&&!onboardingRequired);
             if(passwordOnlyMode){
-                document.getElementById('enrollmentFields').style.display='none';
+                document.getElementById('studentEmail').required=false;
+                document.getElementById('enrollmentFields').hidden=true;
                 document.querySelectorAll('#enrollmentFields [required]').forEach(field=>field.required=false);
                 document.querySelector('.setup-header h1').textContent='Choose a New Password';
                 document.querySelector('.setup-content>p').textContent='Your administrator reset your password. Choose a new password to continue; your student details and section will stay unchanged.';
