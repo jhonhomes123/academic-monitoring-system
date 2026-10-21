@@ -109,7 +109,8 @@
             const {data:profile,error:profileError}=await supabaseClient.from('students').select('student_number, first_name, middle_initial, last_name, section_id').eq('user_id',user.id).maybeSingle();
             if(profileError||!profile){errorBox.textContent='Student profile not found. Please contact an administrator.';return;}
             const internalStudentLogin=Boolean(appUser.email?.endsWith('@accounts.tcc.invalid'));
-            const onboardingRequired=Boolean(appUser.onboarding_required||user.user_metadata?.onboarding_required||internalStudentLogin||profile.section_id==null);
+            const requestedSetupMode=new URLSearchParams(window.location.search).get('mode')==='setup';
+            const onboardingRequired=Boolean(requestedSetupMode||appUser.onboarding_required||user.user_metadata?.onboarding_required||internalStudentLogin||profile.section_id==null);
             const passwordChangeRequired=Boolean(appUser.force_password_change||user.user_metadata?.force_password_change);
             passwordOnlyMode=passwordChangeRequired&&!onboardingRequired;
             if(passwordOnlyMode){
