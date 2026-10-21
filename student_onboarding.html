@@ -104,9 +104,10 @@
             const {data:{user},error}=await supabaseClient.auth.getUser();
             if(error||!user){window.location.replace('login.html');return;}
             currentUser=user;
-            const {data:appUser,error:appError}=await supabaseClient.from('users').select('role_id, onboarding_required, force_password_change').eq('user_id',user.id).maybeSingle();
+            const {data:appUser,error:appError}=await supabaseClient.from('users').select('role_id, email, onboarding_required, force_password_change').eq('user_id',user.id).maybeSingle();
             if(appError||!appUser||Number(appUser.role_id)!==3){errorBox.textContent='This setup page is only for student accounts.';return;}
-            const onboardingRequired=Boolean(appUser.onboarding_required||user.user_metadata?.onboarding_required);
+            const internalStudentLogin=Boolean(appUser.email?.endsWith('@accounts.tcc.invalid'));
+            const onboardingRequired=Boolean(appUser.onboarding_required||user.user_metadata?.onboarding_required||internalStudentLogin);
             const passwordChangeRequired=Boolean(appUser.force_password_change||user.user_metadata?.force_password_change);
             passwordOnlyMode=passwordChangeRequired&&!onboardingRequired;
             if(passwordOnlyMode){
