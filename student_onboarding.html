@@ -97,6 +97,19 @@
         let passwordOnlyMode=new URLSearchParams(window.location.search).get('mode')==='password';
         let currentAccessToken='';
 
+        function applyPasswordOnlyMode(){
+            passwordOnlyMode=true;
+            document.getElementById('studentEmail').required=false;
+            document.getElementById('enrollmentFields').hidden=true;
+            document.querySelectorAll('#enrollmentFields [required]').forEach(field=>field.required=false);
+            document.querySelector('.setup-header h1').textContent='Choose a New Password';
+            document.querySelector('.setup-content>p').textContent='Your administrator reset your password. Choose a new password to continue; your student details and section will stay unchanged.';
+            document.querySelector('#newPassword + .password-note').textContent='Use at least 8 characters.';
+            document.getElementById('saveButton').textContent='Save New Password';
+        }
+
+        if(passwordOnlyMode) applyPasswordOnlyMode();
+
         async function loadSetupOptions(scope, values={}){
             const response=await fetch(FUNCTIONS_URL,{
                 method:'POST',
@@ -189,13 +202,7 @@
             const onboardingRequired=!requestedPasswordMode&&Boolean(requestedSetupMode||appUser.onboarding_required||user.user_metadata?.onboarding_required||(!passwordChangeRequired&&(internalStudentLogin||!enrollmentAlreadyAssigned)));
             passwordOnlyMode=requestedPasswordMode||(passwordChangeRequired&&!onboardingRequired);
             if(passwordOnlyMode){
-                document.getElementById('studentEmail').required=false;
-                document.getElementById('enrollmentFields').hidden=true;
-                document.querySelectorAll('#enrollmentFields [required]').forEach(field=>field.required=false);
-                document.querySelector('.setup-header h1').textContent='Choose a New Password';
-                document.querySelector('.setup-content>p').textContent='Your administrator reset your password. Choose a new password to continue; your student details and section will stay unchanged.';
-                document.querySelector('#newPassword + .password-note').textContent='Use at least 8 characters.';
-                document.getElementById('saveButton').textContent='Save New Password';
+                applyPasswordOnlyMode();
                 return;
             }
             if(!onboardingRequired){
@@ -231,11 +238,12 @@
             errorBox.textContent='';
             const password=document.getElementById('newPassword').value;
             if(password!==document.getElementById('confirmPassword').value){errorBox.textContent='The passwords do not match.';return;}
-            const {data:{session}}=await supabaseClient.auth.getSession();
-            if(!session){errorBox.textContent='Your sign-in session expired. Return to Login, sign in again, and retry setup.';saveButton.disabled=false;saveButton.textContent='Save and Continue';return;}
             saveButton.disabled=true;
             saveButton.textContent='Saving...';
             try{
+                const {data:{session},error:sessionError}=await supabaseClient.auth.getSession();
+                if(sessionError) throw sessionError;
+                if(!session) throw new Error('Your sign-in session expired. Return to Login, sign in again, and retry setup.');
                 if(passwordOnlyMode){
                     const response=await fetch(FUNCTIONS_URL,{
                         method:'POST',
