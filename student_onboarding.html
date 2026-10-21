@@ -55,10 +55,12 @@
                             <div class="saved-enrollment-item"><span>Section</span><strong id="savedSection">-</strong></div>
                         </div>
                     </div>
+                    <div id="enrollmentDropdowns" class="form-grid" style="grid-column:1/-1;display:contents;">
                     <div class="field"><label for="yearSelect">Year level</label><select id="yearSelect" required><option value="">Select year</option><option>1st Year</option><option>2nd Year</option><option>3rd Year</option><option>4th Year</option></select></div>
                     <div class="field"><label for="departmentSelect">Department</label><select id="departmentSelect" required><option value="">Select department</option></select></div>
                     <div class="field"><label for="majorSelect">Major</label><select id="majorSelect" required disabled><option value="">Select major</option></select></div>
                     <div class="field"><label for="sectionSelect">Section</label><select id="sectionSelect" required disabled><option value="">Select section</option></select></div>
+                    </div>
                 </div>
                 <div class="form-grid" id="passwordFields" style="margin-top:16px;">
                     <div class="field"><label for="newPassword">New password</label><input id="newPassword" type="password" autocomplete="new-password" minlength="8" required><span class="password-note">Use at least 8 characters. You can change it later.</span></div>
@@ -166,10 +168,10 @@
             if(!currentAccessToken){errorBox.textContent='Your sign-in session expired. Return to Login and try again.';return;}
             const {data:appUser,error:appError}=await supabaseClient.from('users').select('role_id, email, onboarding_required, force_password_change').eq('user_id',user.id).maybeSingle();
             if(appError||!appUser||Number(appUser.role_id)!==3){errorBox.textContent='This setup page is only for student accounts.';return;}
-            const {data:profile,error:profileError}=await supabaseClient.from('students').select('student_number, section_id, sections(section_name, year_level, majors(major_name, departments(department_name)))').eq('user_id',user.id).maybeSingle();
+            const {data:profile,error:profileError}=await supabaseClient.from('students').select('student_number, section_id').eq('user_id',user.id).maybeSingle();
             if(profileError||!profile){errorBox.textContent='Student profile not found. Please contact an administrator.';return;}
             currentStudentNumber=profile.student_number||'';
-            const enrollmentAlreadyAssigned=profile.section_id!==null;
+            const enrollmentAlreadyAssigned=profile.section_id!==null&&profile.section_id!==undefined;
             const internalStudentLogin=Boolean(appUser.email?.endsWith('@accounts.tcc.invalid'));
             const requestedSetupMode=new URLSearchParams(window.location.search).get('mode')==='setup';
             const passwordChangeRequired=Boolean(appUser.force_password_change||user.user_metadata?.force_password_change);
@@ -189,20 +191,19 @@
                 return;
             }
             if(enrollmentAlreadyAssigned){
-                document.querySelectorAll('#enrollmentFields select').forEach(field=>field.required=false);
-                document.getElementById('departmentSelect').closest('.field').style.display='none';
-                document.getElementById('majorSelect').closest('.field').style.display='none';
-                document.getElementById('yearSelect').closest('.field').style.display='none';
-                document.getElementById('sectionSelect').closest('.field').style.display='none';
-                document.getElementById('savedYear').textContent=profile.sections?.year_level||'-';
-                document.getElementById('savedDepartment').textContent=profile.sections?.majors?.departments?.department_name||'-';
-                document.getElementById('savedMajor').textContent=profile.sections?.majors?.major_name||'-';
-                document.getElementById('savedSection').textContent=profile.sections?.section_name||'-';
+                document.querySelectorAll('#enrollmentDropdowns select').forEach(field=>field.required=false);
+                document.getElementById('enrollmentDropdowns').style.display='none';
+                const {data:savedSection,error:savedSectionError}=await supabaseClient.from('sections').select('section_name, year_level, majors(major_name, departments(department_name))').eq('section_id',profile.section_id).maybeSingle();
+                if(savedSectionError||!savedSection){errorBox.textContent='Your assigned section could not be loaded. Please contact the administrator.';return;}
+                document.getElementById('savedYear').textContent=savedSection.year_level||'-';
+                document.getElementById('savedDepartment').textContent=savedSection.majors?.departments?.department_name||'-';
+                document.getElementById('savedMajor').textContent=savedSection.majors?.major_name||'-';
+                document.getElementById('savedSection').textContent=savedSection.section_name||'-';
                 document.getElementById('savedEnrollment').style.display='block';
                 document.querySelector('.setup-header h1').textContent='Add Your Email and Password';
                 document.querySelector('.setup-content>p').textContent='Your administrator has already entered your name, Student ID, and section. Add your contact email and choose a new password to finish setup.';
             } else {
-                await loadDepartments();
+                if(!enrollmentAlreadyAssigned) await loadDepartments();
             }
         }
 

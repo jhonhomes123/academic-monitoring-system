@@ -7430,8 +7430,18 @@ async function openEditStudentModal(studentId) {
         departmentSelect.innerHTML = '<option value="">Select Department</option>';
         (departments || []).forEach(department => departmentSelect.add(new Option(department.department_name, department.department_id)));
 
-        const section = student.sections;
-        if (section?.majors?.department_id) {
+        let section = null;
+        if (student.section_id !== null && student.section_id !== undefined) {
+            const { data: sectionData, error: sectionError } = await supabaseClient
+                .from('sections')
+                .select('section_id, section_name, year_level, major_id, majors(department_id)')
+                .eq('section_id', student.section_id)
+                .maybeSingle();
+            if (sectionError) throw sectionError;
+            section = sectionData;
+        }
+
+        if (section?.major_id && section.majors?.department_id) {
             departmentSelect.value = section.majors.department_id;
             await loadEditStudentMajors(section.major_id);
             document.getElementById('editStudentYear').value = section.year_level || '';
@@ -7484,6 +7494,13 @@ async function saveStudentEdits() {
     const errorBox = document.getElementById('editStudentError');
     errorBox.textContent = '';
     try {
+        const selectedSectionId = document.getElementById('editStudentSection').value;
+        if (document.getElementById('editStudentDepartment').value
+            && document.getElementById('editStudentMajor').value
+            && document.getElementById('editStudentYear').value
+            && !selectedSectionId) {
+            throw new Error('Choose a section, or clear the department, major, and year to leave the student unassigned.');
+        }
         await callStudentAccountFunction('admin-edit', {
             student_id: Number(document.getElementById('editStudentId').value),
             student_number: document.getElementById('editStudentNumber').value.trim(),
@@ -7491,7 +7508,7 @@ async function saveStudentEdits() {
             middle_initial: document.getElementById('editStudentMiddleInitial').value.trim(),
             last_name: document.getElementById('editStudentLastName').value.trim(),
             email: document.getElementById('editStudentEmail').value.trim(),
-            section_id: document.getElementById('editStudentSection').value || null
+            section_id: selectedSectionId || null
         });
         showAlert('success', 'Student Updated', 'Student details and enrollment were updated.');
         closeEditStudentModal();
