@@ -297,6 +297,13 @@ async function loadStudentProfile() {
             .eq("user_id", user.id)
             .maybeSingle();
 
+        const { data: accountData } = await supabaseClient
+            .from('users')
+            .select('email')
+            .eq('user_id', user.id)
+            .maybeSingle();
+        const contactEmail = accountData?.email?.endsWith('@accounts.tcc.invalid') ? '-' : (accountData?.email || '-');
+
         if (!studentData && !studentError) {
             try {
                 const displayName = (user.user_metadata && (user.user_metadata.full_name || user.user_metadata.name)) || '';
@@ -323,7 +330,7 @@ async function loadStudentProfile() {
 
         if (studentError || !studentData) {
             console.error("Failed to load student profile", studentError);
-            setProfileFields("-", "-", "-", user.email || "-");
+            setProfileFields("-", "-", "-", contactEmail);
             return;
         }
 
@@ -358,7 +365,7 @@ async function loadStudentProfile() {
             studentData.student_number || "-",
             majorName,
             sectionLabel,
-            user.email || "-"
+            contactEmail
         );
     } catch (err) {
         console.error("Error loading student profile", err);

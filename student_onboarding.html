@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Complete Student Setup | AMS</title>
+    <link rel="stylesheet" href="mobile_fix.css">
+    <style>
+        :root{--navy:#17324d;--blue:#176b87;--mint:#d9f0e7;--paper:#f4f7f8;--ink:#20313d;--muted:#657580;--line:#d8e1e5;--danger:#ba4343}
+        *{box-sizing:border-box}
+        body{margin:0;min-height:100vh;background:linear-gradient(135deg,#edf5f4,#f6f4ec);font-family:Arial,sans-serif;color:var(--ink);display:grid;place-items:center;padding:24px}
+        .setup-shell{width:min(100%,720px);background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:0 18px 45px rgba(23,50,77,.12);overflow:hidden}
+        .setup-header{background:var(--navy);color:white;padding:26px 30px;display:flex;align-items:center;gap:15px}
+        .setup-header img{width:52px;height:52px;object-fit:contain;background:white;border-radius:8px;padding:4px}
+        .setup-header h1{font-size:22px;margin:0 0 5px}.setup-header p{margin:0;color:#d7e4eb;font-size:14px}
+        .setup-content{padding:28px 30px 30px}.setup-content>p{color:var(--muted);margin:0 0 22px;line-height:1.5}
+        .form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+        .field{display:flex;flex-direction:column;gap:7px}.field.full{grid-column:1/-1}
+        label{font-weight:600;font-size:14px;color:var(--navy)}
+        input,select{width:100%;min-height:44px;padding:10px 12px;border:1px solid var(--line);border-radius:7px;background:white;color:var(--ink);font:inherit}
+        input[readonly]{background:#f1f4f5;color:var(--muted)}
+        .password-note{font-size:12px;color:var(--muted);line-height:1.4}
+        .submit-button{margin-top:22px;width:100%;min-height:46px;border:0;border-radius:7px;background:var(--blue);color:white;font-weight:700;font-size:15px;cursor:pointer}
+        .submit-button:disabled{opacity:.65;cursor:wait}
+        .form-error{min-height:20px;margin-top:12px;color:var(--danger);font-size:14px}
+        @media(max-width:560px){body{padding:12px}.setup-header{padding:20px}.setup-content{padding:22px 20px}.form-grid{grid-template-columns:1fr}.field.full{grid-column:auto}}
+    </style>
+</head>
+<body>
+    <main class="setup-shell">
+        <header class="setup-header">
+            <img src="school_logo.png" alt="Talisay City College logo">
+            <div><h1>Complete Your Student Account</h1><p>Academic Monitoring System · Talisay City College</p></div>
+        </header>
+        <section class="setup-content">
+            <p>Confirm your details, choose your enrollment information, and replace the temporary password to finish setting up your account.</p>
+            <form id="setupForm">
+                <div class="form-grid" id="enrollmentFields">
+                    <div class="field"><label for="studentNumber">Student ID</label><input id="studentNumber" readonly></div>
+                    <div class="field"><label for="studentEmail">Email address</label><input id="studentEmail" type="email" autocomplete="email" required></div>
+                    <div class="field"><label for="firstName">First name</label><input id="firstName" autocomplete="given-name" required></div>
+                    <div class="field"><label for="lastName">Last name</label><input id="lastName" autocomplete="family-name" required></div>
+                    <div class="field"><label for="middleInitial">Middle initial (optional)</label><input id="middleInitial" maxlength="5"></div>
+                    <div class="field"><label for="departmentSelect">Department</label><select id="departmentSelect" required><option value="">Select department</option></select></div>
+                    <div class="field"><label for="majorSelect">Major</label><select id="majorSelect" required disabled><option value="">Select major</option></select></div>
+                    <div class="field"><label for="yearSelect">Year level</label><select id="yearSelect" required><option value="">Select year</option><option>1st Year</option><option>2nd Year</option><option>3rd Year</option><option>4th Year</option></select></div>
+                    <div class="field"><label for="sectionSelect">Section</label><select id="sectionSelect" required disabled><option value="">Select section</option></select></div>
+                </div>
+                <div class="form-grid" id="passwordFields" style="margin-top:16px;">
+                    <div class="field"><label for="newPassword">New password</label><input id="newPassword" type="password" autocomplete="new-password" minlength="8" required><span class="password-note">Use at least 8 characters. You can change it later.</span></div>
+                    <div class="field"><label for="confirmPassword">Confirm password</label><input id="confirmPassword" type="password" autocomplete="new-password" minlength="8" required></div>
+                </div>
+                <button id="saveButton" class="submit-button" type="submit">Save and Continue</button>
+                <div id="formError" class="form-error" role="alert"></div>
+            </form>
+        </section>
+    </main>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script>
+        const SUPABASE_URL='https://nrqrsolfowebujogawti.supabase.co';
+        const SUPABASE_ANON_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJucXJzb2xmb3dlYnVqb2dhd3RpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkyODE2NjksImV4cCI6MjA5NDg1NzY2OX0.XcawTf9niOIZbG0hBTtwSXjySWfdVl3LAClbWdZmfl8';
+        const supabaseClient=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
+        const FUNCTIONS_URL=`${SUPABASE_URL}/functions/v1/manage-student-accounts`;
+        const form=document.getElementById('setupForm');
+        const errorBox=document.getElementById('formError');
+        const saveButton=document.getElementById('saveButton');
+        const departmentSelect=document.getElementById('departmentSelect');
+        const majorSelect=document.getElementById('majorSelect');
+        const yearSelect=document.getElementById('yearSelect');
+        const sectionSelect=document.getElementById('sectionSelect');
+        let currentUser=null;
+        let passwordOnlyMode=false;
+
+        async function loadDepartments(){
+            const {data,error}=await supabaseClient.from('departments').select('department_id, department_name').order('department_name');
+            if(error) throw error;
+            departmentSelect.innerHTML='<option value="">Select department</option>';
+            (data||[]).forEach(item=>departmentSelect.add(new Option(item.department_name,item.department_id)));
+        }
+
+        async function loadMajors(){
+            majorSelect.innerHTML='<option value="">Select major</option>';
+            sectionSelect.innerHTML='<option value="">Select section</option>';
+            majorSelect.disabled=true;
+            sectionSelect.disabled=true;
+            if(!departmentSelect.value) return;
+            const {data,error}=await supabaseClient.from('majors').select('major_id, major_name').eq('department_id',departmentSelect.value).order('major_name');
+            if(error) throw error;
+            (data||[]).forEach(item=>majorSelect.add(new Option(item.major_name,item.major_id)));
+            majorSelect.disabled=false;
+        }
+
+        async function loadSections(){
+            sectionSelect.innerHTML='<option value="">Select section</option>';
+            sectionSelect.disabled=true;
+            if(!majorSelect.value||!yearSelect.value) return;
+            const {data,error}=await supabaseClient.from('sections').select('section_id, section_name').eq('major_id',majorSelect.value).eq('year_level',yearSelect.value).order('section_name');
+            if(error) throw error;
+            (data||[]).forEach(item=>sectionSelect.add(new Option(item.section_name,item.section_id)));
+            sectionSelect.disabled=false;
+        }
+
+        async function initialize(){
+            const {data:{user},error}=await supabaseClient.auth.getUser();
+            if(error||!user){window.location.replace('login.html');return;}
+            currentUser=user;
+            const {data:appUser,error:appError}=await supabaseClient.from('users').select('role_id, onboarding_required, force_password_change').eq('user_id',user.id).maybeSingle();
+            if(appError||!appUser||Number(appUser.role_id)!==3){errorBox.textContent='This setup page is only for student accounts.';return;}
+            passwordOnlyMode=new URLSearchParams(window.location.search).get('mode')==='password';
+            if(passwordOnlyMode){
+                if(!appUser.force_password_change){window.location.replace('student_dashboard.html');return;}
+                document.getElementById('enrollmentFields').style.display='none';
+                document.querySelectorAll('#enrollmentFields [required]').forEach(field=>field.required=false);
+                document.querySelector('.setup-header h1').textContent='Choose a New Password';
+                document.querySelector('.setup-content>p').textContent='Your administrator reset your password. Choose a new password to continue; your student details and section will stay unchanged.';
+                document.querySelector('#newPassword + .password-note').textContent='Use at least 8 characters.';
+                document.getElementById('saveButton').textContent='Save New Password';
+                return;
+            }
+            if(!appUser.onboarding_required){window.location.replace('student_dashboard.html');return;}
+            const {data:profile,error:profileError}=await supabaseClient.from('students').select('student_number, first_name, middle_initial, last_name').eq('user_id',user.id).maybeSingle();
+            if(profileError||!profile){errorBox.textContent='Student profile not found. Please contact an administrator.';return;}
+            document.getElementById('studentNumber').value=profile.student_number||'';
+            document.getElementById('firstName').value=profile.first_name||'';
+            document.getElementById('middleInitial').value=profile.middle_initial||'';
+            document.getElementById('lastName').value=profile.last_name||'';
+            await loadDepartments();
+        }
+
+        departmentSelect.addEventListener('change',()=>loadMajors().catch(showError));
+        majorSelect.addEventListener('change',()=>loadSections().catch(showError));
+        yearSelect.addEventListener('change',()=>loadSections().catch(showError));
+
+        function showError(error){errorBox.textContent=error?.message||'Unable to load the form. Please retry.';}
+
+        form.addEventListener('submit',async event=>{
+            event.preventDefault();
+            errorBox.textContent='';
+            const password=document.getElementById('newPassword').value;
+            if(password!==document.getElementById('confirmPassword').value){errorBox.textContent='The passwords do not match.';return;}
+            const {data:{session}}=await supabaseClient.auth.getSession();
+            if(!session){window.location.replace('login.html');return;}
+            saveButton.disabled=true;
+            saveButton.textContent='Saving...';
+            try{
+                if(passwordOnlyMode){
+                    const response=await fetch(FUNCTIONS_URL,{
+                        method:'POST',
+                        headers:{'Content-Type':'application/json',apikey:SUPABASE_ANON_KEY,Authorization:`Bearer ${session.access_token}`},
+                        body:JSON.stringify({action:'complete-password-change',password})
+                    });
+                    const result=await response.json();
+                    if(!response.ok) throw new Error(result.error||'Unable to update password.');
+                    window.location.replace('student_dashboard.html');
+                    return;
+                }
+                const response=await fetch(FUNCTIONS_URL,{
+                    method:'POST',
+                    headers:{'Content-Type':'application/json',apikey:SUPABASE_ANON_KEY,Authorization:`Bearer ${session.access_token}`},
+                    body:JSON.stringify({
+                        action:'complete-onboarding',
+                        student_number:document.getElementById('studentNumber').value,
+                        first_name:document.getElementById('firstName').value.trim(),
+                        middle_initial:document.getElementById('middleInitial').value.trim(),
+                        last_name:document.getElementById('lastName').value.trim(),
+                        email:document.getElementById('studentEmail').value.trim(),
+                        department_id:departmentSelect.value,
+                        major_id:majorSelect.value,
+                        year_level:yearSelect.value,
+                        section_id:sectionSelect.value,
+                        password
+                    })
+                });
+                const result=await response.json();
+                if(!response.ok) throw new Error(result.error||'Unable to complete setup.');
+                const loginAlias=`student-${document.getElementById('studentNumber').value.trim().toLowerCase()}@accounts.tcc.invalid`;
+                await supabaseClient.auth.signOut();
+                const {error:loginError}=await supabaseClient.auth.signInWithPassword({email:loginAlias,password});
+                if(loginError) throw new Error('Setup saved, but please sign in again with your new email and password.');
+                window.location.replace('student_dashboard.html');
+            }catch(error){showError(error);saveButton.disabled=false;saveButton.textContent='Save and Continue';}
+        });
+
+        initialize().catch(showError);
+    </script>
+</body>
+</html>

@@ -1024,9 +1024,9 @@ onclick="openAboutModal()">
         <div class="section-title">
             <h2>System Access Portals</h2>
 
-            <p>
-                Select the appropriate portal to access the Academic Monitoring System. Students and teachers may create accounts and wait for administrator approval before accessing the system.
-            </p>
+                <p>
+                    Select the appropriate portal to access the Academic Monitoring System. Student accounts are created by an administrator; teachers can register for approval.
+                </p>
         </div>
 
         <div class="portal-grid">
@@ -1048,9 +1048,9 @@ onclick="openAboutModal()">
                         Login
                     </button>
 
-                    <button class="card-btn signup-btn" onclick="openSignup('Student')">
-                        Sign Up
-                    </button>
+                    <span class="card-btn signup-btn" style="display:inline-flex;align-items:center;justify-content:center;cursor:default;">
+                        Get account from Admin
+                    </span>
                 </div>
 
             </div>
@@ -1713,12 +1713,12 @@ function openLogin(role){
 
         <div class="input-group full">
 
-            <label>Email Address</label>
+            <label>${role === 'Student' ? 'Student ID' : 'Email Address'}</label>
 
             <input
                 type="text"
                 id="loginEmail"
-                placeholder="Enter your credentials"
+                placeholder="${role === 'Student' ? 'Enter your Student ID' : 'Enter your email'}"
             >
 
         </div>
@@ -1739,7 +1739,9 @@ function openLogin(role){
             </button>
 
             <div style="position:absolute; right:8px; top:68px;">
-                <a href="#" onclick="openForgotModal(selectedLoginRole); return false;">Forgot password?</a>
+                ${role === 'Teacher'
+                    ? '<a href="#" onclick="openForgotModal(selectedLoginRole); return false;">Forgot password?</a>'
+                    : '<span>Forgot your password? Contact the administrator.</span>'}
             </div>
 
         </div>
@@ -2094,8 +2096,12 @@ return;
 // STUDENT / TEACHER LOGIN
 // ==========================
 
-const email =
+const loginIdentifier =
 inputs[0].value;
+
+const email = selectedRole === 'Student' && !loginIdentifier.includes('@')
+    ? `student-${loginIdentifier.trim().toLowerCase()}@accounts.tcc.invalid`
+    : loginIdentifier.trim();
 
 const password =
 inputs[1].value;
@@ -2136,7 +2142,7 @@ data.user.id;
 const { data: userData, error: userError } =
 await supabaseClient
 .from('users')
-.select('*')
+.select('*, onboarding_required, force_password_change')
 .eq('user_id', userId)
 .maybeSingle();
 
@@ -2188,6 +2194,16 @@ showAlert(
 
 return;
 
+}
+
+if(Number(userData.role_id) === 3 && (userData.onboarding_required || userData.force_password_change)){
+    showAlert('success', 'Account Setup Required', 'Complete your email, enrollment information, and permanent password.');
+    setTimeout(() => {
+        window.location.href = userData.force_password_change && !userData.onboarding_required
+            ? 'student_onboarding.html?mode=password'
+            : 'student_onboarding.html';
+    }, 800);
+    return;
 }
 
 
@@ -2687,6 +2703,11 @@ function capitalizeName(name) {
 // =====================
 
 const role = selectedSignupRole || (document.getElementById('studentFirstName') ? 'Student' : document.getElementById('teacherFirstName') ? 'Teacher' : '');
+
+if(role === 'Student'){
+    showAlert('warning', 'Student Account Required', 'Student accounts are created by the administrator. Please contact the school administrator for your Student ID and temporary password.');
+    return;
+}
 
 let firstName = '';
 let lastName = '';
