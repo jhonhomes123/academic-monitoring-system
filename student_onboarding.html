@@ -19,6 +19,11 @@
         .setup-content{padding:28px 30px 30px}.setup-content>p{color:var(--gray);margin:0 0 22px;line-height:1.6}
         .form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
         .field{display:flex;flex-direction:column;gap:7px}.field.full{grid-column:1/-1}
+        .saved-enrollment{grid-column:1/-1;padding:16px;border:1px solid var(--border);border-radius:8px;background:var(--light)}
+        .saved-enrollment h2{font-size:16px;color:var(--primary);margin:0 0 12px}
+        .saved-enrollment-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+        .saved-enrollment-item span{display:block;color:var(--gray);font-size:12px;margin-bottom:4px}
+        .saved-enrollment-item strong{color:var(--text);font-size:14px}
         label{font-weight:600;font-size:14px;color:var(--primary)}
         input,select{width:100%;min-height:46px;padding:11px 13px;border:1px solid var(--border);border-radius:8px;background:white;color:var(--text);font:inherit}
         input:focus,select:focus{outline:3px solid rgba(31,107,255,.15);border-color:var(--secondary)}
@@ -41,6 +46,15 @@
             <form id="setupForm">
                 <div class="form-grid" id="enrollmentFields">
                     <div class="field"><label for="studentEmail">Email address</label><input id="studentEmail" type="email" autocomplete="email" required></div>
+                    <div class="saved-enrollment" id="savedEnrollment" style="display:none;">
+                        <h2>Enrollment information set by the administrator</h2>
+                        <div class="saved-enrollment-grid">
+                            <div class="saved-enrollment-item"><span>Year</span><strong id="savedYear">-</strong></div>
+                            <div class="saved-enrollment-item"><span>Department</span><strong id="savedDepartment">-</strong></div>
+                            <div class="saved-enrollment-item"><span>Major</span><strong id="savedMajor">-</strong></div>
+                            <div class="saved-enrollment-item"><span>Section</span><strong id="savedSection">-</strong></div>
+                        </div>
+                    </div>
                     <div class="field"><label for="yearSelect">Year level</label><select id="yearSelect" required><option value="">Select year</option><option>1st Year</option><option>2nd Year</option><option>3rd Year</option><option>4th Year</option></select></div>
                     <div class="field"><label for="departmentSelect">Department</label><select id="departmentSelect" required><option value="">Select department</option></select></div>
                     <div class="field"><label for="majorSelect">Major</label><select id="majorSelect" required disabled><option value="">Select major</option></select></div>
@@ -152,7 +166,7 @@
             if(!currentAccessToken){errorBox.textContent='Your sign-in session expired. Return to Login and try again.';return;}
             const {data:appUser,error:appError}=await supabaseClient.from('users').select('role_id, email, onboarding_required, force_password_change').eq('user_id',user.id).maybeSingle();
             if(appError||!appUser||Number(appUser.role_id)!==3){errorBox.textContent='This setup page is only for student accounts.';return;}
-            const {data:profile,error:profileError}=await supabaseClient.from('students').select('student_number, section_id').eq('user_id',user.id).maybeSingle();
+            const {data:profile,error:profileError}=await supabaseClient.from('students').select('student_number, section_id, sections(section_name, year_level, majors(major_name, departments(department_name)))').eq('user_id',user.id).maybeSingle();
             if(profileError||!profile){errorBox.textContent='Student profile not found. Please contact an administrator.';return;}
             currentStudentNumber=profile.student_number||'';
             const enrollmentAlreadyAssigned=profile.section_id!==null;
@@ -180,10 +194,16 @@
                 document.getElementById('majorSelect').closest('.field').style.display='none';
                 document.getElementById('yearSelect').closest('.field').style.display='none';
                 document.getElementById('sectionSelect').closest('.field').style.display='none';
+                document.getElementById('savedYear').textContent=profile.sections?.year_level||'-';
+                document.getElementById('savedDepartment').textContent=profile.sections?.majors?.departments?.department_name||'-';
+                document.getElementById('savedMajor').textContent=profile.sections?.majors?.major_name||'-';
+                document.getElementById('savedSection').textContent=profile.sections?.section_name||'-';
+                document.getElementById('savedEnrollment').style.display='block';
                 document.querySelector('.setup-header h1').textContent='Add Your Email and Password';
                 document.querySelector('.setup-content>p').textContent='Your administrator has already entered your name, Student ID, and section. Add your contact email and choose a new password to finish setup.';
+            } else {
+                await loadDepartments();
             }
-            await loadDepartments();
         }
 
         yearSelect.addEventListener('change',()=>loadDepartments().catch(showError));
