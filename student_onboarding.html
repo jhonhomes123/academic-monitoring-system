@@ -211,17 +211,26 @@
             }
             if(enrollmentAlreadyAssigned){
                 if(!profile.section||!profile.major||!profile.department){errorBox.textContent='The saved enrollment details are incomplete. Please ask the administrator to edit and save the student section again.';return;}
+                const assignedPanel=document.getElementById('savedEnrollment');
+                const dropdownPanel=document.getElementById('unassignedEnrollmentFields');
+                assignedPanel.hidden=false;
+                assignedPanel.style.setProperty('display','block','important');
+                dropdownPanel.hidden=true;
+                dropdownPanel.style.setProperty('display','none','important');
+                document.querySelectorAll('#unassignedEnrollmentFields select').forEach(field=>field.required=false);
                 document.getElementById('savedYear').textContent=profile.section.year_level||'-';
                 document.getElementById('savedDepartment').textContent=profile.department.department_name||'-';
                 document.getElementById('savedMajor').textContent=profile.major.major_name||'-';
                 document.getElementById('savedSection').textContent=profile.section.section_name||'-';
-                document.getElementById('savedEnrollment').hidden=false;
-                document.getElementById('unassignedEnrollmentFields').style.display='none';
                 document.querySelector('.setup-header h1').textContent='Add Your Email and Password';
                 document.querySelector('.setup-content>p').textContent='Your administrator has already entered your name, Student ID, and section. Add your contact email and choose a new password to finish setup.';
             } else {
-                document.getElementById('savedEnrollment').hidden=true;
-                document.getElementById('unassignedEnrollmentFields').hidden=false;
+                const assignedPanel=document.getElementById('savedEnrollment');
+                const dropdownPanel=document.getElementById('unassignedEnrollmentFields');
+                assignedPanel.hidden=true;
+                assignedPanel.style.setProperty('display','none','important');
+                dropdownPanel.hidden=false;
+                dropdownPanel.style.setProperty('display','grid','important');
                 document.querySelectorAll('#unassignedEnrollmentFields select').forEach(field=>field.required=true);
                 await loadDepartments();
             }
