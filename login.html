@@ -2195,8 +2195,17 @@ return;
 
 const onboardingRequired = Boolean(userData.onboarding_required || data.user.user_metadata?.onboarding_required);
 const passwordChangeRequired = Boolean(userData.force_password_change || data.user.user_metadata?.force_password_change);
+let studentProfileNeedsSetup = false;
+if (Number(userData.role_id) === 3) {
+    const { data: studentProfile, error: studentProfileError } = await supabaseClient
+        .from('students')
+        .select('section_id')
+        .eq('user_id', userId)
+        .maybeSingle();
+    studentProfileNeedsSetup = !studentProfileError && (!studentProfile || studentProfile.section_id == null);
+}
 const firstLoginSetupRequired = Number(userData.role_id) === 3
-    && userData.email?.endsWith('@accounts.tcc.invalid');
+    && (studentProfileNeedsSetup || userData.email?.endsWith('@accounts.tcc.invalid'));
 
 if(Number(userData.role_id) === 3 && (onboardingRequired || passwordChangeRequired || firstLoginSetupRequired)){
     showAlert('success', 'Account Setup Required', 'Complete your email, enrollment information, and permanent password.');

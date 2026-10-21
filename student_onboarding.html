@@ -106,8 +106,10 @@
             currentUser=user;
             const {data:appUser,error:appError}=await supabaseClient.from('users').select('role_id, email, onboarding_required, force_password_change').eq('user_id',user.id).maybeSingle();
             if(appError||!appUser||Number(appUser.role_id)!==3){errorBox.textContent='This setup page is only for student accounts.';return;}
+            const {data:profile,error:profileError}=await supabaseClient.from('students').select('student_number, first_name, middle_initial, last_name, section_id').eq('user_id',user.id).maybeSingle();
+            if(profileError||!profile){errorBox.textContent='Student profile not found. Please contact an administrator.';return;}
             const internalStudentLogin=Boolean(appUser.email?.endsWith('@accounts.tcc.invalid'));
-            const onboardingRequired=Boolean(appUser.onboarding_required||user.user_metadata?.onboarding_required||internalStudentLogin);
+            const onboardingRequired=Boolean(appUser.onboarding_required||user.user_metadata?.onboarding_required||internalStudentLogin||profile.section_id==null);
             const passwordChangeRequired=Boolean(appUser.force_password_change||user.user_metadata?.force_password_change);
             passwordOnlyMode=passwordChangeRequired&&!onboardingRequired;
             if(passwordOnlyMode){
@@ -123,8 +125,6 @@
                 errorBox.textContent='This account is not marked for first-time setup. Sign in normally or contact the administrator if this is a newly created student account.';
                 return;
             }
-            const {data:profile,error:profileError}=await supabaseClient.from('students').select('student_number, first_name, middle_initial, last_name').eq('user_id',user.id).maybeSingle();
-            if(profileError||!profile){errorBox.textContent='Student profile not found. Please contact an administrator.';return;}
             document.getElementById('studentNumber').value=profile.student_number||'';
             document.getElementById('firstName').value=profile.first_name||'';
             document.getElementById('middleInitial').value=profile.middle_initial||'';
