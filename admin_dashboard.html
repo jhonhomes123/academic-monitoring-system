@@ -984,11 +984,6 @@ table td{
                 Dashboard
             </a>
 
-            <a href="#" class="nav-link" onclick="showSection('approvalSection',this)">
-                <i class="fa-solid fa-user-check"></i>
-                Approval Panel
-            </a>
-
             <a href="#" class="nav-link" onclick="showSection('departmentSection',this)">
                 <i class="fa-solid fa-building"></i>
                 Manage Department
@@ -1053,16 +1048,6 @@ table td{
                 </div>
 
                 <div class="card">
-                    <h3>Pending Approvals</h3>
-
-                    <h2 class="warning-text" id="pendingApprovals">
-
-                        0
-
-                    </h2>
-                </div>
-
-                <div class="card">
                     <h3>Total Departments</h3>
 
                     <h2 id="totalDepartments">
@@ -1107,65 +1092,9 @@ table td{
                         </td>
                     </tr>
 
-                    <tr>
-                        <td>Pending Student Requests</td>
-                        <td id="studentPendingCount">
-                            0
-                        </td>
-                    </tr>
-
-                    <tr>
-                        <td>Pending Teacher Requests</td>
-                        <td id="teacherPendingCount">
-                            0
-                        </td>
-                    </tr>
-
                 </table>
                 </div>
 
-            </div>
-            <!-- RECENT PENDING ACCOUNTS -->
-            <div class="table-section">
-
-                <div class="section-header">
-
-                    <h2>Recent Pending Accounts</h2>
-
-                    <p>
-                        Latest account registrations waiting for approval
-                    </p>
-
-                </div>
-                <div class="table-responsive">
-
-                <table>
-
-                    <thead>
-
-                        <tr>
-                            <th>Name</th>
-                            <th>Email</th>
-                            <th>Role</th>
-                            <th>Status</th>
-                        </tr>
-
-                    </thead>
-
-                    <tbody id="recentPendingTable">
-
-                        <tr>
-
-                            <td colspan="4">
-                                Loading pending accounts...
-                            </td>
-
-                        </tr>
-
-                    </tbody>
-
-                </table>
-                </div>
             </div>
             <!-- RECENT APPROVED USERS -->
             <div class="table-section">
@@ -1208,99 +1137,6 @@ table td{
 
                 </table>
                 </div>
-            </div>
-
-        </div>
-        <!-- APPROVAL PANEL -->
-        <div class="content-section" id="approvalSection">
-            <!-- PENDING STUDENTS -->
-            <div class="table-section">
-
-                <div class="section-header">
-
-                    <h2>Pending Student Accounts</h2>
-
-                    <p>
-                        Approve or reject student registrations
-                    </p>
-
-                </div>
-                <div class="table-responsive">
-
-                <table>
-
-                    <thead>
-
-                        <tr>
-                            <th>School ID</th>
-                            <th>Student Name</th>
-                            <th>Email</th>
-                            <th>Department</th>
-                            <th>Major</th>
-                            <th>Section</th>
-                            <th>Document</th>
-                            <th>Status</th>
-                            <th>Action</th>
-                        </tr>
-
-                    </thead>
-
-                    <tbody id="studentApprovalTable">
-
-                        <tr>
-                            <td colspan="3">
-                                Loading student requests...
-                            </td>
-                        </tr>
-
-                    </tbody>
-
-                </table>
-                </div>
-
-            </div>
-            <!-- PENDING TEACHERS -->
-            <div class="table-section">
-
-                <div class="section-header">
-
-                    <h2>Pending Teacher Accounts</h2>
-
-                    <p>
-                        Approve or reject teacher registrations
-                    </p>
-
-                </div>
-                <div class="table-responsive">
-
-                <table>
-
-                    <thead>
-
-                        <tr>
-                            <th>Teacher ID</th>
-                            <th>Teacher Name</th>
-                            <th>Email</th>
-                            <th>Document</th>
-                            <th>Status</th>
-                            <th>Action</th>
-                        </tr>
-
-                    </thead>
-
-                    <tbody id="teacherApprovalTable">
-
-                        <tr>
-                            <td colspan="3">
-                                Loading teacher requests...
-                            </td>
-                        </tr>
-
-                    </tbody>
-
-                </table>
-                </div>
-
             </div>
 
         </div>
@@ -2702,17 +2538,9 @@ onchange="loadSubjectsForTeacherAssign()">
 
             element.classList.add('active');
             // AUTO RELOAD DATA WHEN SWITCHING
-            if (sectionId === 'approvalSection') {
-
-                loadStudentApprovals();
-                loadTeacherApprovals();
-
-            }
-
             if (sectionId === 'dashboardSection') {
 
                 loadDashboardCounts();
-                loadPendingAccounts();
                 loadApprovedUsers();
 
             }
@@ -2765,34 +2593,6 @@ onchange="loadSubjectsForTeacherAssign()">
         console.log("Admin Dashboard Connected!");
         // LOAD DASHBOARD COUNTS
         async function loadDashboardCounts() {
-            // PENDING STUDENTS
-            const { count: pendingStudents } =
-                await supabaseClient
-                    .from('users')
-                    .select('*', {
-                        count: 'exact',
-                        head: true
-                    })
-                    .eq('role_id', 3)
-                    .ilike('approval_status', 'pending');
-
-            document.getElementById(
-                'studentPendingCount'
-            ).innerText = pendingStudents || 0;
-            // PENDING TEACHERS
-            const { count: pendingTeachers } =
-                await supabaseClient
-                    .from('users')
-                    .select('*', {
-                        count: 'exact',
-                        head: true
-                    })
-                    .eq('role_id', 2)
-                    .ilike('approval_status', 'pending');
-
-            document.getElementById(
-                'teacherPendingCount'
-            ).innerText = pendingTeachers || 0;
             // TOTAL STUDENTS
             const { count: studentCount } =
                 await supabaseClient
@@ -2821,19 +2621,6 @@ onchange="loadSubjectsForTeacherAssign()">
             document.getElementById(
                 'totalTeachers'
             ).innerText = teacherCount || 0;
-            // TOTAL PENDING
-            const { count: pendingCount } =
-                await supabaseClient
-                    .from('users')
-                    .select('*', {
-                        count: 'exact',
-                        head: true
-                    })
-                    .ilike('approval_status', 'pending');
-
-            document.getElementById(
-                'pendingApprovals'
-            ).innerText = pendingCount || 0;
             // TOTAL DEPARTMENTS
             const { count: departmentCount } =
                 await supabaseClient
@@ -3166,8 +2953,6 @@ onchange="loadSubjectsForTeacherAssign()">
         }
         // LOAD DASHBOARD
         loadDashboardCounts();
-
-        loadPendingAccounts();
 
         loadApprovedUsers();
         // LOAD STUDENT APPROVALS
@@ -3509,13 +3294,7 @@ async function approveAccount(id) {
 
             await loadDashboardCounts();
 
-            await loadPendingAccounts();
-
             await loadApprovedUsers();
-
-            await loadStudentApprovals();
-
-            await loadTeacherApprovals();
 
             await loadDepartmentExplorer();
             loadTeachersManagement();
