@@ -7501,7 +7501,7 @@ async function saveStudentEdits() {
             && !selectedSectionId) {
             throw new Error('Choose a section, or clear the department, major, and year to leave the student unassigned.');
         }
-        await callStudentAccountFunction('admin-edit', {
+        const result = await callStudentAccountFunction('admin-edit', {
             student_id: Number(document.getElementById('editStudentId').value),
             student_number: document.getElementById('editStudentNumber').value.trim(),
             first_name: document.getElementById('editStudentFirstName').value.trim(),
@@ -7510,6 +7510,9 @@ async function saveStudentEdits() {
             email: document.getElementById('editStudentEmail').value.trim(),
             section_id: selectedSectionId || null
         });
+        if (selectedSectionId && String(result.section_id) !== String(selectedSectionId)) {
+            throw new Error('The saved section does not match the selected section. Please reopen Edit Student and verify the enrollment selections.');
+        }
         showAlert('success', 'Student Updated', 'Student details and enrollment were updated.');
         closeEditStudentModal();
         await loadStudentsBySection();

@@ -168,8 +168,8 @@
             if(!currentAccessToken){errorBox.textContent='Your sign-in session expired. Return to Login and try again.';return;}
             const {data:appUser,error:appError}=await supabaseClient.from('users').select('role_id, email, onboarding_required, force_password_change').eq('user_id',user.id).maybeSingle();
             if(appError||!appUser||Number(appUser.role_id)!==3){errorBox.textContent='This setup page is only for student accounts.';return;}
-            const {data:profile,error:profileError}=await supabaseClient.from('students').select('student_number, section_id').eq('user_id',user.id).maybeSingle();
-            if(profileError||!profile){errorBox.textContent='Student profile not found. Please contact an administrator.';return;}
+            const profile=await loadSetupOptions('profile');
+            if(!profile){errorBox.textContent='Student profile not found. Please contact an administrator.';return;}
             currentStudentNumber=profile.student_number||'';
             const enrollmentAlreadyAssigned=profile.section_id!==null&&profile.section_id!==undefined;
             const internalStudentLogin=Boolean(appUser.email?.endsWith('@accounts.tcc.invalid'));
@@ -193,12 +193,11 @@
             if(enrollmentAlreadyAssigned){
                 document.querySelectorAll('#enrollmentDropdowns select').forEach(field=>field.required=false);
                 document.getElementById('enrollmentDropdowns').style.display='none';
-                const {data:savedSection,error:savedSectionError}=await supabaseClient.from('sections').select('section_name, year_level, majors(major_name, departments(department_name))').eq('section_id',profile.section_id).maybeSingle();
-                if(savedSectionError||!savedSection){errorBox.textContent='Your assigned section could not be loaded. Please contact the administrator.';return;}
-                document.getElementById('savedYear').textContent=savedSection.year_level||'-';
-                document.getElementById('savedDepartment').textContent=savedSection.majors?.departments?.department_name||'-';
-                document.getElementById('savedMajor').textContent=savedSection.majors?.major_name||'-';
-                document.getElementById('savedSection').textContent=savedSection.section_name||'-';
+                if(!profile.section||!profile.major||!profile.department){errorBox.textContent='The saved enrollment details are incomplete. Please ask the administrator to edit and save the student section again.';return;}
+                document.getElementById('savedYear').textContent=profile.section.year_level||'-';
+                document.getElementById('savedDepartment').textContent=profile.department.department_name||'-';
+                document.getElementById('savedMajor').textContent=profile.major.major_name||'-';
+                document.getElementById('savedSection').textContent=profile.section.section_name||'-';
                 document.getElementById('savedEnrollment').style.display='block';
                 document.querySelector('.setup-header h1').textContent='Add Your Email and Password';
                 document.querySelector('.setup-content>p').textContent='Your administrator has already entered your name, Student ID, and section. Add your contact email and choose a new password to finish setup.';
