@@ -63,7 +63,7 @@
                             <div class="saved-enrollment-item"><span>Section</span><strong id="savedSection">-</strong></div>
                         </div>
                     </div>
-                    <div id="unassignedEnrollmentFields" class="form-grid" style="grid-column:1/-1" hidden>
+                    <div id="unassignedEnrollmentFields" class="form-grid" style="grid-column:1/-1;display:grid;">
                         <div class="field"><label for="yearSelect">Year level</label><select id="yearSelect"><option value="">Select year</option><option>1st Year</option><option>2nd Year</option><option>3rd Year</option><option>4th Year</option></select></div>
                         <div class="field"><label for="departmentSelect">Department</label><select id="departmentSelect"><option value="">Select department</option></select></div>
                         <div class="field"><label for="majorSelect">Major</label><select id="majorSelect" disabled><option value="">Select major</option></select></div>
@@ -227,7 +227,6 @@
                 const dropdownPanel=document.getElementById('unassignedEnrollmentFields');
                 assignedPanel.hidden=true;
                 assignedPanel.style.setProperty('display','none','important');
-                dropdownPanel.hidden=false;
                 dropdownPanel.style.setProperty('display','grid','important');
                 document.querySelectorAll('#unassignedEnrollmentFields select').forEach(field=>field.required=true);
                 await loadDepartments();
