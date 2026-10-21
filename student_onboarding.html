@@ -192,7 +192,7 @@
             const profile=await loadSetupOptions('profile');
             if(!profile){errorBox.textContent='Student profile not found. Please contact an administrator.';return;}
             currentStudentNumber=profile.student_number||'';
-            const enrollmentAlreadyAssigned=profile.section_id!==null&&profile.section_id!==undefined;
+            const enrollmentAlreadyAssigned=profile.section_id!==null&&profile.section_id!==undefined&&Number(profile.section_id)>0;
             form.dataset.enrollmentAssigned=enrollmentAlreadyAssigned?'true':'false';
             const internalStudentLogin=Boolean(appUser.email?.endsWith('@accounts.tcc.invalid'));
             const requestedMode=new URLSearchParams(window.location.search).get('mode');
@@ -215,9 +215,7 @@
                 const dropdownPanel=document.getElementById('unassignedEnrollmentFields');
                 assignedPanel.hidden=false;
                 assignedPanel.style.setProperty('display','block','important');
-                dropdownPanel.hidden=true;
-                dropdownPanel.style.setProperty('display','none','important');
-                document.querySelectorAll('#unassignedEnrollmentFields select').forEach(field=>field.required=false);
+                dropdownPanel.remove();
                 document.getElementById('savedYear').textContent=profile.section.year_level||'-';
                 document.getElementById('savedDepartment').textContent=profile.department.department_name||'-';
                 document.getElementById('savedMajor').textContent=profile.major.major_name||'-';
