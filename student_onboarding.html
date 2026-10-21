@@ -20,6 +20,7 @@
         .form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
         .field{display:flex;flex-direction:column;gap:7px}.field.full{grid-column:1/-1}
         .saved-enrollment{grid-column:1/-1;padding:16px;border:1px solid var(--border);border-radius:8px;background:var(--light)}
+        .saved-enrollment[hidden],#unassignedEnrollmentFields[hidden]{display:none!important}
         .saved-enrollment h2{font-size:16px;color:var(--primary);margin:0 0 12px}
         .saved-enrollment-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
         .saved-enrollment-item span{display:block;color:var(--gray);font-size:12px;margin-bottom:4px}
@@ -46,7 +47,7 @@
             <form id="setupForm">
                 <div class="form-grid" id="enrollmentFields">
                     <div class="field"><label for="studentEmail">Email address</label><input id="studentEmail" type="email" autocomplete="email" required></div>
-                    <div id="savedEnrollment" class="saved-enrollment" style="display:none;">
+                    <div id="savedEnrollment" class="saved-enrollment" hidden>
                         <h2>Enrollment information set by the administrator</h2>
                         <div class="saved-enrollment-grid">
                             <div class="saved-enrollment-item"><span>Year</span><strong id="savedYear">-</strong></div>
@@ -55,7 +56,7 @@
                             <div class="saved-enrollment-item"><span>Section</span><strong id="savedSection">-</strong></div>
                         </div>
                     </div>
-                    <div id="unassignedEnrollmentFields" class="form-grid" style="grid-column:1/-1;display:none;">
+                    <div id="unassignedEnrollmentFields" class="form-grid" style="grid-column:1/-1" hidden>
                         <div class="field"><label for="yearSelect">Year level</label><select id="yearSelect"><option value="">Select year</option><option>1st Year</option><option>2nd Year</option><option>3rd Year</option><option>4th Year</option></select></div>
                         <div class="field"><label for="departmentSelect">Department</label><select id="departmentSelect"><option value="">Select department</option></select></div>
                         <div class="field"><label for="majorSelect">Major</label><select id="majorSelect" disabled><option value="">Select major</option></select></div>
@@ -88,7 +89,6 @@
         let currentStudentNumber='';
         let passwordOnlyMode=false;
         let currentAccessToken='';
-        let enrollmentAlreadyAssigned=false;
 
         async function loadSetupOptions(scope, values={}){
             const response=await fetch(FUNCTIONS_URL,{
@@ -172,7 +172,8 @@
             const profile=await loadSetupOptions('profile');
             if(!profile){errorBox.textContent='Student profile not found. Please contact an administrator.';return;}
             currentStudentNumber=profile.student_number||'';
-            enrollmentAlreadyAssigned=profile.section_id!==null&&profile.section_id!==undefined;
+            const enrollmentAlreadyAssigned=profile.section_id!==null&&profile.section_id!==undefined;
+            form.dataset.enrollmentAssigned=enrollmentAlreadyAssigned?'true':'false';
             const internalStudentLogin=Boolean(appUser.email?.endsWith('@accounts.tcc.invalid'));
             const requestedSetupMode=new URLSearchParams(window.location.search).get('mode')==='setup';
             const passwordChangeRequired=Boolean(appUser.force_password_change||user.user_metadata?.force_password_change);
@@ -197,13 +198,13 @@
                 document.getElementById('savedDepartment').textContent=profile.department.department_name||'-';
                 document.getElementById('savedMajor').textContent=profile.major.major_name||'-';
                 document.getElementById('savedSection').textContent=profile.section.section_name||'-';
-                document.getElementById('savedEnrollment').style.display='block';
+                document.getElementById('savedEnrollment').hidden=false;
                 document.getElementById('unassignedEnrollmentFields').style.display='none';
                 document.querySelector('.setup-header h1').textContent='Add Your Email and Password';
                 document.querySelector('.setup-content>p').textContent='Your administrator has already entered your name, Student ID, and section. Add your contact email and choose a new password to finish setup.';
             } else {
-                document.getElementById('savedEnrollment').style.display='none';
-                document.getElementById('unassignedEnrollmentFields').style.display='grid';
+                document.getElementById('savedEnrollment').hidden=true;
+                document.getElementById('unassignedEnrollmentFields').hidden=false;
                 document.querySelectorAll('#unassignedEnrollmentFields select').forEach(field=>field.required=true);
                 await loadDepartments();
             }
@@ -236,16 +237,17 @@
                     window.location.replace('student_dashboard.html');
                     return;
                 }
+                const enrollmentAssigned = form.dataset.enrollmentAssigned === 'true';
                 const response=await fetch(FUNCTIONS_URL,{
                     method:'POST',
                     headers:{'Content-Type':'application/json',apikey:SUPABASE_ANON_KEY,Authorization:`Bearer ${session.access_token}`},
                     body:JSON.stringify({
                         action:'complete-onboarding',
                         email:document.getElementById('studentEmail').value.trim(),
-                        department_id:enrollmentAlreadyAssigned ? null : departmentSelect.value,
-                        major_id:enrollmentAlreadyAssigned ? null : majorSelect.value,
-                        year_level:enrollmentAlreadyAssigned ? null : yearSelect.value,
-                        section_id:enrollmentAlreadyAssigned ? null : sectionSelect.value,
+                        department_id:enrollmentAssigned ? null : departmentSelect.value,
+                        major_id:enrollmentAssigned ? null : majorSelect.value,
+                        year_level:enrollmentAssigned ? null : yearSelect.value,
+                        section_id:enrollmentAssigned ? null : sectionSelect.value,
                         password
                     })
                 });
