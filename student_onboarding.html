@@ -19,6 +19,7 @@
         .setup-content{padding:28px 30px 30px}.setup-content>p{color:var(--gray);margin:0 0 22px;line-height:1.6}
         .form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
         .form-grid[hidden]{display:none!important}
+        .password-reset-mode #enrollmentFields{display:none!important}
         .field{display:flex;flex-direction:column;gap:7px}.field.full{grid-column:1/-1}
         .saved-enrollment{grid-column:1/-1;padding:16px;border:1px solid var(--border);border-radius:8px;background:var(--light)}
         .saved-enrollment[hidden],#unassignedEnrollmentFields[hidden]{display:none!important}
@@ -36,6 +37,11 @@
         .form-error{min-height:20px;margin-top:12px;color:var(--danger);font-size:14px}
         @media(max-width:560px){body{padding:12px}.setup-header{padding:20px}.setup-content{padding:22px 20px}.form-grid{grid-template-columns:1fr}.field.full{grid-column:auto}}
     </style>
+    <script>
+        if (new URLSearchParams(window.location.search).get('mode') === 'password') {
+            document.documentElement.classList.add('password-reset-mode');
+        }
+    </script>
 </head>
 <body>
     <main class="setup-shell">
@@ -88,7 +94,7 @@
         const sectionSelect=document.getElementById('sectionSelect');
         let currentUser=null;
         let currentStudentNumber='';
-        let passwordOnlyMode=false;
+        let passwordOnlyMode=new URLSearchParams(window.location.search).get('mode')==='password';
         let currentAccessToken='';
 
         async function loadSetupOptions(scope, values={}){
