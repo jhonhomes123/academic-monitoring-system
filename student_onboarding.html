@@ -192,8 +192,7 @@
             const profile=await loadSetupOptions('profile');
             if(!profile){errorBox.textContent='Student profile not found. Please contact an administrator.';return;}
             currentStudentNumber=profile.student_number||'';
-            const adminAssignedEnrollment=Boolean(user.user_metadata?.admin_enrollment_assigned);
-            const enrollmentAlreadyAssigned=adminAssignedEnrollment||(profile.section_id!==null&&profile.section_id!==undefined&&Number(profile.section_id)>0);
+            const enrollmentAlreadyAssigned=Boolean(profile.admin_enrollment_assigned||(profile.section_id!==null&&profile.section_id!==undefined&&Number(profile.section_id)>0));
             form.dataset.enrollmentAssigned=enrollmentAlreadyAssigned?'true':'false';
             const internalStudentLogin=Boolean(appUser.email?.endsWith('@accounts.tcc.invalid'));
             const requestedMode=new URLSearchParams(window.location.search).get('mode');
