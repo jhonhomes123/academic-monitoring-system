@@ -944,7 +944,7 @@ async function getActiveSubjectIds(){
 }
 
 let teacherId = null;
-let teacherEmail = "";
+let teacherUserId = null;
 
 const yearFilter =
 document.getElementById("yearFilter");
@@ -981,7 +981,7 @@ async function initialize(){
 
     if(!user) return;
 
-    teacherEmail = user.email;
+    teacherUserId = user.id;
 
     await loadTeacher();
 
@@ -995,25 +995,17 @@ LOAD TEACHER
 
 async function loadTeacher(){
 
-    const { data } =
-    await supabaseClient
+    const { data, error } = await supabaseClient
+        .from("teachers")
+        .select("teacher_id")
+        .eq("user_id", teacherUserId)
+        .maybeSingle();
+    if (error) {
+        console.error(error);
+        return;
+    }
 
-    .from("teachers")
-
-    .select(`
-        teacher_id,
-        users!teachers_user_id_fkey(
-            email
-        )
-    `);
-
-    const teacher =
-    data.find(t =>
-
-        t.users?.email?.toLowerCase() ===
-        teacherEmail.toLowerCase()
-
-    );
+    const teacher = data;
 
     if(teacher){
 

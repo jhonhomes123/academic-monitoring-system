@@ -834,13 +834,15 @@ Select Subject and Section
             }
 
             let teacherId = null;
-            let teacherEmail = '';
+            let teacherUserId = null;
             let currentRequirementStudents = [];
 
             async function loadTeacher() {
                 const { data, error } = await supabaseClient
                     .from('teachers')
-                    .select(`teacher_id, users!teachers_user_id_fkey(email)`);
+                    .select('teacher_id')
+                    .eq('user_id', teacherUserId)
+                    .maybeSingle();
 
                 if (error) {
                     console.error(error);
@@ -848,7 +850,7 @@ Select Subject and Section
                     return;
                 }
 
-                const teacher = data?.find(t => t.users?.email?.toLowerCase() === teacherEmail?.toLowerCase());
+                const teacher = data;
                 if (teacher) teacherId = teacher.teacher_id;
             }
 
@@ -1374,7 +1376,7 @@ Select Subject and Section
                 }
 
                 if (user) {
-                    teacherEmail = user.email;
+                    teacherUserId = user.id;
                     await loadTeacher();
                 }
 

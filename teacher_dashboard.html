@@ -874,7 +874,7 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 let teacherId = null;
 let teacherLastName = '';
-let teacherEmail = '';
+let teacherUserId = null;
 
 async function getActiveSubjectIds() {
     const { data: semester, error: semesterError } = await supabaseClient
@@ -899,7 +899,7 @@ async function initializeTeacherDashboard() {
         console.error('Teacher dashboard auth error', error);
         return;
     }
-    teacherEmail = user.email;
+    teacherUserId = user.id;
     await loadTeacher();
     await loadTeacherSummary();
 }
@@ -907,17 +907,16 @@ async function initializeTeacherDashboard() {
 async function loadTeacher() {
     const { data, error } = await supabaseClient
         .from('teachers')
-        .select('teacher_id, last_name, users!teachers_user_id_fkey(email)');
+        .select('teacher_id, last_name')
+        .eq('user_id', teacherUserId)
+        .maybeSingle();
 
     if (error) {
         console.error(error);
         return;
     }
 
-    const teacher = data?.find(t =>
-        t.users?.email?.toLowerCase() ===
-        teacherEmail?.toLowerCase()
-    );
+    const teacher = data;
 
     if (teacher) {
         teacherId = teacher.teacher_id;

@@ -741,7 +741,8 @@
             first_name,
             middle_initial,
             last_name,
-            user_id
+            user_id,
+            users!teachers_user_id_fkey(email)
         `)
 
         .eq("user_id", user.id)
@@ -800,10 +801,10 @@
         ).innerText =
         data.teacher_number || "-";
 
-        document.getElementById(
-            "teacherEmail"
-        ).innerText =
-        user.email || "-";
+        document.getElementById("teacherEmail").innerText =
+            data.users?.email && !data.users.email.endsWith("@accounts.tcc.invalid")
+                ? data.users.email
+                : "-";
 
         document.getElementById(
             "topbarTeacherName"

@@ -506,7 +506,7 @@ async function getActiveSubjectIds(){
 /* =====================================================
 SAMPLE TEACHER EMAIL
 ===================================================== */
-let teacherEmail = "";
+let teacherUserId = null;
 let teacherId = null;
 
 /* =====================================================
@@ -553,9 +553,7 @@ async function initialize(){
 
     }
 
-    teacherEmail = user.email;
-
-    console.log("LOGGED IN EMAIL:", teacherEmail);
+    teacherUserId = user.id;
 
     /* =========================
        LOAD TEACHER
@@ -585,35 +583,17 @@ LOAD TEACHER
 async function loadTeacher(){
 
     const { data, error } = await supabaseClient
-
-    .from("teachers")
-
-    .select(`
-        teacher_id,
-        user_id,
-        users!teachers_user_id_fkey(
-            email
-        )
-    `);
+        .from("teachers")
+        .select("teacher_id")
+        .eq("user_id", teacherUserId)
+        .maybeSingle();
 
     if(error){
-
         console.log(error);
         return;
-
     }
 
-    console.log("TEACHERS:", data);
-
-    const teacher = data.find(t =>
-
-        t.users?.email?.toLowerCase() ===
-        teacherEmail.toLowerCase()
-
-    );
-
-    console.log("MATCHED TEACHER:", teacher);
-
+    const teacher = data;
     if(teacher){
 
         teacherId = teacher.teacher_id;
@@ -651,13 +631,6 @@ async function loadYears(){
     });
 
 }
-
-yearFilter.addEventListener(
-    "change",
-    async () => {
-        await loadDepartments(yearFilter.value);
-    }
-);
 
 /* =====================================================
 DEPARTMENTS
@@ -1008,8 +981,6 @@ async function loadStudents(){
         <tr>
             <td colspan="4" class="empty">
                 No students found
-            </td>
-        </tr>
         `;
 
         return;
