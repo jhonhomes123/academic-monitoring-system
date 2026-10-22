@@ -21,12 +21,6 @@
         .form-grid[hidden]{display:none!important}
         .password-reset-mode #enrollmentFields{display:none!important}
         .field{display:flex;flex-direction:column;gap:7px}.field.full{grid-column:1/-1}
-        .saved-enrollment{grid-column:1/-1;padding:16px;border:1px solid var(--border);border-radius:8px;background:var(--light)}
-        .saved-enrollment[hidden]{display:none!important}
-        .saved-enrollment h2{font-size:16px;color:var(--primary);margin:0 0 12px}
-        .saved-enrollment-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
-        .saved-enrollment-item span{display:block;color:var(--gray);font-size:12px;margin-bottom:4px}
-        .saved-enrollment-item strong{color:var(--text);font-size:14px}
         label{font-weight:600;font-size:14px;color:var(--primary)}
         input,select{width:100%;min-height:46px;padding:11px 13px;border:1px solid var(--border);border-radius:8px;background:white;color:var(--text);font:inherit}
         input:focus,select:focus{outline:3px solid rgba(31,107,255,.15);border-color:var(--secondary)}
@@ -54,15 +48,6 @@
             <form id="setupForm">
                 <div class="form-grid" id="enrollmentFields">
                     <div class="field"><label for="studentEmail">Email address</label><input id="studentEmail" type="email" autocomplete="email" required></div>
-                    <div id="savedEnrollment" class="saved-enrollment" hidden>
-                        <h2>Enrollment information set by the administrator</h2>
-                        <div class="saved-enrollment-grid">
-                            <div class="saved-enrollment-item"><span>Year</span><strong id="savedYear">Loading...</strong></div>
-                            <div class="saved-enrollment-item"><span>Department</span><strong id="savedDepartment">Loading...</strong></div>
-                            <div class="saved-enrollment-item"><span>Major</span><strong id="savedMajor">Loading...</strong></div>
-                            <div class="saved-enrollment-item"><span>Section</span><strong id="savedSection">Loading...</strong></div>
-                        </div>
-                    </div>
                 </div>
                 <div class="form-grid" id="passwordFields" style="margin-top:16px;">
                     <div class="field"><label for="newPassword">New password</label><input id="newPassword" type="password" autocomplete="new-password" minlength="8" required><span class="password-note">Use at least 8 characters. You can change it later.</span></div>
@@ -83,7 +68,6 @@
         const errorBox=document.getElementById('formError');
         const saveButton=document.getElementById('saveButton');
         let currentUser=null;
-        let currentStudentNumber='';
         let passwordOnlyMode=new URLSearchParams(window.location.search).get('mode')==='password';
         let currentAccessToken='';
 
@@ -99,17 +83,6 @@
         }
 
         if(passwordOnlyMode) applyPasswordOnlyMode();
-
-        async function loadSetupProfile(){
-            const response=await fetch(FUNCTIONS_URL,{
-                method:'POST',
-                headers:{'Content-Type':'application/json',apikey:SUPABASE_ANON_KEY,Authorization:`Bearer ${currentAccessToken}`},
-                body:JSON.stringify({action:'load-setup-options',scope:'profile'})
-            });
-            const result=await response.json();
-            if(!response.ok) throw new Error(result.error||'Unable to load the assigned enrollment.');
-            return result.data||null;
-        }
 
         async function initialize(){
             let { data: { session }, error } = await supabaseClient.auth.getSession();
@@ -146,16 +119,12 @@
             if(!currentAccessToken){errorBox.textContent='Your sign-in session expired. Return to Login and try again.';return;}
             const {data:appUser,error:appError}=await supabaseClient.from('users').select('role_id, email, onboarding_required, force_password_change').eq('user_id',user.id).maybeSingle();
             if(appError||!appUser||Number(appUser.role_id)!==3){errorBox.textContent='This setup page is only for student accounts.';return;}
-            const profile=await loadSetupProfile();
-            if(!profile){errorBox.textContent='Student profile not found. Please contact an administrator.';return;}
-            currentStudentNumber=profile.student_number||'';
-            const enrollmentAlreadyAssigned=Boolean(profile.admin_enrollment_assigned||(profile.section_id!==null&&profile.section_id!==undefined&&Number(profile.section_id)>0));
             const internalStudentLogin=Boolean(appUser.email?.endsWith('@accounts.tcc.invalid'));
             const requestedMode=new URLSearchParams(window.location.search).get('mode');
             const requestedPasswordMode=requestedMode==='password';
             const requestedSetupMode=requestedMode==='setup';
             const passwordChangeRequired=Boolean(appUser.force_password_change||user.user_metadata?.force_password_change);
-            const onboardingRequired=!requestedPasswordMode&&Boolean(requestedSetupMode||appUser.onboarding_required||user.user_metadata?.onboarding_required||(!passwordChangeRequired&&(internalStudentLogin||!enrollmentAlreadyAssigned)));
+            const onboardingRequired=!requestedPasswordMode&&Boolean(requestedSetupMode||appUser.onboarding_required||user.user_metadata?.onboarding_required||(!passwordChangeRequired&&internalStudentLogin));
             passwordOnlyMode=requestedPasswordMode||(passwordChangeRequired&&!onboardingRequired);
             if(passwordOnlyMode){
                 applyPasswordOnlyMode();
@@ -165,32 +134,8 @@
                 errorBox.textContent='This account is not marked for first-time setup. Sign in normally or contact the administrator if this is a newly created student account.';
                 return;
             }
-            if(enrollmentAlreadyAssigned){
-                const enrollment={
-                    year:profile.year_level||profile.section?.year_level,
-                    department:profile.department_name||profile.department?.department_name,
-                    major:profile.major_name||profile.major?.major_name,
-                    section:profile.section_name||profile.section?.section_name
-                };
-                const assignedPanel=document.getElementById('savedEnrollment');
-                document.getElementById('savedYear').textContent=enrollment.year||'Not available';
-                document.getElementById('savedDepartment').textContent=enrollment.department||'Not available';
-                document.getElementById('savedMajor').textContent=enrollment.major||'Not available';
-                document.getElementById('savedSection').textContent=enrollment.section||'Not available';
-                assignedPanel.hidden=false;
-                document.querySelector('.setup-header h1').textContent='Add Your Email and Password';
-                document.querySelector('.setup-content>p').textContent='Your administrator has already entered your name, Student ID, and section. Add your contact email and choose a new password to finish setup.';
-                if(!enrollment.year||!enrollment.department||!enrollment.major||!enrollment.section){
-                    errorBox.textContent='Some enrollment details could not be loaded. The available information is shown above. Please contact the administrator to verify any item marked Not available.';
-                }
-            } else {
-                document.getElementById('savedYear').textContent='Not assigned';
-                document.getElementById('savedDepartment').textContent='Not assigned';
-                document.getElementById('savedMajor').textContent='Not assigned';
-                document.getElementById('savedSection').textContent='Not assigned';
-                document.getElementById('savedEnrollment').hidden=false;
-                errorBox.textContent='Your enrollment has not been assigned yet. Please ask the administrator to assign your department, year, major, and section before completing setup.';
-            }
+            document.querySelector('.setup-header h1').textContent='Add Your Email and Password';
+            document.querySelector('.setup-content>p').textContent='Enter your contact email and choose a new password to finish setting up your account.';
         }
 
         function showError(error){errorBox.textContent=error?.message||'Unable to load the form. Please retry.';}
