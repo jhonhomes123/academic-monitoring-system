@@ -992,7 +992,7 @@ footer{
             <h1>Academic Monitoring System</h1>
 
             <p>
-                A professional academic evaluation and monitoring system designed for students, teachers, and administrators of Talisay City College. The platform centralizes academic monitoring, approval management, and student performance tracking in one secure system.
+                A shared academic workspace for Talisay City College. Students can follow grades and requirements, teachers can manage assigned classes, and administrators maintain accounts and academic records.
             </p>
 
             <div class="hero-buttons">
@@ -1082,7 +1082,7 @@ onclick="openAboutModal()">
                 <h3>Administrator Portal</h3>
 
                 <p>
-                    Administrators manage approvals, departments, majors, sections, and overall system operations.
+                    Administrators create student and teacher accounts, assign enrollment and teaching responsibilities, and maintain academic structures.
                 </p>
 
                 <div class="card-buttons">
@@ -1114,9 +1114,9 @@ onclick="openAboutModal()">
 
             <div class="feature-box">
                 <i class="fa-solid fa-user-check"></i>
-                <h4>Account Approval</h4>
+                <h4>Account Setup</h4>
                 <p>
-                    Student registrations remain pending until reviewed. Teacher accounts are created by the administrator.
+                    Administrators create accounts. Students add their email and set a password at first sign-in; teachers add their Gmail and set a password.
                 </p>
             </div>
 
@@ -1130,9 +1130,9 @@ onclick="openAboutModal()">
 
             <div class="feature-box">
                 <i class="fa-solid fa-envelope"></i>
-                <h4>Email Notification</h4>
+                <h4>Account Recovery</h4>
                 <p>
-                    Approved users automatically receive confirmation emails with their account details.
+                    Users add a contact email during first-time setup. Password recovery is handled by the administrator.
                 </p>
             </div>
 
@@ -1231,9 +1231,9 @@ onclick="openAboutModal()">
                 </div>
 
                 <div class="modal-feature">
-                    <h4>Approval System</h4>
+                    <h4>Administrator-Managed Accounts</h4>
                     <p>
-                        Student registrations remain pending until approved. Teacher accounts are created by the administrator.
+                        Administrators create student and teacher accounts and provide the initial sign-in credentials.
                     </p>
                 </div>
 
@@ -1290,7 +1290,7 @@ onclick="openAboutModal()">
 
                     <p>
                         Unauthorized access to this system is strictly prohibited.
-                        All login attempts and account approvals are monitored
+                        Account access and academic records are managed
                         by the administrator.
                     </p>
 
@@ -1383,11 +1383,11 @@ onclick="openAboutModal()">
         <div class="modal-main">
 
             <h2 class="modal-title" id="signupTitle">
-                Student Registration
+                Account Access
             </h2>
 
             <p class="modal-subtitle" id="signupSubtitle">
-                Complete the registration form for account approval.
+                Student and teacher accounts are created by an administrator.
             </p>
 
             <form id="signupForm">
@@ -1397,11 +1397,11 @@ onclick="openAboutModal()">
                 </div>
 
                 <button type="submit" class="submit-btn">
-                    Submit Registration
+                    Continue
                 </button>
 
                 <div class="note-box">
-                    Submitted accounts will remain pending until verified and approved by the administrator.
+                    Contact the administrator for your account ID and temporary password.
                 </div>
 
             </form>
@@ -1519,10 +1519,10 @@ onclick="openAboutModal()">
                 </p>
 
                 <p>
-                    The system allows administrators to manage
-                    departments, approve accounts, configure
-                    sections, assign teachers, and monitor
-                    system activity efficiently.
+                    The system allows administrators to create
+                    accounts, configure departments, majors and
+                    sections, assign teachers to subjects and
+                    sections, and monitor system activity.
                 </p>
 
                 <p>
@@ -1547,13 +1547,13 @@ onclick="openAboutModal()">
                     <div>
 
                         <h4>
-                            Account Approval System
+                            Administrator-Created Accounts
                         </h4>
 
                         <p>
-                            All student and teacher accounts
-                            require administrator approval
-                            before gaining access.
+                            Administrators create student and
+                            teacher accounts. New users complete
+                            their email and password setup at first sign-in.
                         </p>
 
                     </div>
@@ -2835,7 +2835,7 @@ else {
     showAlert(
         'error',
         'Role Required',
-        'Please open a Student or Teacher registration form.'
+        'Student and teacher accounts are created by an administrator. Contact the administrator for your sign-in details.'
     );
     return;
 }
@@ -3148,8 +3148,8 @@ try {
 
 showAlert(
 'success',
-'Registration Successful',
-'Your account is pending for administrator approval.'
+'Account Setup',
+'Student and teacher accounts are created by an administrator. Contact the administrator for your sign-in details.'
 );
 
 signupForm.reset();
