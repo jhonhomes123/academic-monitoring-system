@@ -7,41 +7,50 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
     <style>
         :root{--primary:#0b3d91;--secondary:#1f6bff;--light:#f4f7fc;--white:#fff;--text:#1e293b;--gray:#64748b;--border:#dbe4f0;--danger:#b42318}
         *{box-sizing:border-box}
         body{margin:0;min-height:100vh;background:var(--light);font-family:'Inter',sans-serif;color:var(--text);display:grid;place-items:center;padding:24px}
         .setup-shell{width:min(100%,560px);background:var(--white);border:1px solid var(--border);border-radius:12px;box-shadow:0 15px 40px rgba(11,61,145,.09);overflow:hidden}
-        .setup-header{padding:25px 30px;border-bottom:1px solid var(--border)}
+        .setup-header{background:var(--white);color:var(--text);padding:25px 30px;display:flex;align-items:center;gap:15px;border-bottom:1px solid var(--border)}
+        .setup-header img{width:48px;height:48px;object-fit:contain}
         .setup-header h1{font-size:22px;color:var(--primary);margin:0 0 5px;font-weight:800}
-        .setup-header p,.setup-content>p{margin:0;color:var(--gray);font-size:13px;line-height:1.6}
+        .setup-header p{margin:0;color:var(--gray);font-size:13px}
         .setup-content{padding:28px 30px 30px}
-        .field{display:flex;flex-direction:column;gap:7px;margin-top:16px}
+        .setup-content>p{color:var(--gray);margin:0 0 22px;line-height:1.6}
+        .form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+        .field{display:flex;flex-direction:column;gap:7px}
+        .field[hidden]{display:none!important}
+        .field.full{grid-column:1/-1}
         label{font-weight:600;font-size:14px;color:var(--primary)}
         input{width:100%;min-height:46px;padding:11px 13px;border:1px solid var(--border);border-radius:8px;background:white;color:var(--text);font:inherit}
         input:focus{outline:3px solid rgba(31,107,255,.15);border-color:var(--secondary)}
         .submit-button{margin-top:22px;width:100%;min-height:48px;border:0;border-radius:8px;background:var(--primary);color:white;font-weight:700;font-size:15px;cursor:pointer}
+        .submit-button:hover{background:#082d6b}
         .submit-button:disabled{opacity:.65;cursor:wait}
         .form-error{min-height:20px;margin-top:12px;color:var(--danger);font-size:14px}
-        @media(max-width:560px){body{padding:12px}.setup-header{padding:20px}.setup-content{padding:22px 20px}}
+        @media(max-width:560px){body{padding:12px}.setup-header{padding:20px}.setup-content{padding:22px 20px}.form-grid{grid-template-columns:1fr}.field.full{grid-column:auto}}
     </style>
 </head>
 <body>
     <main class="setup-shell">
         <header class="setup-header">
-            <h1>Choose Your Password</h1>
-            <p>Academic Monitoring System · Talisay City College</p>
+            <img src="school_logo.png" alt="Talisay City College logo">
+            <div><h1>Choose Your Password</h1><p>Academic Monitoring System · Talisay City College</p></div>
         </header>
         <section class="setup-content">
             <p>Your administrator created your teacher account. Set a new password to finish setup.</p>
             <form id="teacherSetupForm">
-                <div class="field" id="emailField" hidden>
+                <div class="form-grid" id="teacherSetupFields">
+                <div class="field full" id="emailField" hidden>
                     <label for="teacherEmail">Gmail address</label>
                     <input id="teacherEmail" type="email" autocomplete="email">
                 </div>
                 <div class="field">
                     <label for="newPassword">New password</label>
                     <input id="newPassword" type="password" autocomplete="new-password" minlength="8" required>
+                </div>
                 </div>
                 <div class="field">
                     <label for="confirmPassword">Confirm new password</label>
@@ -61,7 +70,8 @@
         const form=document.getElementById('teacherSetupForm');
         const errorBox=document.getElementById('formError');
         const saveButton=document.getElementById('saveButton');
-        let firstLoginMode=false;
+        const requestedMode=new URLSearchParams(window.location.search).get('mode');
+        let firstLoginMode=requestedMode==='setup';
 
         async function initialize(){
             let {data:{session}}=await supabaseClient.auth.getSession();
@@ -86,7 +96,12 @@
                 errorBox.textContent='This setup page is only for teacher accounts.';
                 return;
             }
-            firstLoginMode=Boolean(userData.onboarding_required||session.user.user_metadata?.onboarding_required);
+            const passwordChangeRequired=Boolean(userData.force_password_change||session.user.user_metadata?.force_password_change);
+            firstLoginMode=requestedMode==='setup'
+                ? Boolean(userData.onboarding_required||session.user.user_metadata?.onboarding_required)
+                : requestedMode==='password'
+                    ? false
+                    : Boolean((userData.onboarding_required||session.user.user_metadata?.onboarding_required)&&!passwordChangeRequired);
             if(firstLoginMode){
                 document.getElementById('emailField').hidden=false;
                 document.getElementById('teacherEmail').required=true;
