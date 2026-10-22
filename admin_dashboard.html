@@ -1940,10 +1940,6 @@ onchange="loadSubjectsForTeacherAssign()">
                         Select Section
                     </option>
 
-                    <option value="unassigned">
-                        Unassigned (First Login Setup)
-                    </option>
-
                 </select>
 
             </div>
@@ -7183,8 +7179,6 @@ async function loadSectionsForManageStudents() {
 
     `;
 
-    select.innerHTML += '<option value="unassigned">Unassigned (First Login Setup)</option>';
-
     if (!majorId || !yearLevel) return;
 
     const { data, error } =
@@ -7290,9 +7284,7 @@ async function loadStudentsBySection() {
                 )
             `);
 
-    studentQuery = sectionId === 'unassigned'
-        ? studentQuery.is('section_id', null)
-        : studentQuery.eq('section_id', sectionId);
+    studentQuery = studentQuery.eq('section_id', sectionId);
 
     const { data, error } = await studentQuery.order('last_name');
 
