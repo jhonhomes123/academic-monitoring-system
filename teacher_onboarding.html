@@ -23,6 +23,8 @@
         .field{display:flex;flex-direction:column;gap:7px}
         .field[hidden]{display:none!important}
         .field.full{grid-column:1/-1}
+        #teacherSetupFields{grid-template-columns:repeat(2,minmax(0,1fr))}
+        #teacherSetupFields .field:not(.full) label{min-height:36px;display:flex;align-items:flex-end}
         label{font-weight:600;font-size:14px;color:var(--primary)}
         input{width:100%;min-height:46px;padding:11px 13px;border:1px solid var(--border);border-radius:8px;background:white;color:var(--text);font:inherit}
         input:focus{outline:3px solid rgba(31,107,255,.15);border-color:var(--secondary)}
@@ -31,6 +33,7 @@
         .submit-button:disabled{opacity:.65;cursor:wait}
         .form-error{min-height:20px;margin-top:12px;color:var(--danger);font-size:14px}
         @media(max-width:560px){body{padding:12px}.setup-header{padding:20px}.setup-content{padding:22px 20px}.form-grid{grid-template-columns:1fr}.field.full{grid-column:auto}}
+        @media(max-width:560px){#teacherSetupFields{grid-template-columns:repeat(2,minmax(0,1fr))}.field.full{grid-column:1/-1}}
     </style>
 </head>
 <body>
