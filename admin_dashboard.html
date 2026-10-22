@@ -358,6 +358,22 @@ table td{
             gap: 12px;
         }
 
+        #createStudentModal {
+            padding: 16px;
+        }
+
+        #createStudentModal .modal-content {
+            max-height: calc(100vh - 32px);
+            max-height: calc(100dvh - 32px);
+            overflow: hidden;
+        }
+
+        #createStudentModal .modal-body {
+            min-height: 0;
+            overflow-y: auto;
+            overscroll-behavior: contain;
+        }
+
         .modal-header {
             display: flex;
             justify-content: space-between;
