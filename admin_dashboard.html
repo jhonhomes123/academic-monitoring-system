@@ -2105,11 +2105,11 @@ onchange="loadSubjectsForTeacherAssign()">
                 <button class="close-btn" onclick="closeModal('resetStudentCredentialsModal')">X</button>
             </div>
             <div class="modal-body">
-                <p>This account has not completed first-time setup. Share these credentials with the student.</p>
+                <p id="resetStudentDeliveryNote">Share this temporary password directly with the student. If the student has a saved Gmail, it may also have been emailed.</p>
                 <p>Student ID: <strong id="resetStudentLoginId"></strong></p>
                 <p>Temporary password: <code id="resetStudentTemporaryPassword"></code></p>
                 <button class="btn" onclick="copyResetStudentPassword()">Copy Password</button>
-                <p>The student will still add their email and choose a new password at first login.</p>
+                <p id="resetStudentNextStep">The student must choose a new password at next sign-in.</p>
             </div>
         </div>
     </div>
@@ -2313,11 +2313,11 @@ onchange="loadSubjectsForTeacherAssign()">
             <button class="close-btn" onclick="closeModal('resetTeacherCredentialsModal')">X</button>
         </div>
         <div class="modal-body">
-            <p>This teacher has not completed first-time setup. Share these credentials.</p>
+            <p id="resetTeacherDeliveryNote">Share this temporary password directly with the teacher. If the teacher has a saved Gmail, it may also have been emailed.</p>
             <p>Teacher ID: <strong id="resetTeacherLoginId"></strong></p>
             <p>Temporary password: <code id="resetTeacherTemporaryPassword"></code></p>
             <button class="btn" onclick="copyResetTeacherPassword()">Copy Password</button>
-            <p>The teacher will add Gmail and choose a new password at first login.</p>
+            <p id="resetTeacherNextStep">The teacher must choose a new password at next sign-in.</p>
         </div>
     </div>
 </div>
@@ -7667,16 +7667,20 @@ async function saveStudentEdits() {
 }
 
 async function resetStudentPassword(studentId) {
-    showConfirmModal('Reset Student Password', 'Generate a new temporary password? First-time setup credentials will be shown here; established accounts will receive the reset by email.', async () => {
+    showConfirmModal('Reset Student Password', 'Generate a new temporary password? It will be shown here and emailed to the saved Gmail when possible.', async () => {
         try {
             const result = await callStudentAccountFunction('admin-reset', { student_id: Number(studentId) });
-            if (result.delivery === 'admin') {
-                document.getElementById('resetStudentLoginId').textContent = result.student_number;
-                document.getElementById('resetStudentTemporaryPassword').textContent = result.temporary_password;
-                openModal('resetStudentCredentialsModal');
-                return;
-            }
-            showAlert('success', 'Temporary Password Sent', `A temporary password was sent to ${result.email}. The student must choose a new password at next sign-in.`);
+            document.getElementById('resetStudentLoginId').textContent = result.student_number;
+            document.getElementById('resetStudentTemporaryPassword').textContent = result.temporary_password;
+            document.getElementById('resetStudentDeliveryNote').textContent = result.delivery === 'email-and-admin'
+                ? `The temporary password was also emailed to ${result.email}. You can share it directly if the student cannot access Gmail.`
+                : result.email_error
+                    ? `Email delivery failed (${result.email_error}). Share this temporary password directly with the student.`
+                    : 'Share this temporary password directly with the student.';
+            document.getElementById('resetStudentNextStep').textContent = result.delivery === 'admin'
+                ? 'The student will add their Gmail and choose a new password during first-time setup.'
+                : 'The student must choose a new password at next sign-in.';
+            openModal('resetStudentCredentialsModal');
         } catch (error) {
             showAlert('error', 'Password Reset Failed', error.message);
         }
@@ -8487,7 +8491,7 @@ async function saveTeacherEdits() {
 }
 
 async function resetTeacherPassword(teacherId) {
-    showConfirmModal('Reset Teacher Password', 'Generate a temporary password? First-time setup credentials will be shown here; established accounts will receive it by email.', async () => {
+    showConfirmModal('Reset Teacher Password', 'Generate a new temporary password? It will be shown here and emailed to the saved Gmail when possible.', async () => {
         try {
             const { data: { session } } = await supabaseClient.auth.getSession();
             if (!session) throw new Error('Please sign in again as an administrator.');
@@ -8498,13 +8502,17 @@ async function resetTeacherPassword(teacherId) {
             });
             const result = await response.json().catch(() => ({}));
             if (!response.ok) throw new Error(result.error || 'Unable to reset teacher password.');
-            if (result.delivery === 'admin') {
-                document.getElementById('resetTeacherLoginId').textContent = result.teacher_number;
-                document.getElementById('resetTeacherTemporaryPassword').textContent = result.temporary_password;
-                openModal('resetTeacherCredentialsModal');
-                return;
-            }
-            showAlert('success', 'Temporary Password Sent', `A temporary password was sent to ${result.email}. The teacher must choose a new password at next sign-in.`);
+            document.getElementById('resetTeacherLoginId').textContent = result.teacher_number;
+            document.getElementById('resetTeacherTemporaryPassword').textContent = result.temporary_password;
+            document.getElementById('resetTeacherDeliveryNote').textContent = result.delivery === 'email-and-admin'
+                ? `The temporary password was also emailed to ${result.email}. You can share it directly if the teacher cannot access Gmail.`
+                : result.email_error
+                    ? `Email delivery failed (${result.email_error}). Share this temporary password directly with the teacher.`
+                    : 'Share this temporary password directly with the teacher.';
+            document.getElementById('resetTeacherNextStep').textContent = result.delivery === 'admin'
+                ? 'The teacher will add Gmail and choose a new password during first-time setup.'
+                : 'The teacher must choose a new password at next sign-in.';
+            openModal('resetTeacherCredentialsModal');
         } catch (error) {
             showAlert('error', 'Password Reset Failed', error.message);
         }
