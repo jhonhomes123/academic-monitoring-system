@@ -1025,7 +1025,7 @@ onclick="openAboutModal()">
             <h2>System Access Portals</h2>
 
                 <p>
-                    Select the appropriate portal to access the Academic Monitoring System. Student accounts are created by an administrator; teachers can register for approval.
+                    Select the appropriate portal to access the Academic Monitoring System. Student and teacher accounts are created by an administrator.
                 </p>
         </div>
 
@@ -1061,7 +1061,7 @@ onclick="openAboutModal()">
                 <h3>Teacher Portal</h3>
 
                 <p>
-                    Teachers can manage evaluations, update academic records, and monitor student progress securely.
+                    Teacher accounts are created by an administrator. Sign in with your Teacher ID and temporary password.
                 </p>
 
                 <div class="card-buttons">
@@ -1069,9 +1069,6 @@ onclick="openAboutModal()">
                         Login
                     </button>
 
-                    <button class="card-btn signup-btn" onclick="openSignup('Teacher')">
-                        Sign Up
-                    </button>
                 </div>
 
             </div>
@@ -1119,7 +1116,7 @@ onclick="openAboutModal()">
                 <i class="fa-solid fa-user-check"></i>
                 <h4>Account Approval</h4>
                 <p>
-                    Student and teacher accounts remain pending until approved by the administrator.
+                    Student registrations remain pending until reviewed. Teacher accounts are created by the administrator.
                 </p>
             </div>
 
@@ -1236,8 +1233,7 @@ onclick="openAboutModal()">
                 <div class="modal-feature">
                     <h4>Approval System</h4>
                     <p>
-                        Student and teacher accounts remain pending
-                        until officially approved.
+                        Student registrations remain pending until approved. Teacher accounts are created by the administrator.
                     </p>
                 </div>
 
@@ -1710,12 +1706,12 @@ function openLogin(role){
 
         <div class="input-group full">
 
-            <label>${role === 'Student' ? 'Student ID' : 'Email Address'}</label>
+            <label>${role === 'Student' ? 'Student ID' : role === 'Teacher' ? 'Teacher ID' : 'Email Address'}</label>
 
             <input
                 type="text"
                 id="loginEmail"
-                placeholder="${role === 'Student' ? 'Enter your Student ID' : 'Enter your email'}"
+                placeholder="${role === 'Student' ? 'Enter your Student ID' : role === 'Teacher' ? 'Enter your Teacher ID' : 'Enter your email'}"
             >
 
         </div>
@@ -1758,6 +1754,10 @@ function closeSignup(){
 }
 
 function openSignup(role){
+    if(role === 'Teacher'){
+        showAlert('warning', 'Teacher Account Required', 'Teacher accounts are created by an administrator. Contact the administrator for your Teacher ID and temporary password.');
+        return;
+    }
     selectedSignupRole = role;
 
     const fields = document.getElementById('signupFields');
@@ -2096,9 +2096,11 @@ return;
 const loginIdentifier =
 inputs[0].value;
 
-const email = selectedRole === 'Student' && !loginIdentifier.includes('@')
+const email = !loginIdentifier.includes('@') && selectedRole === 'Student'
     ? `student-${loginIdentifier.trim().toLowerCase()}@accounts.tcc.invalid`
-    : loginIdentifier.trim();
+    : !loginIdentifier.includes('@') && selectedRole === 'Teacher'
+        ? `teacher-${loginIdentifier.trim().toLowerCase()}@accounts.tcc.invalid`
+        : loginIdentifier.trim();
 
 const password =
 inputs[1].value;
@@ -2206,6 +2208,22 @@ return;
 
 const onboardingRequired = Boolean(userData.onboarding_required || data.user.user_metadata?.onboarding_required);
 const passwordChangeRequired = Boolean(userData.force_password_change || data.user.user_metadata?.force_password_change);
+if (Number(userData.role_id) === 2 && (onboardingRequired || passwordChangeRequired)) {
+    showAlert('success', 'Password Setup Required', 'Choose a permanent password to finish setting up your teacher account.');
+    const activeSession = data.session || (await supabaseClient.auth.getSession()).data.session;
+    if (activeSession?.access_token && activeSession?.refresh_token) {
+        try {
+            sessionStorage.setItem('ams_teacher_setup_session', JSON.stringify({
+                access_token: activeSession.access_token,
+                refresh_token: activeSession.refresh_token
+            }));
+        } catch (storageError) {
+            console.warn('Temporary teacher setup session handoff unavailable; using the saved Supabase session.', storageError);
+        }
+    }
+    setTimeout(() => window.location.href = 'teacher_onboarding.html', 800);
+    return;
+}
 let studentProfileNeedsSetup = false;
 if (Number(userData.role_id) === 3) {
     const { data: studentProfile, error: studentProfileError } = await supabaseClient
@@ -2740,6 +2758,10 @@ const role = selectedSignupRole || (document.getElementById('studentFirstName') 
 
 if(role === 'Student'){
     showAlert('warning', 'Student Account Required', 'Student accounts are created by the administrator. Please contact the school administrator for your Student ID and temporary password.');
+    return;
+}
+if(role === 'Teacher'){
+    showAlert('warning', 'Teacher Account Required', 'Teacher accounts are created by an administrator. Contact the administrator for your Teacher ID and temporary password.');
     return;
 }
 

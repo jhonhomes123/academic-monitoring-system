@@ -2160,6 +2160,8 @@ onchange="loadSubjectsForTeacherAssign()">
 
         </div>
 
+        <button class="btn" onclick="openCreateTeacherModal()">Create Teacher Account</button>
+
     </div>
 
     <!-- =========================================================
@@ -2253,6 +2255,32 @@ onchange="loadSubjectsForTeacherAssign()">
 
     </div>
 
+</div>
+
+<div class="modal" id="createTeacherModal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Create Teacher Account</h3>
+            <button class="close-btn" onclick="closeModal('createTeacherModal')">X</button>
+        </div>
+        <div class="modal-body">
+            <p>Enter the teacher's ID, name, and Gmail. A temporary password will be generated for first login.</p>
+            <input id="createTeacherNumber" type="text" placeholder="Teacher ID" autocomplete="off">
+            <input id="createTeacherFirstName" type="text" placeholder="First name">
+            <input id="createTeacherMiddleInitial" type="text" placeholder="Middle initial (optional)">
+            <input id="createTeacherLastName" type="text" placeholder="Last name">
+            <input id="createTeacherEmail" type="email" placeholder="Teacher Gmail">
+            <button class="btn" onclick="createTeacherAccount()">Create Account</button>
+            <div id="createdTeacherCredentials" style="display:none;padding:14px;background:#f1f5f9;border-radius:8px;overflow-wrap:anywhere;">
+                <strong>Give these credentials to the teacher</strong>
+                <p>Teacher ID: <span id="createdTeacherLoginId"></span></p>
+                <p>Temporary password: <code id="createdTeacherPassword"></code></p>
+                <button class="btn" onclick="copyCreatedTeacherPassword()">Copy Password</button>
+                <p>The teacher will choose a new password at first login.</p>
+            </div>
+            <p id="createTeacherError" class="danger-text"></p>
+        </div>
+    </div>
 </div>
        <!-- =========================================================
      SYSTEM LOGS PANEL
@@ -8260,7 +8288,7 @@ async function loadTeachersManagement() {
 
             <td>
 
-                ${teacher.teacher_id}
+                ${teacher.teacher_number}
 
             </td>
 
@@ -8310,6 +8338,60 @@ onclick="deleteTeacher(
 
     });
 
+}
+
+const TEACHER_ACCOUNT_FUNCTION_URL = `${SUPABASE_URL}/functions/v1/manage-teacher-accounts`;
+
+function openCreateTeacherModal() {
+    ['createTeacherNumber', 'createTeacherFirstName', 'createTeacherMiddleInitial', 'createTeacherLastName', 'createTeacherEmail']
+        .forEach(id => document.getElementById(id).value = '');
+    document.getElementById('createTeacherError').textContent = '';
+    document.getElementById('createdTeacherCredentials').style.display = 'none';
+    openModal('createTeacherModal');
+}
+
+async function createTeacherAccount() {
+    const errorBox = document.getElementById('createTeacherError');
+    errorBox.textContent = '';
+    try {
+        const { data: { session } } = await supabaseClient.auth.getSession();
+        if (!session) throw new Error('Please sign in again as an administrator.');
+        const response = await fetch(TEACHER_ACCOUNT_FUNCTION_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                apikey: SUPABASE_ANON_KEY,
+                Authorization: `Bearer ${session.access_token}`
+            },
+            body: JSON.stringify({
+                action: 'admin-create',
+                teacher_number: document.getElementById('createTeacherNumber').value.trim(),
+                first_name: document.getElementById('createTeacherFirstName').value.trim(),
+                middle_initial: document.getElementById('createTeacherMiddleInitial').value.trim(),
+                last_name: document.getElementById('createTeacherLastName').value.trim(),
+                email: document.getElementById('createTeacherEmail').value.trim()
+            })
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(result.error || 'Unable to create the teacher account.');
+        document.getElementById('createdTeacherLoginId').textContent = result.teacher_number;
+        document.getElementById('createdTeacherPassword').textContent = result.temporary_password;
+        document.getElementById('createdTeacherCredentials').style.display = 'block';
+        showAlert('success', 'Teacher Account Created', 'Give the Teacher ID and temporary password to the teacher.');
+        await loadTeachersManagement();
+    } catch (error) {
+        errorBox.textContent = error.message;
+    }
+}
+
+async function copyCreatedTeacherPassword() {
+    const password = document.getElementById('createdTeacherPassword').textContent;
+    try {
+        await navigator.clipboard.writeText(password);
+        showAlert('success', 'Copied', 'Temporary password copied.');
+    } catch {
+        showAlert('warning', 'Copy Unavailable', 'Select and copy the temporary password manually.');
+    }
 }
 /* =========================================================
    FILTER TEACHERS
