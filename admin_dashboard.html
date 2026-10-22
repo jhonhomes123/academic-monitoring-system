@@ -7792,6 +7792,28 @@ async function deleteStudent(
 
                 }
 
+                const {
+                    error: gradesDeleteError
+                } = await supabaseClient
+                    .from('student_grades')
+                    .delete()
+                    .eq('student_id', studentId);
+
+                if (gradesDeleteError) {
+                    throw new Error(gradesDeleteError.message);
+                }
+
+                const {
+                    error: studentFilesDeleteError
+                } = await supabaseClient
+                    .from('subject_instruction_files')
+                    .delete()
+                    .eq('student_id', studentId);
+
+                if (studentFilesDeleteError) {
+                    throw new Error(studentFilesDeleteError.message);
+                }
+
                 /* ======================
                    DELETE REQUIREMENTS
                 ====================== */
