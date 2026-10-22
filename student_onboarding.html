@@ -57,10 +57,10 @@
                     <div id="savedEnrollment" class="saved-enrollment" hidden>
                         <h2>Enrollment information set by the administrator</h2>
                         <div class="saved-enrollment-grid">
-                            <div class="saved-enrollment-item"><span>Year</span><strong id="savedYear">-</strong></div>
-                            <div class="saved-enrollment-item"><span>Department</span><strong id="savedDepartment">-</strong></div>
-                            <div class="saved-enrollment-item"><span>Major</span><strong id="savedMajor">-</strong></div>
-                            <div class="saved-enrollment-item"><span>Section</span><strong id="savedSection">-</strong></div>
+                            <div class="saved-enrollment-item"><span>Year</span><strong id="savedYear">Loading...</strong></div>
+                            <div class="saved-enrollment-item"><span>Department</span><strong id="savedDepartment">Loading...</strong></div>
+                            <div class="saved-enrollment-item"><span>Major</span><strong id="savedMajor">Loading...</strong></div>
+                            <div class="saved-enrollment-item"><span>Section</span><strong id="savedSection">Loading...</strong></div>
                         </div>
                     </div>
                 </div>
@@ -172,21 +172,23 @@
                     major:profile.major_name||profile.major?.major_name,
                     section:profile.section_name||profile.section?.section_name
                 };
-                if(!enrollment.year||!enrollment.department||!enrollment.major||!enrollment.section){
-                    errorBox.textContent='The admin-assigned enrollment could not be loaded. Please ask the administrator to reopen Edit Student, select the section again, and save.';
-                    return;
-                }
                 const assignedPanel=document.getElementById('savedEnrollment');
-                document.getElementById('savedYear').textContent=enrollment.year;
-                document.getElementById('savedDepartment').textContent=enrollment.department;
-                document.getElementById('savedMajor').textContent=enrollment.major;
-                document.getElementById('savedSection').textContent=enrollment.section;
+                document.getElementById('savedYear').textContent=enrollment.year||'Not available';
+                document.getElementById('savedDepartment').textContent=enrollment.department||'Not available';
+                document.getElementById('savedMajor').textContent=enrollment.major||'Not available';
+                document.getElementById('savedSection').textContent=enrollment.section||'Not available';
                 assignedPanel.hidden=false;
                 document.querySelector('.setup-header h1').textContent='Add Your Email and Password';
                 document.querySelector('.setup-content>p').textContent='Your administrator has already entered your name, Student ID, and section. Add your contact email and choose a new password to finish setup.';
+                if(!enrollment.year||!enrollment.department||!enrollment.major||!enrollment.section){
+                    errorBox.textContent='Some enrollment details could not be loaded. The available information is shown above. Please contact the administrator to verify any item marked Not available.';
+                }
             } else {
-                document.getElementById('savedEnrollment').hidden=true;
-                document.getElementById('setupForm').hidden=true;
+                document.getElementById('savedYear').textContent='Not assigned';
+                document.getElementById('savedDepartment').textContent='Not assigned';
+                document.getElementById('savedMajor').textContent='Not assigned';
+                document.getElementById('savedSection').textContent='Not assigned';
+                document.getElementById('savedEnrollment').hidden=false;
                 errorBox.textContent='Your enrollment has not been assigned yet. Please ask the administrator to assign your department, year, major, and section before completing setup.';
             }
         }
