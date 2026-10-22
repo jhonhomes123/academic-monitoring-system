@@ -2209,7 +2209,9 @@ return;
 const onboardingRequired = Boolean(userData.onboarding_required || data.user.user_metadata?.onboarding_required);
 const passwordChangeRequired = Boolean(userData.force_password_change || data.user.user_metadata?.force_password_change);
 if (Number(userData.role_id) === 2 && (onboardingRequired || passwordChangeRequired)) {
-    showAlert('success', 'Password Setup Required', 'Choose a permanent password to finish setting up your teacher account.');
+    showAlert('success', 'Account Setup Required', onboardingRequired
+        ? 'Add your Gmail and choose a permanent password to finish setting up your teacher account.'
+        : 'Choose a new password to continue.');
     const activeSession = data.session || (await supabaseClient.auth.getSession()).data.session;
     if (activeSession?.access_token && activeSession?.refresh_token) {
         try {
@@ -2221,7 +2223,11 @@ if (Number(userData.role_id) === 2 && (onboardingRequired || passwordChangeRequi
             console.warn('Temporary teacher setup session handoff unavailable; using the saved Supabase session.', storageError);
         }
     }
-    setTimeout(() => window.location.href = 'teacher_onboarding.html', 800);
+    setTimeout(() => {
+        window.location.href = onboardingRequired
+            ? 'teacher_onboarding.html?mode=setup'
+            : 'teacher_onboarding.html?mode=password';
+    }, 800);
     return;
 }
 let studentProfileNeedsSetup = false;

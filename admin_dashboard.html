@@ -2264,12 +2264,11 @@ onchange="loadSubjectsForTeacherAssign()">
             <button class="close-btn" onclick="closeModal('createTeacherModal')">X</button>
         </div>
         <div class="modal-body">
-            <p>Enter the teacher's ID, name, and Gmail. A temporary password will be generated for first login.</p>
+            <p>Enter the teacher's ID and name. A temporary password will be generated for first login.</p>
             <input id="createTeacherNumber" type="text" placeholder="Teacher ID" autocomplete="off">
             <input id="createTeacherFirstName" type="text" placeholder="First name">
             <input id="createTeacherMiddleInitial" type="text" placeholder="Middle initial (optional)">
             <input id="createTeacherLastName" type="text" placeholder="Last name">
-            <input id="createTeacherEmail" type="email" placeholder="Teacher Gmail">
             <button class="btn" onclick="createTeacherAccount()">Create Account</button>
             <div id="createdTeacherCredentials" style="display:none;padding:14px;background:#f1f5f9;border-radius:8px;overflow-wrap:anywhere;">
                 <strong>Give these credentials to the teacher</strong>
@@ -2279,6 +2278,46 @@ onchange="loadSubjectsForTeacherAssign()">
                 <p>The teacher will choose a new password at first login.</p>
             </div>
             <p id="createTeacherError" class="danger-text"></p>
+        </div>
+    </div>
+</div>
+
+<div class="modal" id="editTeacherModal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Edit Teacher</h3>
+            <button class="close-btn" onclick="closeModal('editTeacherModal')">X</button>
+        </div>
+        <div class="modal-body">
+            <input id="editTeacherId" type="hidden">
+            <label for="editTeacherNumber">Teacher ID</label>
+            <input id="editTeacherNumber" type="text">
+            <label for="editTeacherFirstName">First name</label>
+            <input id="editTeacherFirstName" type="text">
+            <label for="editTeacherMiddleInitial">Middle initial</label>
+            <input id="editTeacherMiddleInitial" type="text">
+            <label for="editTeacherLastName">Last name</label>
+            <input id="editTeacherLastName" type="text">
+            <label for="editTeacherEmail">Gmail (leave empty before first login)</label>
+            <input id="editTeacherEmail" type="email">
+            <button class="btn" onclick="saveTeacherEdits()">Save Teacher</button>
+            <p id="editTeacherError" class="danger-text"></p>
+        </div>
+    </div>
+</div>
+
+<div class="modal" id="resetTeacherCredentialsModal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Temporary Teacher Password</h3>
+            <button class="close-btn" onclick="closeModal('resetTeacherCredentialsModal')">X</button>
+        </div>
+        <div class="modal-body">
+            <p>This teacher has not completed first-time setup. Share these credentials.</p>
+            <p>Teacher ID: <strong id="resetTeacherLoginId"></strong></p>
+            <p>Temporary password: <code id="resetTeacherTemporaryPassword"></code></p>
+            <button class="btn" onclick="copyResetTeacherPassword()">Copy Password</button>
+            <p>The teacher will add Gmail and choose a new password at first login.</p>
         </div>
     </div>
 </div>
@@ -8319,6 +8358,10 @@ async function loadTeachersManagement() {
 
                 </button>
 
+                <button class="btn" onclick="openEditTeacherModal(${teacher.teacher_id})">Edit</button>
+
+                <button class="btn" onclick="resetTeacherPassword(${teacher.teacher_id})">Reset Password</button>
+
                 <button
 class="btn reject-btn"
 onclick="deleteTeacher(
@@ -8343,7 +8386,7 @@ onclick="deleteTeacher(
 const TEACHER_ACCOUNT_FUNCTION_URL = `${SUPABASE_URL}/functions/v1/manage-teacher-accounts`;
 
 function openCreateTeacherModal() {
-    ['createTeacherNumber', 'createTeacherFirstName', 'createTeacherMiddleInitial', 'createTeacherLastName', 'createTeacherEmail']
+    ['createTeacherNumber', 'createTeacherFirstName', 'createTeacherMiddleInitial', 'createTeacherLastName']
         .forEach(id => document.getElementById(id).value = '');
     document.getElementById('createTeacherError').textContent = '';
     document.getElementById('createdTeacherCredentials').style.display = 'none';
@@ -8368,8 +8411,7 @@ async function createTeacherAccount() {
                 teacher_number: document.getElementById('createTeacherNumber').value.trim(),
                 first_name: document.getElementById('createTeacherFirstName').value.trim(),
                 middle_initial: document.getElementById('createTeacherMiddleInitial').value.trim(),
-                last_name: document.getElementById('createTeacherLastName').value.trim(),
-                email: document.getElementById('createTeacherEmail').value.trim()
+                last_name: document.getElementById('createTeacherLastName').value.trim()
             })
         });
         const result = await response.json().catch(() => ({}));
@@ -8386,6 +8428,91 @@ async function createTeacherAccount() {
 
 async function copyCreatedTeacherPassword() {
     const password = document.getElementById('createdTeacherPassword').textContent;
+    try {
+        await navigator.clipboard.writeText(password);
+        showAlert('success', 'Copied', 'Temporary password copied.');
+    } catch {
+        showAlert('warning', 'Copy Unavailable', 'Select and copy the temporary password manually.');
+    }
+}
+
+async function openEditTeacherModal(teacherId) {
+    const errorBox = document.getElementById('editTeacherError');
+    errorBox.textContent = '';
+    try {
+        const { data: teacher, error } = await supabaseClient.from('teachers')
+            .select('teacher_id, teacher_number, first_name, middle_initial, last_name, users!teachers_user_id_fkey(email)')
+            .eq('teacher_id', teacherId).single();
+        if (error) throw error;
+        document.getElementById('editTeacherId').value = teacher.teacher_id;
+        document.getElementById('editTeacherNumber').value = teacher.teacher_number || '';
+        document.getElementById('editTeacherFirstName').value = teacher.first_name || '';
+        document.getElementById('editTeacherMiddleInitial').value = teacher.middle_initial || '';
+        document.getElementById('editTeacherLastName').value = teacher.last_name || '';
+        document.getElementById('editTeacherEmail').value = teacher.users?.email?.endsWith('@accounts.tcc.invalid') ? '' : (teacher.users?.email || '');
+        openModal('editTeacherModal');
+    } catch (error) {
+        errorBox.textContent = error.message;
+        openModal('editTeacherModal');
+    }
+}
+
+async function saveTeacherEdits() {
+    const errorBox = document.getElementById('editTeacherError');
+    errorBox.textContent = '';
+    try {
+        const { data: { session } } = await supabaseClient.auth.getSession();
+        if (!session) throw new Error('Please sign in again as an administrator.');
+        const response = await fetch(TEACHER_ACCOUNT_FUNCTION_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${session.access_token}` },
+            body: JSON.stringify({
+                action: 'admin-edit',
+                teacher_id: Number(document.getElementById('editTeacherId').value),
+                teacher_number: document.getElementById('editTeacherNumber').value.trim(),
+                first_name: document.getElementById('editTeacherFirstName').value.trim(),
+                middle_initial: document.getElementById('editTeacherMiddleInitial').value.trim(),
+                last_name: document.getElementById('editTeacherLastName').value.trim(),
+                email: document.getElementById('editTeacherEmail').value.trim()
+            })
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(result.error || 'Unable to update teacher details.');
+        closeModal('editTeacherModal');
+        showAlert('success', 'Teacher Updated', result.message || 'Teacher details updated.');
+        await loadTeachersManagement();
+    } catch (error) {
+        errorBox.textContent = error.message;
+    }
+}
+
+async function resetTeacherPassword(teacherId) {
+    showConfirmModal('Reset Teacher Password', 'Generate a temporary password? First-time setup credentials will be shown here; established accounts will receive it by email.', async () => {
+        try {
+            const { data: { session } } = await supabaseClient.auth.getSession();
+            if (!session) throw new Error('Please sign in again as an administrator.');
+            const response = await fetch(TEACHER_ACCOUNT_FUNCTION_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${session.access_token}` },
+                body: JSON.stringify({ action: 'admin-reset', teacher_id: Number(teacherId) })
+            });
+            const result = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(result.error || 'Unable to reset teacher password.');
+            if (result.delivery === 'admin') {
+                document.getElementById('resetTeacherLoginId').textContent = result.teacher_number;
+                document.getElementById('resetTeacherTemporaryPassword').textContent = result.temporary_password;
+                openModal('resetTeacherCredentialsModal');
+                return;
+            }
+            showAlert('success', 'Temporary Password Sent', `A temporary password was sent to ${result.email}. The teacher must choose a new password at next sign-in.`);
+        } catch (error) {
+            showAlert('error', 'Password Reset Failed', error.message);
+        }
+    });
+}
+
+async function copyResetTeacherPassword() {
+    const password = document.getElementById('resetTeacherTemporaryPassword').textContent;
     try {
         await navigator.clipboard.writeText(password);
         showAlert('success', 'Copied', 'Temporary password copied.');

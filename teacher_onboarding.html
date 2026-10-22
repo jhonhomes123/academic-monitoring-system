@@ -35,6 +35,10 @@
         <section class="setup-content">
             <p>Your administrator created your teacher account. Set a new password to finish setup.</p>
             <form id="teacherSetupForm">
+                <div class="field" id="emailField" hidden>
+                    <label for="teacherEmail">Gmail address</label>
+                    <input id="teacherEmail" type="email" autocomplete="email">
+                </div>
                 <div class="field">
                     <label for="newPassword">New password</label>
                     <input id="newPassword" type="password" autocomplete="new-password" minlength="8" required>
@@ -57,6 +61,7 @@
         const form=document.getElementById('teacherSetupForm');
         const errorBox=document.getElementById('formError');
         const saveButton=document.getElementById('saveButton');
+        let firstLoginMode=false;
 
         async function initialize(){
             let {data:{session}}=await supabaseClient.auth.getSession();
@@ -81,6 +86,16 @@
                 errorBox.textContent='This setup page is only for teacher accounts.';
                 return;
             }
+            firstLoginMode=Boolean(userData.onboarding_required||session.user.user_metadata?.onboarding_required);
+            if(firstLoginMode){
+                document.getElementById('emailField').hidden=false;
+                document.getElementById('teacherEmail').required=true;
+                document.querySelector('.setup-header h1').textContent='Add Your Gmail and Password';
+                document.querySelector('.setup-content>p').textContent='Enter your Gmail address and choose a permanent password to finish account setup.';
+            }else{
+                document.querySelector('.setup-header h1').textContent='Choose a New Password';
+                document.querySelector('.setup-content>p').textContent='Your administrator reset your password. Choose a new password to continue.';
+            }
             if(!userData.onboarding_required&&!userData.force_password_change
                 &&!session.user.user_metadata?.onboarding_required&&!session.user.user_metadata?.force_password_change){
                 errorBox.innerHTML='This account does not require password setup. <a href="teacher_dashboard.html">Continue to the teacher dashboard</a>.';
@@ -101,10 +116,15 @@
                 const {data:{session},error:sessionError}=await supabaseClient.auth.getSession();
                 if(sessionError)throw sessionError;
                 if(!session)throw new Error('Your sign-in session expired. Return to Login and try again.');
+                const action=firstLoginMode?'complete-teacher-setup':'complete-password-change';
                 const response=await fetch(FUNCTION_URL,{
                     method:'POST',
                     headers:{'Content-Type':'application/json',apikey:SUPABASE_ANON_KEY,Authorization:`Bearer ${session.access_token}`},
-                    body:JSON.stringify({action:'complete-password-change',password})
+                    body:JSON.stringify({
+                        action,
+                        email:firstLoginMode?document.getElementById('teacherEmail').value.trim():undefined,
+                        password
+                    })
                 });
                 const result=await response.json();
                 if(!response.ok)throw new Error(result.error||'Unable to save your password.');
