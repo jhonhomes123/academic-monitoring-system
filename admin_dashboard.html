@@ -2102,6 +2102,22 @@ onchange="loadSubjectsForTeacherAssign()">
         </div>
     </div>
 
+    <div class="modal" id="resetStudentCredentialsModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Temporary Student Password</h3>
+                <button class="close-btn" onclick="closeModal('resetStudentCredentialsModal')">X</button>
+            </div>
+            <div class="modal-body">
+                <p>This account has not completed first-time setup. Share these credentials with the student.</p>
+                <p>Student ID: <strong id="resetStudentLoginId"></strong></p>
+                <p>Temporary password: <code id="resetStudentTemporaryPassword"></code></p>
+                <button class="btn" onclick="copyResetStudentPassword()">Copy Password</button>
+                <p>The student will still add their email and choose a new password at first login.</p>
+            </div>
+        </div>
+    </div>
+
     <!-- DANGER ZONE -->
 
     <div class="danger-zone">
@@ -7592,14 +7608,30 @@ async function saveStudentEdits() {
 }
 
 async function resetStudentPassword(studentId) {
-    showConfirmModal('Reset Student Password', 'Send a temporary password to the student email on file?', async () => {
+    showConfirmModal('Reset Student Password', 'Generate a new temporary password? First-time setup credentials will be shown here; established accounts will receive the reset by email.', async () => {
         try {
             const result = await callStudentAccountFunction('admin-reset', { student_id: Number(studentId) });
+            if (result.delivery === 'admin') {
+                document.getElementById('resetStudentLoginId').textContent = result.student_number;
+                document.getElementById('resetStudentTemporaryPassword').textContent = result.temporary_password;
+                openModal('resetStudentCredentialsModal');
+                return;
+            }
             showAlert('success', 'Temporary Password Sent', `A temporary password was sent to ${result.email}. The student must choose a new password at next sign-in.`);
         } catch (error) {
             showAlert('error', 'Password Reset Failed', error.message);
         }
     });
+}
+
+async function copyResetStudentPassword() {
+    const password = document.getElementById('resetStudentTemporaryPassword').textContent;
+    try {
+        await navigator.clipboard.writeText(password);
+        showAlert('success', 'Copied', 'Temporary password copied.');
+    } catch {
+        showAlert('warning', 'Copy Unavailable', 'Select and copy the temporary password manually.');
+    }
 }
 
 /* =========================================================
