@@ -22,7 +22,7 @@
         .password-reset-mode #enrollmentFields{display:none!important}
         .field{display:flex;flex-direction:column;gap:7px}.field.full{grid-column:1/-1}
         .saved-enrollment{grid-column:1/-1;padding:16px;border:1px solid var(--border);border-radius:8px;background:var(--light)}
-        .saved-enrollment[hidden],#unassignedEnrollmentFields[hidden]{display:none!important}
+        .saved-enrollment[hidden]{display:none!important}
         .saved-enrollment h2{font-size:16px;color:var(--primary);margin:0 0 12px}
         .saved-enrollment-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
         .saved-enrollment-item span{display:block;color:var(--gray);font-size:12px;margin-bottom:4px}
@@ -50,7 +50,7 @@
             <div><h1>Complete Your Student Account</h1><p>Academic Monitoring System · Talisay City College</p></div>
         </header>
         <section class="setup-content">
-            <p>Add your contact email and enrollment details, then replace the temporary password to finish setting up your account.</p>
+            <p>Add your contact email and choose a new password to finish setting up your account.</p>
             <form id="setupForm">
                 <div class="form-grid" id="enrollmentFields">
                     <div class="field"><label for="studentEmail">Email address</label><input id="studentEmail" type="email" autocomplete="email" required></div>
@@ -62,12 +62,6 @@
                             <div class="saved-enrollment-item"><span>Major</span><strong id="savedMajor">-</strong></div>
                             <div class="saved-enrollment-item"><span>Section</span><strong id="savedSection">-</strong></div>
                         </div>
-                    </div>
-                    <div id="unassignedEnrollmentFields" class="form-grid" style="grid-column:1/-1;display:grid;">
-                        <div class="field"><label for="yearSelect">Year level</label><select id="yearSelect"><option value="">Select year</option><option>1st Year</option><option>2nd Year</option><option>3rd Year</option><option>4th Year</option></select></div>
-                        <div class="field"><label for="departmentSelect">Department</label><select id="departmentSelect"><option value="">Select department</option></select></div>
-                        <div class="field"><label for="majorSelect">Major</label><select id="majorSelect" disabled><option value="">Select major</option></select></div>
-                        <div class="field"><label for="sectionSelect">Section</label><select id="sectionSelect" disabled><option value="">Select section</option></select></div>
                     </div>
                 </div>
                 <div class="form-grid" id="passwordFields" style="margin-top:16px;">
@@ -88,10 +82,6 @@
         const form=document.getElementById('setupForm');
         const errorBox=document.getElementById('formError');
         const saveButton=document.getElementById('saveButton');
-        const departmentSelect=document.getElementById('departmentSelect');
-        const majorSelect=document.getElementById('majorSelect');
-        const yearSelect=document.getElementById('yearSelect');
-        const sectionSelect=document.getElementById('sectionSelect');
         let currentUser=null;
         let currentStudentNumber='';
         let passwordOnlyMode=new URLSearchParams(window.location.search).get('mode')==='password';
@@ -110,48 +100,15 @@
 
         if(passwordOnlyMode) applyPasswordOnlyMode();
 
-        async function loadSetupOptions(scope, values={}){
+        async function loadSetupProfile(){
             const response=await fetch(FUNCTIONS_URL,{
                 method:'POST',
                 headers:{'Content-Type':'application/json',apikey:SUPABASE_ANON_KEY,Authorization:`Bearer ${currentAccessToken}`},
-                body:JSON.stringify({action:'load-setup-options',scope,...values})
+                body:JSON.stringify({action:'load-setup-options',scope:'profile'})
             });
             const result=await response.json();
-            if(!response.ok) throw new Error(result.error||'Unable to load enrollment options.');
-            return result.data||[];
-        }
-
-        async function loadDepartments(){
-            departmentSelect.innerHTML='<option value="">Select department</option>';
-            majorSelect.innerHTML='<option value="">Select major</option>';
-            sectionSelect.innerHTML='<option value="">Select section</option>';
-            departmentSelect.disabled=true;
-            majorSelect.disabled=true;
-            sectionSelect.disabled=true;
-            if(!yearSelect.value) return;
-            const data=await loadSetupOptions('departments');
-            data.forEach(item=>departmentSelect.add(new Option(item.department_name,item.department_id)));
-            departmentSelect.disabled=false;
-        }
-
-        async function loadMajors(){
-            majorSelect.innerHTML='<option value="">Select major</option>';
-            sectionSelect.innerHTML='<option value="">Select section</option>';
-            majorSelect.disabled=true;
-            sectionSelect.disabled=true;
-            if(!yearSelect.value||!departmentSelect.value) return;
-            const data=await loadSetupOptions('majors',{department_id:departmentSelect.value});
-            data.forEach(item=>majorSelect.add(new Option(item.major_name,item.major_id)));
-            majorSelect.disabled=false;
-        }
-
-        async function loadSections(){
-            sectionSelect.innerHTML='<option value="">Select section</option>';
-            sectionSelect.disabled=true;
-            if(!majorSelect.value||!yearSelect.value) return;
-            const data=await loadSetupOptions('sections',{major_id:majorSelect.value,year_level:yearSelect.value});
-            data.forEach(item=>sectionSelect.add(new Option(item.section_name,item.section_id)));
-            sectionSelect.disabled=false;
+            if(!response.ok) throw new Error(result.error||'Unable to load the assigned enrollment.');
+            return result.data||null;
         }
 
         async function initialize(){
@@ -189,11 +146,10 @@
             if(!currentAccessToken){errorBox.textContent='Your sign-in session expired. Return to Login and try again.';return;}
             const {data:appUser,error:appError}=await supabaseClient.from('users').select('role_id, email, onboarding_required, force_password_change').eq('user_id',user.id).maybeSingle();
             if(appError||!appUser||Number(appUser.role_id)!==3){errorBox.textContent='This setup page is only for student accounts.';return;}
-            const profile=await loadSetupOptions('profile');
+            const profile=await loadSetupProfile();
             if(!profile){errorBox.textContent='Student profile not found. Please contact an administrator.';return;}
             currentStudentNumber=profile.student_number||'';
             const enrollmentAlreadyAssigned=Boolean(profile.admin_enrollment_assigned||(profile.section_id!==null&&profile.section_id!==undefined&&Number(profile.section_id)>0));
-            form.dataset.enrollmentAssigned=enrollmentAlreadyAssigned?'true':'false';
             const internalStudentLogin=Boolean(appUser.email?.endsWith('@accounts.tcc.invalid'));
             const requestedMode=new URLSearchParams(window.location.search).get('mode');
             const requestedPasswordMode=requestedMode==='password';
@@ -215,10 +171,8 @@
                     return;
                 }
                 const assignedPanel=document.getElementById('savedEnrollment');
-                const dropdownPanel=document.getElementById('unassignedEnrollmentFields');
                 assignedPanel.hidden=false;
                 assignedPanel.style.setProperty('display','block','important');
-                dropdownPanel.remove();
                 document.getElementById('savedYear').textContent=profile.section.year_level||'-';
                 document.getElementById('savedDepartment').textContent=profile.department.department_name||'-';
                 document.getElementById('savedMajor').textContent=profile.major.major_name||'-';
@@ -226,19 +180,10 @@
                 document.querySelector('.setup-header h1').textContent='Add Your Email and Password';
                 document.querySelector('.setup-content>p').textContent='Your administrator has already entered your name, Student ID, and section. Add your contact email and choose a new password to finish setup.';
             } else {
-                const assignedPanel=document.getElementById('savedEnrollment');
-                const dropdownPanel=document.getElementById('unassignedEnrollmentFields');
-                assignedPanel.hidden=true;
-                assignedPanel.style.setProperty('display','none','important');
-                dropdownPanel.style.setProperty('display','grid','important');
-                document.querySelectorAll('#unassignedEnrollmentFields select').forEach(field=>field.required=true);
-                await loadDepartments();
+                document.getElementById('setupForm').hidden=true;
+                errorBox.textContent='Your enrollment has not been assigned yet. Please ask the administrator to assign your department, year, major, and section before completing setup.';
             }
         }
-
-        yearSelect.addEventListener('change',()=>loadDepartments().catch(showError));
-        departmentSelect.addEventListener('change',()=>loadMajors().catch(showError));
-        majorSelect.addEventListener('change',()=>loadSections().catch(showError));
 
         function showError(error){errorBox.textContent=error?.message||'Unable to load the form. Please retry.';}
 
@@ -273,17 +218,12 @@
                     setTimeout(()=>window.location.replace('login.html'),5000);
                     return;
                 }
-                const enrollmentAssigned = form.dataset.enrollmentAssigned === 'true';
                 const response=await fetch(FUNCTIONS_URL,{
                     method:'POST',
                     headers:{'Content-Type':'application/json',apikey:SUPABASE_ANON_KEY,Authorization:`Bearer ${session.access_token}`},
                     body:JSON.stringify({
                         action:'complete-onboarding',
                         email:document.getElementById('studentEmail').value.trim(),
-                        department_id:enrollmentAssigned ? null : departmentSelect.value,
-                        major_id:enrollmentAssigned ? null : majorSelect.value,
-                        year_level:enrollmentAssigned ? null : yearSelect.value,
-                        section_id:enrollmentAssigned ? null : sectionSelect.value,
                         password
                     })
                 });
@@ -294,7 +234,7 @@
                     <div style="padding:24px 16px;text-align:center;">
                         <div style="font-size:42px;color:#1f6bff;margin-bottom:12px;"><i class="fa-solid fa-circle-check"></i></div>
                         <h2 style="color:#0b3d91;margin-bottom:10px;">Your information has been saved</h2>
-                        <p style="color:#64748b;line-height:1.6;">Your email and enrollment details are set. Please return to the homepage and log in with your Student ID and new password.</p>
+                        <p style="color:#64748b;line-height:1.6;">Your email and password are saved. Please return to the login page and sign in with your Student ID and new password.</p>
                         <a href="login.html" class="submit-button" style="display:flex;align-items:center;justify-content:center;text-decoration:none;margin-top:22px;">Return to Homepage</a>
                     </div>
                 `;

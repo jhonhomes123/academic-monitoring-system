@@ -2037,6 +2037,12 @@ onchange="loadSubjectsForTeacherAssign()">
                 <input id="createStudentFirstName" type="text" placeholder="First name">
                 <input id="createStudentMiddleInitial" type="text" placeholder="Middle initial (optional)">
                 <input id="createStudentLastName" type="text" placeholder="Last name">
+                <select id="createStudentDepartment" onchange="loadCreateStudentMajors()"><option value="">Select Department</option></select>
+                <select id="createStudentYear" onchange="loadCreateStudentSections()">
+                    <option value="">Select Year</option><option>1st Year</option><option>2nd Year</option><option>3rd Year</option><option>4th Year</option>
+                </select>
+                <select id="createStudentMajor" onchange="loadCreateStudentSections()"><option value="">Select Major</option></select>
+                <select id="createStudentSection"><option value="">Select Section</option></select>
                 <button class="btn" onclick="createStudentAccount()">Create Account</button>
                 <div id="createdStudentCredentials" style="display:none; padding:14px; background:#f1f5f9; border-radius:8px; overflow-wrap:anywhere;">
                     <strong>Give these credentials to the student now</strong>
@@ -7366,9 +7372,44 @@ function openCreateStudentModal() {
     document.getElementById('createStudentFirstName').value = '';
     document.getElementById('createStudentMiddleInitial').value = '';
     document.getElementById('createStudentLastName').value = '';
+    document.getElementById('createStudentDepartment').innerHTML = '<option value="">Select Department</option>';
+    document.getElementById('createStudentYear').value = '';
+    document.getElementById('createStudentMajor').innerHTML = '<option value="">Select Major</option>';
+    document.getElementById('createStudentSection').innerHTML = '<option value="">Select Section</option>';
     document.getElementById('createStudentError').textContent = '';
     document.getElementById('createdStudentCredentials').style.display = 'none';
+    loadCreateStudentDepartments().catch(error => document.getElementById('createStudentError').textContent = error.message);
     openModal('createStudentModal');
+}
+
+async function loadCreateStudentDepartments() {
+    const select = document.getElementById('createStudentDepartment');
+    const { data, error } = await supabaseClient.from('departments').select('department_id, department_name').order('department_name');
+    if (error) throw error;
+    (data || []).forEach(department => select.add(new Option(department.department_name, department.department_id)));
+}
+
+async function loadCreateStudentMajors() {
+    const select = document.getElementById('createStudentMajor');
+    const sectionSelect = document.getElementById('createStudentSection');
+    select.innerHTML = '<option value="">Select Major</option>';
+    sectionSelect.innerHTML = '<option value="">Select Section</option>';
+    const departmentId = document.getElementById('createStudentDepartment').value;
+    if (!departmentId) return;
+    const { data, error } = await supabaseClient.from('majors').select('major_id, major_name').eq('department_id', departmentId).order('major_name');
+    if (error) throw error;
+    (data || []).forEach(major => select.add(new Option(major.major_name, major.major_id)));
+}
+
+async function loadCreateStudentSections() {
+    const select = document.getElementById('createStudentSection');
+    select.innerHTML = '<option value="">Select Section</option>';
+    const majorId = document.getElementById('createStudentMajor').value;
+    const yearLevel = document.getElementById('createStudentYear').value;
+    if (!majorId || !yearLevel) return;
+    const { data, error } = await supabaseClient.from('sections').select('section_id, section_name').eq('major_id', majorId).eq('year_level', yearLevel).order('section_name');
+    if (error) throw error;
+    (data || []).forEach(section => select.add(new Option(section.section_name, section.section_id)));
 }
 
 function closeCreateStudentModal() {
@@ -7383,13 +7424,23 @@ async function createStudentAccount() {
             student_number: document.getElementById('createStudentNumber').value.trim(),
             first_name: document.getElementById('createStudentFirstName').value.trim(),
             middle_initial: document.getElementById('createStudentMiddleInitial').value.trim(),
-            last_name: document.getElementById('createStudentLastName').value.trim()
+            last_name: document.getElementById('createStudentLastName').value.trim(),
+            department_id: document.getElementById('createStudentDepartment').value,
+            major_id: document.getElementById('createStudentMajor').value,
+            year_level: document.getElementById('createStudentYear').value,
+            section_id: document.getElementById('createStudentSection').value
         });
         document.getElementById('createdStudentLoginId').textContent = result.login_id;
         document.getElementById('createdStudentPassword').textContent = result.temporary_password;
         document.getElementById('createdStudentCredentials').style.display = 'block';
         showAlert('success', 'Student Account Created', 'Give the Student ID and temporary password to the student now.');
-        document.getElementById('manageStudentSection').value = 'unassigned';
+        document.getElementById('manageStudentYear').value = document.getElementById('createStudentYear').value;
+        await loadDepartmentsForManageStudents();
+        document.getElementById('manageStudentDepartment').value = document.getElementById('createStudentDepartment').value;
+        await loadMajorsForManageStudents();
+        document.getElementById('manageStudentMajor').value = document.getElementById('createStudentMajor').value;
+        await loadSectionsForManageStudents();
+        document.getElementById('manageStudentSection').value = String(result.section_id);
         await loadStudentsBySection();
     } catch (error) {
         errorBox.textContent = error.message;
