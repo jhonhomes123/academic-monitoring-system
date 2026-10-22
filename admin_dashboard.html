@@ -7517,6 +7517,10 @@ async function createStudentAccount() {
             year_level: document.getElementById('createStudentYear').value,
             section_id: document.getElementById('createStudentSection').value
         });
+        document.getElementById('createStudentNumber').value = '';
+        document.getElementById('createStudentFirstName').value = '';
+        document.getElementById('createStudentMiddleInitial').value = '';
+        document.getElementById('createStudentLastName').value = '';
         document.getElementById('createdStudentLoginId').textContent = result.login_id;
         document.getElementById('createdStudentPassword').textContent = result.temporary_password;
         document.getElementById('createdStudentCredentials').style.display = 'block';
@@ -8414,6 +8418,8 @@ async function createTeacherAccount() {
         });
         const result = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(result.error || 'Unable to create the teacher account.');
+        ['createTeacherNumber', 'createTeacherFirstName', 'createTeacherMiddleInitial', 'createTeacherLastName']
+            .forEach(id => document.getElementById(id).value = '');
         document.getElementById('createdTeacherLoginId').textContent = result.teacher_number;
         document.getElementById('createdTeacherPassword').textContent = result.temporary_password;
         document.getElementById('createdTeacherCredentials').style.display = 'block';
