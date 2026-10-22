@@ -946,6 +946,11 @@ async function getActiveSubjectIds(){
 let teacherId = null;
 let teacherUserId = null;
 
+function formatStudentTableName(student) {
+    const middleInitial = String(student.middle_initial || '').trim();
+    return `${String(student.last_name || '').trim()}, ${String(student.first_name || '').trim()}${middleInitial ? ` ${middleInitial.charAt(0).toUpperCase()}.` : ''}`;
+}
+
 const yearFilter =
 document.getElementById("yearFilter");
 
@@ -1434,12 +1439,7 @@ async function loadStudents(){
 
         <tr>
 
-        <td>
-
-        ${student.last_name},
-        ${student.first_name}
-
-        </td>
+        <td>${formatStudentTableName(student)}</td>
 
         <td>
             <input type="number" step="0.1" id="prelim-${student.student_id}" value="${formatGradeInput(grade?.prelim)}">

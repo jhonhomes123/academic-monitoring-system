@@ -509,6 +509,11 @@ SAMPLE TEACHER EMAIL
 let teacherUserId = null;
 let teacherId = null;
 
+function formatStudentTableName(student) {
+    const middleInitial = String(student.middle_initial || '').trim();
+    return `${String(student.last_name || '').trim()}, ${String(student.first_name || '').trim()}${middleInitial ? ` ${middleInitial.charAt(0).toUpperCase()}.` : ''}`;
+}
+
 /* =====================================================
 ELEMENTS
 ===================================================== */
@@ -1026,11 +1031,7 @@ else if(status === "INCOMPLETE"){
 
 }
 
-        const fullName = `
-            ${student.last_name},
-            ${student.first_name}
-            ${student.middle_initial || ""}
-        `;
+        const fullName = formatStudentTableName(student);
 
         tableBody.innerHTML += `
 

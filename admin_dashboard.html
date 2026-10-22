@@ -2603,15 +2603,10 @@ onchange="loadSubjectsForTeacherAssign()">
     <script>
         /* NAVIGATION */
         function formatName(first, middle, last) {
-
-            return [
-                first,
-                middle,
-                last
-            ]
-                .filter(Boolean)
-                .join(' ');
-
+            const firstName = String(first || '').trim();
+            const lastName = String(last || '').trim();
+            const middleInitial = String(middle || '').trim();
+            return `${lastName}, ${firstName}${middleInitial ? ` ${middleInitial.charAt(0).toUpperCase()}.` : ''}`;
         }
 
         function showSection(sectionId, element) {
@@ -3279,8 +3274,11 @@ onchange="loadSubjectsForTeacherAssign()">
 
             filteredData.forEach(teacher => {
 
-                const fullName =
-                    `${teacher.first_name || ''} ${teacher.middle_initial || ''} ${teacher.last_name || ''}`;
+                const fullName = formatName(
+                    teacher.first_name,
+                    teacher.middle_initial,
+                    teacher.last_name
+                );
 
                 let documentUrl = teacher.document_url || null;
 
@@ -4236,6 +4234,7 @@ data.forEach(major => {
                 assignment_id,
                 teachers (
                     first_name,
+                    middle_initial,
                     last_name
                 )
             `)
@@ -4295,8 +4294,7 @@ data.forEach(major => {
 
             <td>
 
-                ${assign.teachers?.first_name || ''}
-                ${assign.teachers?.last_name || ''}
+                ${assign.teachers ? formatName(assign.teachers.first_name, assign.teachers.middle_initial, assign.teachers.last_name) : ''}
 
             </td>
 
@@ -6537,7 +6535,7 @@ async function loadSubjectsForDelete() {
                 select.innerHTML += `
         
         <option value="${teacher.teacher_id}">
-            ${teacher.first_name} ${teacher.last_name}
+            ${formatName(teacher.first_name, teacher.middle_initial, teacher.last_name)}
         </option>
         
         `;
@@ -6809,7 +6807,7 @@ async function assignTeacherToSubject() {
     showAlert(
         'success',
         'Teacher Assigned',
-        `${teacherData.first_name} ${teacherData.last_name} assigned successfully`
+        `${formatName(teacherData.first_name, teacherData.middle_initial, teacherData.last_name)} assigned successfully`
     );
 
     closeTeacherAssignModal();
@@ -6872,8 +6870,7 @@ async function assignTeacherToSubject() {
                 select.innerHTML += `
         
         <option value="${teacher.teacher_id}">
-            ${teacher.first_name}
-            ${teacher.last_name}
+            ${formatName(teacher.first_name, teacher.middle_initial, teacher.last_name)}
         </option>
         
         `;
@@ -6900,6 +6897,7 @@ async function assignTeacherToSubject() {
                 assignment_id,
                 teachers (
                     first_name,
+                    middle_initial,
                     last_name
                 )
             `)
@@ -6937,8 +6935,7 @@ async function assignTeacherToSubject() {
         <tr>
 
             <td>
-           ${assign.teachers?.first_name || ''} 
-        ${assign.teachers?.last_name || ''}
+              ${assign.teachers ? formatName(assign.teachers.first_name, assign.teachers.middle_initial, assign.teachers.last_name) : ''}
             </td>
 
             <td>
@@ -7401,12 +7398,11 @@ async function loadStudentsBySection() {
 
     data.forEach(student => {
 
-        const fullName =
-            formatName(
-                student.last_name,
-                student.first_name,
-                student.middle_initial
-            );
+        const fullName = formatName(
+            student.first_name,
+            student.middle_initial,
+            student.last_name
+        );
 
         table.innerHTML += `
 
@@ -8337,15 +8333,13 @@ async function loadTeachersManagement() {
 
             <td>
 
-                ${teacher.last_name},
-                ${teacher.first_name}
-                ${teacher.middle_initial || ''}
+                ${formatName(teacher.first_name, teacher.middle_initial, teacher.last_name)}
 
             </td>
 
             <td>
 
-               ${teacher.users?.email || ''}
+                    ${teacher.users?.email?.endsWith('@accounts.tcc.invalid') ? 'Email not added yet' : (teacher.users?.email || 'N/A')}
 
             </td>
 
@@ -8355,7 +8349,7 @@ async function loadTeachersManagement() {
                 class="btn"
                 onclick="openTeacherAssignments(
                     ${teacher.teacher_id},
-                    '${teacher.last_name}, ${teacher.first_name}'
+                    '${formatName(teacher.first_name, teacher.middle_initial, teacher.last_name)}'
                 )">
 
                     Open

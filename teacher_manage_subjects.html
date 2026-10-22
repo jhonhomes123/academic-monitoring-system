@@ -837,6 +837,11 @@ Select Subject and Section
             let teacherUserId = null;
             let currentRequirementStudents = [];
 
+            function formatPersonTableName(person) {
+                const middleInitial = String(person.middle_initial || '').trim();
+                return `${String(person.last_name || '').trim()}, ${String(person.first_name || '').trim()}${middleInitial ? ` ${middleInitial.charAt(0).toUpperCase()}.` : ''}`;
+            }
+
             async function loadTeacher() {
                 const { data, error } = await supabaseClient
                     .from('teachers')
@@ -1148,7 +1153,7 @@ Select Subject and Section
 
                     html += `
                         <tr>
-                            <td>${student.last_name.charAt(0).toUpperCase() + student.last_name.slice(1)}, ${student.first_name.charAt(0).toUpperCase() + student.first_name.slice(1)}</td>
+                            <td>${formatPersonTableName(student)}</td>
                             <td>${requirementList}</td>
                             <td>
                                 <div class="action-buttons">
@@ -1637,7 +1642,7 @@ Select Subject and Section
                     checkbox.addEventListener('change', updateRequirementStudentCount);
 
                     const name = document.createElement('span');
-                    name.textContent = `${student.last_name || ''}, ${student.first_name || ''}`.trim();
+                    name.textContent = formatPersonTableName(student);
 
                     label.append(checkbox, name);
                     list.appendChild(label);

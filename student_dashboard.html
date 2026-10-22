@@ -935,7 +935,7 @@ async function loadStudentDashboard() {
                     .in('subject_id', subjectIds),
                 supabaseClient
                     .from('teacher_subject_assignments')
-                    .select('subject_id, teachers(first_name, last_name), teacher_section_assignments(section_id)')
+                    .select('subject_id, teachers(first_name, middle_initial, last_name), teacher_section_assignments(section_id)')
                     .in('subject_id', subjectIds)
             ])
             : [{ data: [], error: null }, { data: [], error: null }];
@@ -961,7 +961,7 @@ async function loadStudentDashboard() {
             );
             const teacher = assignment?.teachers;
             const instructor = teacher
-                ? `${teacher.first_name || ''} ${teacher.last_name || ''}`.trim()
+                ? `${teacher.last_name || ''}, ${teacher.first_name || ''}${teacher.middle_initial ? ` ${String(teacher.middle_initial).trim().charAt(0).toUpperCase()}.` : ''}`
                 : 'TBD';
             const statusRaw = (grade.status || '').toString().toUpperCase();
             let statusClass = 'warning-text';

@@ -347,7 +347,7 @@ async function loadStudentSubjects() {
         const subjectIds = sectionSubjects.map(subject => subject.subject_id);
         const { data: assignments, error: assignmentsError } = await supabaseClient
             .from('teacher_subject_assignments')
-            .select('subject_id, teachers(first_name, last_name), teacher_section_assignments(section_id)')
+            .select('subject_id, teachers(first_name, middle_initial, last_name), teacher_section_assignments(section_id)')
             .in('subject_id', subjectIds);
 
         if (assignmentsError) throw assignmentsError;
@@ -365,7 +365,7 @@ async function loadStudentSubjects() {
                 code: subject.subject_code || '-',
                 name: subject.subject_name || '-',
                 instructor: teacher
-                    ? `${teacher.first_name || ''} ${teacher.last_name || ''}`.trim()
+                    ? `${teacher.last_name || ''}, ${teacher.first_name || ''}${teacher.middle_initial ? ` ${String(teacher.middle_initial).trim().charAt(0).toUpperCase()}.` : ''}`
                     : 'TBD'
             };
         });
