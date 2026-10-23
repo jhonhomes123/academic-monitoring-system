@@ -335,6 +335,16 @@ TABLE SCROLLBAR
     color:#f59e0b;
     font-weight:700;
 }
+
+.term-status-list{
+    display:flex;
+    flex-wrap:wrap;
+    gap:6px 12px;
+}
+
+.term-status-list a{
+    white-space:nowrap;
+}
 </style>
 <link rel="stylesheet" href="mobile_fix.css">
 </head>
@@ -1054,7 +1064,7 @@ async function loadStudents(){
             section_id: sectionFilter.value
         });
         const statusHtml = termStatuses
-            .map(([term, status]) => `<div><a class="${statusClass(status)}" href="teacher_student_status.html?${statusParams.toString()}&term=${encodeURIComponent(term.toLowerCase())}" title="Open ${term} status and grades for this student"><strong>${term}:</strong> ${status}</a></div>`)
+            .map(([term, status]) => `<a class="${statusClass(status)}" href="teacher_student_status.html?${statusParams.toString()}&term=${encodeURIComponent(term.toLowerCase())}" title="Open ${term} status and grades for this student"><strong>${term}:</strong> ${status}</a>`)
             .join("");
 
         const fullName = formatStudentTableName(student);
@@ -1072,7 +1082,7 @@ async function loadStudents(){
             </td>
 
             <td>
-                ${statusHtml}
+                <div class="term-status-list">${statusHtml}</div>
             </td>
 
         </tr>

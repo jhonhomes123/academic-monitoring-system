@@ -964,13 +964,20 @@ async function loadStudentDashboard() {
                 ? `${teacher.last_name || ''}, ${teacher.first_name || ''}${teacher.middle_initial ? ` ${String(teacher.middle_initial).trim().charAt(0).toUpperCase()}.` : ''}`
                 : 'TBD';
             const statusRaw = (grade.status || '').toString().toUpperCase();
-            let statusClass = 'warning-text';
-            if (statusRaw === 'PASSED') { statusClass = 'pass-text'; passed++; }
-            else if (statusRaw === 'FAILED') { statusClass = 'danger-text'; failed++; }
-            else if (statusRaw === 'INCOMPLETE') { incomplete++; }
+            if (statusRaw === 'PASSED') passed++;
+            else if (statusRaw === 'FAILED') failed++;
+            else if (statusRaw === 'INCOMPLETE') incomplete++;
 
-            const termStatus = (value) => value || statusRaw || 'PENDING';
-            return `<tr><td>${subject.subject_name || subject.subject_code}</td><td>${instructor}</td><td class="${statusClass}">Prelim: ${termStatus(grade.prelim_status)}<br>Midterm: ${termStatus(grade.midterm_status)}<br>Final: ${termStatus(grade.final_status)}</td></tr>`;
+            const termStatus = value => (value || statusRaw || 'PENDING').toString().toUpperCase();
+            const termStatusClass = value => value === 'PASSED'
+                ? 'pass-text'
+                : value === 'FAILED'
+                    ? 'danger-text'
+                    : 'warning-text';
+            const prelimStatus = termStatus(grade.prelim_status);
+            const midtermStatus = termStatus(grade.midterm_status);
+            const finalStatus = termStatus(grade.final_status);
+            return `<tr><td>${subject.subject_name || subject.subject_code}</td><td>${instructor}</td><td><span class="${termStatusClass(prelimStatus)}">Prelim: ${prelimStatus}</span><br><span class="${termStatusClass(midtermStatus)}">Midterm: ${midtermStatus}</span><br><span class="${termStatusClass(finalStatus)}">Final: ${finalStatus}</span></td></tr>`;
         }).join('') || '<tr><td colspan="3" class="empty">No subjects for the active semester</td></tr>';
         const total = (sectionSubjects || []).length;
 
