@@ -181,6 +181,25 @@
             font-size: 14px;
         }
 
+        #requirementStudentPicker table {
+            min-width: 0;
+            table-layout: fixed;
+        }
+
+        #requirementStudentPicker th,
+        #requirementStudentPicker td {
+            padding: 8px 10px;
+        }
+
+        #requirementStudentPicker th:first-child,
+        #requirementStudentPicker td:first-child {
+            width: 44px;
+        }
+
+        #requirementStudentPicker td:last-child {
+            overflow-wrap: anywhere;
+        }
+
         .warning-text {
             color: var(--warning);
             font-weight: 700;
@@ -1158,7 +1177,7 @@ Select Subject and Section
                                         <div style="display:flex; justify-content:space-between; align-items:start; gap:10px;">
                                             <div style="flex:1; min-width:0;">
                                                 <strong>${r.requirement_title}</strong>
-                                                ${description ? `<div style="color:#475569;margin-top:4px;">${description}</div>` : ''}
+                                                ${description ? `<div style="color:#475569;margin-top:4px;white-space:pre-wrap;">${description}</div>` : ''}
                                                 ${deadlineText}
                                                 ${requirementFilesHtml}
                                             </div>
