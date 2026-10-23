@@ -757,13 +757,24 @@ Select Subject and Section
 
                 <div class="modal-body">
 
-                    <div>
+                    <div id="requirementStudentPicker">
                         <strong id="requirementStudentCount">Choose students</strong>
                         <div style="display:flex; gap:8px; margin:8px 0; flex-wrap:wrap;">
                             <button class="btn" type="button" onclick="selectRequirementStudents(true)">Select All</button>
                             <button class="btn secondary-btn" type="button" onclick="selectRequirementStudents(false)">Clear</button>
                         </div>
-                        <div id="requirementStudentList" style="max-height:180px; overflow-y:auto; border:1px solid #dbe4f0; border-radius:8px; padding:8px;"></div>
+                        <div style="max-height:210px; overflow:auto; border:1px solid #dbe4f0; border-radius:6px;">
+                            <table style="width:100%; border-collapse:collapse;">
+                                <thead>
+                                    <tr>
+                                        <th style="width:44px;">Select</th>
+                                        <th>Student ID</th>
+                                        <th>Student Name</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="requirementStudentList"></tbody>
+                            </table>
+                        </div>
                     </div>
 
                     <input type="text" id="requirementTitle" placeholder="Project Name">
@@ -1639,25 +1650,38 @@ Select Subject and Section
                     return showAlert('warning', 'No Students', 'Select a subject and section with students first.');
                 }
 
+                const picker = document.getElementById('requirementStudentPicker');
                 const list = document.getElementById('requirementStudentList');
+                const isSingleStudent = studentId !== null;
                 list.innerHTML = '';
+                picker.style.display = isSingleStudent ? 'none' : '';
 
-                currentRequirementStudents.forEach(student => {
-                    const label = document.createElement('label');
-                    label.style.cssText = 'display:flex;align-items:center;gap:8px;padding:7px 4px;cursor:pointer;';
-
+                const students = isSingleStudent
+                    ? currentRequirementStudents.filter(student => String(student.student_id) === String(studentId))
+                    : currentRequirementStudents;
+                students.forEach(student => {
+                    const row = document.createElement('tr');
                     const checkbox = document.createElement('input');
                     checkbox.type = 'checkbox';
                     checkbox.className = 'requirement-student-check';
                     checkbox.value = student.student_id;
-                    checkbox.checked = studentId !== null && String(student.student_id) === String(studentId);
+                    checkbox.checked = isSingleStudent;
                     checkbox.addEventListener('change', updateRequirementStudentCount);
 
+                    const checkboxCell = document.createElement('td');
+                    checkboxCell.style.textAlign = 'center';
+                    checkboxCell.appendChild(checkbox);
+
+                    const idCell = document.createElement('td');
+                    idCell.textContent = student.student_number || 'N/A';
+
+                    const nameCell = document.createElement('td');
                     const name = document.createElement('span');
                     name.textContent = formatPersonTableName(student);
+                    nameCell.appendChild(name);
 
-                    label.append(checkbox, name);
-                    list.appendChild(label);
+                    row.append(checkboxCell, idCell, nameCell);
+                    list.appendChild(row);
                 });
 
                 document.getElementById('requirementModal').style.display = 'flex';
