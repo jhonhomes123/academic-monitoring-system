@@ -454,7 +454,7 @@ TABLE SCROLLBAR
                 <tr>
                     <th>Student ID</th>
                     <th>Name</th>
-                    <th>Status</th>
+                    <th>Term Status</th>
                 </tr>
 
             </thead>
@@ -462,7 +462,7 @@ TABLE SCROLLBAR
             <tbody id="studentTableBody">
 
                 <tr>
-                    <td colspan="4" class="empty">
+                    <td colspan="3" class="empty">
                         Select filters to load students
                     </td>
                 </tr>
@@ -988,7 +988,7 @@ async function loadStudents(){
 
         tableBody.innerHTML = `
         <tr>
-            <td colspan="4" class="empty">
+            <td colspan="3" class="empty">
                 No students found
         `;
 
@@ -1005,7 +1005,7 @@ async function loadStudents(){
 
         .from("student_grades")
 
-        .select("status")
+        .select("status, prelim_status, midterm_status, final_status")
 
         .eq("student_id", student.student_id)
 
@@ -1013,27 +1013,23 @@ async function loadStudents(){
 
         .maybeSingle();
 
-        let status =
-        grade?.status || "PENDING";
-
-        let statusClass =
-        "status-pending";
-
-        if(status === "PASSED"){
-
-    statusClass = "status-approved";
-
-}
-else if(status === "FAILED"){
-
-    statusClass = "status-failed";
-
-}
-else if(status === "INCOMPLETE"){
-
-    statusClass = "status-incomplete";
-
-}
+        const overallStatus = grade?.status || "PENDING";
+        const termStatus = value => value || overallStatus;
+        const statusClass = value => value === "PASSED"
+            ? "status-approved"
+            : value === "FAILED"
+                ? "status-failed"
+                : value === "INCOMPLETE"
+                    ? "status-incomplete"
+                    : "status-pending";
+        const termStatuses = [
+            ["Prelim", termStatus(grade?.prelim_status)],
+            ["Midterm", termStatus(grade?.midterm_status)],
+            ["Final", termStatus(grade?.final_status)]
+        ];
+        const statusHtml = termStatuses
+            .map(([term, status]) => `<div><strong>${term}:</strong> <span class="${statusClass(status)}">${status}</span></div>`)
+            .join("");
 
         const fullName = formatStudentTableName(student);
 
@@ -1049,8 +1045,8 @@ else if(status === "INCOMPLETE"){
                 ${fullName}
             </td>
 
-            <td class="${statusClass}">
-                ${status}
+            <td>
+                ${statusHtml}
             </td>
 
         </tr>
