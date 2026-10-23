@@ -2049,6 +2049,11 @@ onchange="loadSubjectsForTeacherAssign()">
                 <input id="createStudentFirstName" type="text" placeholder="First name">
                 <input id="createStudentMiddleInitial" type="text" placeholder="Middle initial (optional)">
                 <input id="createStudentLastName" type="text" placeholder="Last name">
+                <select id="createStudentGender" required>
+                    <option value="">Select Gender</option>
+                    <option value="Male">Male</option>
+                    <option value="Female">Female</option>
+                </select>
                 <select id="createStudentDepartment" onchange="loadCreateStudentMajors()"><option value="">Select Department</option></select>
                 <select id="createStudentYear" onchange="loadCreateStudentSections()">
                     <option value="">Select Year</option><option>1st Year</option><option>2nd Year</option><option>3rd Year</option><option>4th Year</option>
@@ -2084,6 +2089,12 @@ onchange="loadSubjectsForTeacherAssign()">
                 <input id="editStudentMiddleInitial" type="text">
                 <label for="editStudentLastName">Last name</label>
                 <input id="editStudentLastName" type="text">
+                <label for="editStudentGender">Gender</label>
+                <select id="editStudentGender" required>
+                    <option value="">Select Gender</option>
+                    <option value="Male">Male</option>
+                    <option value="Female">Female</option>
+                </select>
                 <label for="editStudentEmail">Email (leave empty if not enrolled yet)</label>
                 <input id="editStudentEmail" type="email">
                 <select id="editStudentDepartment" onchange="loadEditStudentMajors()"><option value="">Select Department</option></select>
@@ -7306,6 +7317,7 @@ async function loadStudentsBySection() {
                 first_name,
                 middle_initial,
                 last_name,
+                gender,
                 users!students_user_id_fkey (
                     user_id,
                     email,
@@ -7360,8 +7372,18 @@ async function loadStudentsBySection() {
     }
 
     table.innerHTML = '';
+    const genderGroups = [
+        ['Male', data.filter(student => student.gender === 'Male')],
+        ['Female', data.filter(student => student.gender === 'Female')],
+        ['Gender Not Set', data.filter(student => !['Male', 'Female'].includes(student.gender))],
+    ];
 
-    data.forEach(student => {
+    genderGroups.forEach(([genderLabel, students]) => {
+        if (!students.length) return;
+        table.innerHTML += `<tr class="student-gender-heading"><td colspan="4"><strong>${genderLabel}</strong></td></tr>`;
+        students.sort((first, second) =>
+            `${first.last_name || ''}, ${first.first_name || ''}`.localeCompare(`${second.last_name || ''}, ${second.first_name || ''}`, undefined, { sensitivity: 'base' })
+        ).forEach(student => {
 
         const fullName = formatName(
             student.first_name,
@@ -7395,6 +7417,7 @@ async function loadStudentsBySection() {
 
         `;
 
+        });
     });
 
 }
@@ -7424,6 +7447,7 @@ function openCreateStudentModal() {
     document.getElementById('createStudentFirstName').value = '';
     document.getElementById('createStudentMiddleInitial').value = '';
     document.getElementById('createStudentLastName').value = '';
+    document.getElementById('createStudentGender').value = '';
     document.getElementById('createStudentDepartment').innerHTML = '<option value="">Select Department</option>';
     document.getElementById('createStudentYear').value = '';
     document.getElementById('createStudentMajor').innerHTML = '<option value="">Select Major</option>';
@@ -7477,6 +7501,7 @@ async function createStudentAccount() {
             first_name: document.getElementById('createStudentFirstName').value.trim(),
             middle_initial: document.getElementById('createStudentMiddleInitial').value.trim(),
             last_name: document.getElementById('createStudentLastName').value.trim(),
+            gender: document.getElementById('createStudentGender').value,
             department_id: document.getElementById('createStudentDepartment').value,
             major_id: document.getElementById('createStudentMajor').value,
             year_level: document.getElementById('createStudentYear').value,
@@ -7486,6 +7511,7 @@ async function createStudentAccount() {
         document.getElementById('createStudentFirstName').value = '';
         document.getElementById('createStudentMiddleInitial').value = '';
         document.getElementById('createStudentLastName').value = '';
+        document.getElementById('createStudentGender').value = '';
         document.getElementById('createdStudentLoginId').textContent = result.login_id;
         document.getElementById('createdStudentPassword').textContent = result.temporary_password;
         document.getElementById('createdStudentCredentials').style.display = 'block';
@@ -7519,7 +7545,7 @@ async function openEditStudentModal(studentId) {
     try {
         const { data: student, error } = await supabaseClient
             .from('students')
-            .select('student_id, student_number, first_name, middle_initial, last_name, section_id, users!students_user_id_fkey(email), sections(section_id, year_level, major_id, majors(department_id))')
+            .select('student_id, student_number, first_name, middle_initial, last_name, gender, section_id, users!students_user_id_fkey(email), sections(section_id, year_level, major_id, majors(department_id))')
             .eq('student_id', studentId)
             .single();
         if (error) throw error;
@@ -7529,6 +7555,7 @@ async function openEditStudentModal(studentId) {
         document.getElementById('editStudentFirstName').value = student.first_name || '';
         document.getElementById('editStudentMiddleInitial').value = student.middle_initial || '';
         document.getElementById('editStudentLastName').value = student.last_name || '';
+        document.getElementById('editStudentGender').value = student.gender || '';
         document.getElementById('editStudentEmail').value = student.users?.email?.endsWith('@accounts.tcc.invalid') ? '' : (student.users?.email || '');
 
         const departmentSelect = document.getElementById('editStudentDepartment');
@@ -7614,6 +7641,7 @@ async function saveStudentEdits() {
             first_name: document.getElementById('editStudentFirstName').value.trim(),
             middle_initial: document.getElementById('editStudentMiddleInitial').value.trim(),
             last_name: document.getElementById('editStudentLastName').value.trim(),
+            gender: document.getElementById('editStudentGender').value,
             email: document.getElementById('editStudentEmail').value.trim(),
             department_id: document.getElementById('editStudentDepartment').value || null,
             major_id: document.getElementById('editStudentMajor').value || null,
@@ -8201,6 +8229,7 @@ function filterStudentsTable() {
         table.getElementsByTagName('tr');
 
     for (let i = 0; i < rows.length; i++) {
+        if (rows[i].classList.contains('student-gender-heading')) continue;
 
         const fullnameCell =
             rows[i].getElementsByTagName('td')[1];
@@ -8225,6 +8254,18 @@ function filterStudentsTable() {
 
         }
 
+    }
+
+    for (let i = 0; i < rows.length; i++) {
+        if (!rows[i].classList.contains('student-gender-heading')) continue;
+        let hasVisibleStudent = false;
+        for (let next = i + 1; next < rows.length && !rows[next].classList.contains('student-gender-heading'); next++) {
+            if (rows[next].style.display !== 'none') {
+                hasVisibleStudent = true;
+                break;
+            }
+        }
+        rows[i].style.display = hasVisibleStudent ? '' : 'none';
     }
 
 }

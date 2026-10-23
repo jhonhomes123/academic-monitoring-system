@@ -1099,7 +1099,18 @@ Select Subject and Section
                     .eq('teacher_id', teacherId);
 
                 let html = '';
-                for (const student of students) {
+                const genderGroups = [
+                    ['Male', students.filter(student => student.gender === 'Male')],
+                    ['Female', students.filter(student => student.gender === 'Female')],
+                    ['Gender Not Set', students.filter(student => !['Male', 'Female'].includes(student.gender))]
+                ];
+                for (const [gender, group] of genderGroups) {
+                    if (!group.length) continue;
+                    html += `<tr class="student-gender-heading"><td colspan="3"><strong>${gender}</strong></td></tr>`;
+                    group.sort((first, second) =>
+                        `${first.last_name || ''}, ${first.first_name || ''}`.localeCompare(`${second.last_name || ''}, ${second.first_name || ''}`, undefined, { sensitivity: 'base' })
+                    );
+                    for (const student of group) {
                     const { data: requirements } = await supabaseClient
                         .from('student_requirements')
                         .select('*')
@@ -1161,6 +1172,7 @@ Select Subject and Section
                                 </div>
                             </td>
                         </tr>`;
+                    }
                 }
 
                 studentsTable.innerHTML = html;

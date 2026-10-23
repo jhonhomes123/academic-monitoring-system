@@ -968,6 +968,7 @@ async function loadStudents(){
         first_name,
         middle_initial,
         last_name,
+        gender,
         sections(
             section_name
         )
@@ -994,7 +995,23 @@ async function loadStudents(){
 
     }
 
-    for(const student of students){
+    const orderedStudents = [
+        ['Male', students.filter(student => student.gender === 'Male')],
+        ['Female', students.filter(student => student.gender === 'Female')],
+        ['Gender Not Set', students.filter(student => !['Male', 'Female'].includes(student.gender))]
+    ].flatMap(([gender, group]) => [
+        ...(group.length ? [{ genderHeader: gender }] : []),
+        ...group.sort((first, second) =>
+            `${first.last_name || ''}, ${first.first_name || ''}`.localeCompare(`${second.last_name || ''}, ${second.first_name || ''}`, undefined, { sensitivity: 'base' })
+        )
+    ]);
+
+    for(const student of orderedStudents){
+
+        if (student.genderHeader) {
+            tableBody.innerHTML += `<tr class="student-gender-heading"><td colspan="3"><strong>${student.genderHeader}</strong></td></tr>`;
+            continue;
+        }
 
         /* GET STATUS FROM student_grades */
 
