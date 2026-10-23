@@ -2006,6 +2006,10 @@ onchange="loadSubjectsForTeacherAssign()">
                         </th>
 
                         <th>
+                            Gender
+                        </th>
+
+                        <th>
                             Email
                         </th>
 
@@ -2021,7 +2025,7 @@ onchange="loadSubjectsForTeacherAssign()">
 
                     <tr>
 
-                        <td colspan="4">
+                        <td colspan="5">
 
                             No students loaded
 
@@ -7270,7 +7274,7 @@ async function loadStudentsBySection() {
 
         <tr>
 
-            <td colspan="4">
+            <td colspan="5">
 
                 No section selected
 
@@ -7288,7 +7292,7 @@ async function loadStudentsBySection() {
 
     <tr>
 
-        <td colspan="4">
+        <td colspan="5">
 
             Loading students...
 
@@ -7306,6 +7310,7 @@ async function loadStudentsBySection() {
                 first_name,
                 middle_initial,
                 last_name,
+                gender,
                 users!students_user_id_fkey (
                     user_id,
                     email,
@@ -7325,7 +7330,7 @@ async function loadStudentsBySection() {
 
         <tr>
 
-            <td colspan="4">
+            <td colspan="5">
 
                 Failed loading students
 
@@ -7345,7 +7350,7 @@ async function loadStudentsBySection() {
 
         <tr>
 
-            <td colspan="4">
+            <td colspan="5">
 
                 No students found
 
@@ -7360,8 +7365,18 @@ async function loadStudentsBySection() {
     }
 
     table.innerHTML = '';
+    const genderGroups = [
+        ['Male', data.filter(student => student.gender === 'Male')],
+        ['Female', data.filter(student => student.gender === 'Female')],
+        ['Gender Not Set', data.filter(student => !['Male', 'Female'].includes(student.gender))],
+    ];
 
-    data.forEach(student => {
+    genderGroups.forEach(([genderLabel, students]) => {
+        if (!students.length) return;
+        table.innerHTML += `<tr class="student-gender-heading"><td colspan="5"><strong>${genderLabel}</strong></td></tr>`;
+        students.sort((first, second) =>
+            `${first.last_name || ''}, ${first.first_name || ''}`.localeCompare(`${second.last_name || ''}, ${second.first_name || ''}`, undefined, { sensitivity: 'base' })
+        ).forEach(student => {
 
         const fullName = formatName(
             student.first_name,
@@ -7381,6 +7396,8 @@ async function loadStudentsBySection() {
                 ${fullName}
             </td>
 
+            <td>${student.gender || 'Not Set'}</td>
+
             <td>${student.users?.email?.endsWith('@accounts.tcc.invalid') ? 'Email not added yet' : (student.users?.email || 'N/A')}</td>
 
             <td>
@@ -7395,6 +7412,7 @@ async function loadStudentsBySection() {
 
         `;
 
+        });
     });
 
 }
