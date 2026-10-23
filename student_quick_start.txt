@@ -1,0 +1,49 @@
+TALISAY CITY COLLEGE
+ACADEMIC MONITORING SYSTEM
+STUDENT QUICK-START GUIDE
+
+FIRST-TIME SIGN-IN
+
+1. Get your sign-in details from the administrator.
+   You will need your Student ID and temporary password. The administrator has entered your name and enrollment (department, major, year, and section). Keep those details for reference; the setup page will not display them.
+
+2. Open the Academic Monitoring System.
+   Visit https://academic-monitoring-system.vercel.app
+
+3. Open the Student Portal.
+   Select Login under Student Portal.
+
+4. Sign in with your Student ID and temporary password.
+   Enter your Student ID in the Student ID field. Do not use your Gmail address as your login ID.
+
+5. Complete first-time setup.
+   Enter your contact Gmail address, choose a new password with at least 8 characters, and confirm the password. Your department, major, year, and section were already entered by the administrator and are not part of this form. If you are unsure of your assigned enrollment, ask the administrator before continuing.
+
+6. Sign in again.
+   Return to the login page and sign in using your Student ID and the new password you just created.
+
+STUDENT PORTAL NAVIGATION
+
+Dashboard
+See a summary of your enrolled subjects and overall academic status. The dashboard also shows recent missing requirements, including their subject, requirement title, and deadline.
+
+My Subjects
+See subjects for the active semester, including subject codes and the instructor assigned to your section.
+
+Academic Status
+Review your recorded grades and status for each subject across Prelim, Midterm, and Final. A Pending status means a result has not been recorded yet.
+
+Missing Requirements
+See requirements assigned to you, grouped by subject. Each item may include its instructions or description, deadline, and teacher-provided attachment. Check this page regularly and follow the instructions for each requirement.
+
+Profile
+Check your Student ID, course or major, year and section, and contact email saved to your account. Contact the administrator if any of your enrollment information is incorrect.
+
+Logout
+Select Logout when you finish, especially when using a shared or public device.
+
+PASSWORD OR SIGN-IN HELP
+
+If your temporary password does not work, you cannot access the Gmail address on your account, or you forget your password, contact the administrator. The administrator can verify your account and issue a new temporary password. After an administrator reset, sign in with your Student ID and temporary password, then choose a new password when prompted.
+
+Keep your password private. Do not share it with other students.

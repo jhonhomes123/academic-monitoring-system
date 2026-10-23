@@ -637,6 +637,10 @@ async function loadYears(){
 
 }
 
+yearFilter.addEventListener('change', async () => {
+    await loadDepartments(yearFilter.value);
+});
+
 /* =====================================================
 DEPARTMENTS
 ===================================================== */
