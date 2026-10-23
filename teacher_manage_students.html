@@ -984,13 +984,11 @@ async function loadStudents(){
 
     tableBody.innerHTML = "";
 
-    if(students.length === 0){
-
+    if(!students.length){
         tableBody.innerHTML = `
         <tr>
-            <td colspan="3" class="empty">
-                No students found
-        `;
+            <td colspan="3" class="empty">No students found</td>
+        </tr>`;
 
         return;
 
@@ -1027,8 +1025,16 @@ async function loadStudents(){
             ["Midterm", termStatus(grade?.midterm_status)],
             ["Final", termStatus(grade?.final_status)]
         ];
+        const statusParams = new URLSearchParams({
+            student_id: String(student.student_id),
+            year: yearFilter.value,
+            department_id: departmentFilter.value,
+            major_id: majorFilter.value,
+            subject_id: subjectFilter.value,
+            section_id: sectionFilter.value
+        });
         const statusHtml = termStatuses
-            .map(([term, status]) => `<div><strong>${term}:</strong> <span class="${statusClass(status)}">${status}</span></div>`)
+            .map(([term, status]) => `<div><a class="${statusClass(status)}" href="teacher_student_status.html?${statusParams.toString()}&term=${encodeURIComponent(term.toLowerCase())}" title="Open ${term} status and grades for this student"><strong>${term}:</strong> ${status}</a></div>`)
             .join("");
 
         const fullName = formatStudentTableName(student);

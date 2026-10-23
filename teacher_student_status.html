@@ -544,6 +544,11 @@ table select{
 
 }
 /*-----------------------------------------------*/
+.selected-student-row td{
+    background:#eaf1ff;
+    outline:2px solid #1f6bff;
+    outline-offset:-2px;
+}
 </style>
 <link rel="stylesheet" href="mobile_fix.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -945,6 +950,9 @@ async function getActiveSubjectIds(){
 
 let teacherId = null;
 let teacherUserId = null;
+const statusRouteParams = new URLSearchParams(window.location.search);
+const targetStudentId = statusRouteParams.get('student_id');
+const targetTerm = statusRouteParams.get('term');
 
 function formatStudentTableName(student) {
     const middleInitial = String(student.middle_initial || '').trim();
@@ -991,6 +999,7 @@ async function initialize(){
     await loadTeacher();
 
     await loadYears();
+    await applyStatusRoute();
 
 }
 
@@ -1304,52 +1313,52 @@ SUBJECT CHANGE
 subjectFilter.addEventListener(
 "change",
 async()=>{
-
-    sectionFilter.innerHTML =
-    `<option value="">
-    Select Section
-    </option>`;
-
-    const { data } =
-    await supabaseClient
-
-    .from("teacher_subject_assignments")
-
-    .select(`
-        assignment_id,
-        teacher_section_assignments(
-            section_id,
-            sections(
-                section_id,
-                section_name
-            )
-        )
-    `)
-
-    .eq("teacher_id",teacherId)
-
-    .eq(
-        "subject_id",
-        subjectFilter.value
-    );
-
-    data.forEach(assign=>{
-
-        assign
-        .teacher_section_assignments
-        .forEach(sec=>{
-
-            sectionFilter.innerHTML += `
-            <option value="${sec.sections.section_id}">
-                ${sec.sections.section_name}
-            </option>
-            `;
-
-        });
-
-    });
-
+    await loadSectionsForSubject(subjectFilter.value);
 });
+
+async function loadSectionsForSubject(subjectId){
+    sectionFilter.innerHTML='<option value="">Select Section</option>';
+    if(!teacherId||!subjectId) return;
+
+    const {data,error}=await supabaseClient
+        .from('teacher_subject_assignments')
+        .select('assignment_id, teacher_section_assignments(section_id, sections(section_id, section_name))')
+        .eq('teacher_id',teacherId)
+        .eq('subject_id',subjectId);
+    if(error){
+        console.error(error);
+        return;
+    }
+
+    const sections=new Map();
+    (data||[]).forEach(assign=>{
+        (assign.teacher_section_assignments||[]).forEach(sectionAssignment=>{
+            const section=sectionAssignment.sections;
+            if(section) sections.set(String(section.section_id),section);
+        });
+    });
+    sections.forEach(section=>sectionFilter.add(new Option(section.section_name,section.section_id)));
+}
+
+async function applyStatusRoute(){
+    const year=statusRouteParams.get('year');
+    const departmentId=statusRouteParams.get('department_id');
+    const majorId=statusRouteParams.get('major_id');
+    const subjectId=statusRouteParams.get('subject_id');
+    const sectionId=statusRouteParams.get('section_id');
+    if(!year||!departmentId||!majorId||!subjectId||!sectionId) return;
+
+    yearFilter.value=year;
+    await loadDepartments(year);
+    departmentFilter.value=departmentId;
+    await loadMajors(departmentId);
+    majorFilter.value=majorId;
+    await loadSubjects(majorId);
+    subjectFilter.value=subjectId;
+    await loadSectionsForSubject(subjectId);
+    sectionFilter.value=sectionId;
+    if(sectionFilter.value) await loadStudents();
+}
 
 /* ==================================================
 LOAD STUDENTS
@@ -1437,7 +1446,7 @@ async function loadStudents(){
 
         tableBody.innerHTML += `
 
-        <tr>
+        <tr id="student-row-${student.student_id}" class="${String(student.student_id)===String(targetStudentId)?'selected-student-row':''}">
 
         <td>${formatStudentTableName(student)}</td>
 
@@ -1484,6 +1493,17 @@ onclick="saveGrade(${student.student_id})">
 
         `;
 
+    }
+
+    if(targetStudentId){
+        const target=document.getElementById(`student-row-${targetStudentId}`);
+        if(target){
+            const termControl=targetTerm
+                ? document.getElementById(`${targetTerm}-status-${targetStudentId}`)
+                : null;
+            (termControl||target).scrollIntoView({behavior:'smooth',block:'center'});
+            if(termControl) termControl.focus({preventScroll:true});
+        }
     }
 
 }
