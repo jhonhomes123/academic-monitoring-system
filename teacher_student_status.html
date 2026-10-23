@@ -1382,6 +1382,8 @@ async function loadStudents(){
         !subjectId
     ) return;
 
+    tableBody.innerHTML = '<tr><td colspan="5" class="empty">Loading students...</td></tr>';
+
     const { data:students }
     =
     await supabaseClient
@@ -1423,6 +1425,20 @@ async function loadStudents(){
         return;
     }
 
+    const { data: grades, error: gradesError } = await supabaseClient
+        .from("student_grades")
+        .select("student_id, prelim, midterm, final, prelim_status, midterm_status, final_status, status")
+        .eq("subject_id", subjectId)
+        .in("student_id", students.map(student => student.student_id));
+
+    if (gradesError) {
+        tableBody.innerHTML = '<tr><td colspan="5" class="empty">Unable to load student grades</td></tr>';
+        console.error('Unable to load student grades', gradesError);
+        return;
+    }
+
+    const gradesByStudent = new Map((grades || []).map(grade => [String(grade.student_id), grade]));
+
     const orderedStudents = [
         ['Male', students.filter(student => student.gender === 'Male')],
         ['Female', students.filter(student => student.gender === 'Female')],
@@ -1441,25 +1457,7 @@ async function loadStudents(){
             continue;
         }
 
-        const { data:grade }
-        =
-        await supabaseClient
-
-        .from("student_grades")
-
-        .select("*")
-
-        .eq(
-            "student_id",
-            student.student_id
-        )
-
-        .eq(
-            "subject_id",
-            subjectId
-        )
-
-        .maybeSingle();
+        const grade = gradesByStudent.get(String(student.student_id));
 
         tableBody.innerHTML += `
 
