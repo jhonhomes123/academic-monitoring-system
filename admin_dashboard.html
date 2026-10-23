@@ -5380,6 +5380,7 @@ async function loadDepartmentDeleteOptions() {
     );
 
 }
+
     async function deleteDepartment() {
 
     const id =
@@ -5429,18 +5430,9 @@ async function loadDepartmentDeleteOptions() {
 
         async () => {
 
-            /* ======================
-               DELETE DEPARTMENT
-            ====================== */
-
-            const { error } =
-                await supabaseClient
-                    .from('departments')
-                    .delete()
-                    .eq(
-                        'department_id',
-                        id
-                    );
+            const { error } = await supabaseClient.rpc('admin_delete_department', {
+                p_department_id: id,
+            });
 
             /* ERROR */
 
@@ -5614,18 +5606,9 @@ async function loadDepartmentDeleteOptions() {
 
         async () => {
 
-            /* ======================
-               DELETE MAJOR
-            ====================== */
-
-            const { error } =
-                await supabaseClient
-                    .from('majors')
-                    .delete()
-                    .eq(
-                        'major_id',
-                        id
-                    );
+            const { error } = await supabaseClient.rpc('admin_delete_major', {
+                p_major_id: id,
+            });
 
             /* ERROR */
 
@@ -5892,18 +5875,9 @@ async function loadDepartmentDeleteOptions() {
 
         async () => {
 
-            /* ======================
-               DELETE SECTION
-            ====================== */
-
-            const { error } =
-                await supabaseClient
-                    .from('sections')
-                    .delete()
-                    .eq(
-                        'section_id',
-                        id
-                    );
+            const { error } = await supabaseClient.rpc('admin_delete_section', {
+                p_section_id: id,
+            });
 
             /* ERROR */
 
@@ -6202,18 +6176,9 @@ async function loadSubjectsForDelete() {
 
         async () => {
 
-            /* ======================
-               DELETE SUBJECT
-            ====================== */
-
-            const { error } =
-                await supabaseClient
-                    .from('subjects')
-                    .delete()
-                    .eq(
-                        'subject_id',
-                        id
-                    );
+            const { error } = await supabaseClient.rpc('admin_delete_subject', {
+                p_subject_id: Number(id),
+            });
 
             /* ERROR */
 
