@@ -2009,10 +2009,6 @@ onchange="loadSubjectsForTeacherAssign()">
                         </th>
 
                         <th>
-                            Gender
-                        </th>
-
-                        <th>
                             Email
                         </th>
 
@@ -2028,7 +2024,7 @@ onchange="loadSubjectsForTeacherAssign()">
 
                     <tr>
 
-                        <td colspan="5">
+                        <td colspan="4">
 
                             No students loaded
 
@@ -7288,7 +7284,7 @@ async function loadStudentsBySection() {
 
         <tr>
 
-            <td colspan="5">
+            <td colspan="4">
 
                 No section selected
 
@@ -7306,7 +7302,7 @@ async function loadStudentsBySection() {
 
     <tr>
 
-        <td colspan="5">
+        <td colspan="4">
 
             Loading students...
 
@@ -7344,7 +7340,7 @@ async function loadStudentsBySection() {
 
         <tr>
 
-            <td colspan="5">
+            <td colspan="4">
 
                 Failed loading students
 
@@ -7364,7 +7360,7 @@ async function loadStudentsBySection() {
 
         <tr>
 
-            <td colspan="5">
+            <td colspan="4">
 
                 No students found
 
@@ -7387,7 +7383,7 @@ async function loadStudentsBySection() {
 
     genderGroups.forEach(([genderLabel, students]) => {
         if (!students.length) return;
-        table.innerHTML += `<tr class="student-gender-heading"><td colspan="5"><strong>${genderLabel}</strong></td></tr>`;
+        table.innerHTML += `<tr class="student-gender-heading"><td colspan="4"><strong>${genderLabel}</strong></td></tr>`;
         students.sort((first, second) =>
             `${first.last_name || ''}, ${first.first_name || ''}`.localeCompare(`${second.last_name || ''}, ${second.first_name || ''}`, undefined, { sensitivity: 'base' })
         ).forEach(student => {
@@ -7409,8 +7405,6 @@ async function loadStudentsBySection() {
             <td>
                 ${fullName}
             </td>
-
-            <td>${student.gender || 'Not Set'}</td>
 
             <td>${student.users?.email?.endsWith('@accounts.tcc.invalid') ? 'Email not added yet' : (student.users?.email || 'N/A')}</td>
 
