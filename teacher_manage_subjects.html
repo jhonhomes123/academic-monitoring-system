@@ -768,7 +768,6 @@ Select Subject and Section
                                 <thead>
                                     <tr>
                                         <th style="width:44px;">Select</th>
-                                        <th>Student ID</th>
                                         <th>Student Name</th>
                                     </tr>
                                 </thead>
@@ -1102,12 +1101,32 @@ Select Subject and Section
 
                 currentRequirementStudents = students;
 
-                // fetch instructor uploaded files for this subject (once)
-                const { data: uploadedFiles } = await supabaseClient
-                    .from('subject_instruction_files')
-                    .select('*')
-                    .eq('subject_id', subjectId)
-                    .eq('teacher_id', teacherId);
+                const studentIds = students.map(student => student.student_id);
+                const [requirementsResult, filesResult] = await Promise.all([
+                    supabaseClient
+                        .from('student_requirements')
+                        .select('*')
+                        .eq('subject_id', subjectId)
+                        .in('student_id', studentIds),
+                    supabaseClient
+                        .from('subject_instruction_files')
+                        .select('*')
+                        .eq('subject_id', subjectId)
+                        .eq('teacher_id', teacherId)
+                ]);
+
+                if (requirementsResult.error || filesResult.error) {
+                    currentRequirementStudents = [];
+                    return showAlert('error', 'Error', requirementsResult.error?.message || filesResult.error?.message || 'Unable to load student requirements.');
+                }
+
+                const requirementsByStudent = new Map();
+                (requirementsResult.data || []).forEach(requirement => {
+                    const studentRequirements = requirementsByStudent.get(String(requirement.student_id)) || [];
+                    studentRequirements.push(requirement);
+                    requirementsByStudent.set(String(requirement.student_id), studentRequirements);
+                });
+                const uploadedFiles = filesResult.data || [];
 
                 let html = '';
                 const genderGroups = [
@@ -1122,11 +1141,7 @@ Select Subject and Section
                         `${first.last_name || ''}, ${first.first_name || ''}`.localeCompare(`${second.last_name || ''}, ${second.first_name || ''}`, undefined, { sensitivity: 'base' })
                     );
                     for (const student of group) {
-                    const { data: requirements } = await supabaseClient
-                        .from('student_requirements')
-                        .select('*')
-                        .eq('student_id', student.student_id)
-                        .eq('subject_id', subjectId);
+                    const requirements = requirementsByStudent.get(String(student.student_id)) || [];
 
                     const requirementList = requirements?.length
                         ? requirements.map(r => {
@@ -1672,15 +1687,12 @@ Select Subject and Section
                     checkboxCell.style.textAlign = 'center';
                     checkboxCell.appendChild(checkbox);
 
-                    const idCell = document.createElement('td');
-                    idCell.textContent = student.student_number || 'N/A';
-
                     const nameCell = document.createElement('td');
                     const name = document.createElement('span');
                     name.textContent = formatPersonTableName(student);
                     nameCell.appendChild(name);
 
-                    row.append(checkboxCell, idCell, nameCell);
+                    row.append(checkboxCell, nameCell);
                     list.appendChild(row);
                 });
 
