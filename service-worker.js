@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ams-student-shell-v3';
+const CACHE_NAME = 'ams-student-shell-v4';
 const APP_FILES = [
     './student_dashboard.html',
     './student_subjects.html',
@@ -48,6 +48,7 @@ self.addEventListener('fetch', event => {
     const requestUrl = new URL(request.url);
     const sameOrigin = requestUrl.origin === self.location.origin;
     const isStudentPage = sameOrigin && /\/student_(dashboard|subjects|academic|requirements|profile)\.html$/.test(requestUrl.pathname);
+    const isMobileStylesheet = sameOrigin && requestUrl.pathname.endsWith('/mobile_fix.css');
     const isLocalAsset = sameOrigin && /\/(auth-session\.js|student-offline\.js|mobile_fix\.css|school_logo\.png)$/.test(requestUrl.pathname);
     const isApprovedCdnAsset = !sameOrigin && CACHEABLE_CDN_HOSTS.has(requestUrl.hostname)
         && (request.destination === 'script' || request.destination === 'style' || request.destination === 'font');
@@ -56,6 +57,22 @@ self.addEventListener('fetch', event => {
 
     event.respondWith((async () => {
         const cache = await caches.open(CACHE_NAME);
+        if (isMobileStylesheet) {
+            try {
+                const freshResponse = await fetch(request);
+                if (freshResponse.ok) {
+                    await cache.put(request, freshResponse.clone());
+                    return freshResponse;
+                }
+            } catch (error) {
+                console.warn('Using the cached mobile stylesheet while offline.', error);
+            }
+
+            const cachedStylesheet = await cache.match(request);
+            if (cachedStylesheet) return cachedStylesheet;
+            throw new Error('The mobile stylesheet is unavailable offline.');
+        }
+
         const cached = await cache.match(request);
         if (cached) {
             if (isStudentPage || isApprovedCdnAsset) {
