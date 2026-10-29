@@ -10670,9 +10670,9 @@ function showConfirmModal(
         'confirmMessage'
     ).innerText = message;
 
-    document.getElementById(
-        'confirmModal'
-    ).classList.add('show');
+    const confirmModal = document.getElementById('confirmModal');
+    confirmModal.style.display = 'flex';
+    confirmModal.classList.add('show');
 
     document.getElementById(
         'confirmActionBtn'
@@ -10690,9 +10690,9 @@ function showConfirmModal(
 
 function closeConfirmModal(){
 
-    document.getElementById(
-        'confirmModal'
-    ).classList.remove('show');
+    const confirmModal = document.getElementById('confirmModal');
+    confirmModal.classList.remove('show');
+    confirmModal.style.display = '';
 
 }
 </script>
