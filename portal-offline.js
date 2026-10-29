@@ -221,7 +221,13 @@
             transaction.onerror = () => reject(transaction.error || new Error('Unable to queue this change on the device.'));
         });
         const pending = await getTeacherQueue(client);
-        const changeLabel = type === 'grade' ? 'Grade' : type === 'attachment' ? 'Attachment' : 'Requirement';
+        const changeLabel = type === 'grade'
+            ? 'Grade'
+            : type === 'attachment'
+                ? 'Attachment'
+                : type === 'requirement_delete'
+                    ? 'Delete'
+                    : 'Requirement';
         setNotice(`${changeLabel} saved on this device. ${pending.length} change${pending.length === 1 ? '' : 's'} waiting to sync.`, true, 'sync');
         if (window.currentOfflineRole === 'teacher' && window.currentStudentOfflinePage) {
             await applyQueuedTeacherOperations(client, window.currentStudentOfflinePage, document.querySelector('.main'));
@@ -735,6 +741,11 @@
                     pending.style.cssText = 'margin:6px 0;padding:7px 9px;border-left:3px solid #d97706;background:#fffbeb;color:#92400e;font-size:12px;';
                     cell.appendChild(pending);
                 });
+            }
+            if (operation.type === 'requirement_delete' && pageKey === 'subjects') {
+                const currentSubject = container.querySelector('#subjectSelect')?.value;
+                if (String(currentSubject) !== String(payload.subject_id)) continue;
+                container.querySelectorAll(`[data-requirement-id="${payload.requirement_id}"]`).forEach(element => element.remove());
             }
         }
     }

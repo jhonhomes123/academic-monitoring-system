@@ -1186,7 +1186,7 @@ Select Subject and Section
                                         ${requirementFiles.map(f => `<div style="margin-bottom:6px;"><a href="${f.file_url}" target="_blank" style="color:#2563eb; text-decoration:none;">📎 ${f.file_name}</a></div>`).join('')}
                                     </div>`
                                 : '';
-                            return `<div style="margin-bottom:10px; padding:12px; background-color:#f1f5f9; border-radius:8px; border:1px solid #dbe4f0;">
+                            return `<div data-requirement-id="${r.requirement_id}" style="margin-bottom:10px; padding:12px; background-color:#f1f5f9; border-radius:8px; border:1px solid #dbe4f0;">
                                         <div style="display:flex; justify-content:space-between; align-items:start; gap:10px;">
                                             <div style="flex:1; min-width:0;">
                                                 <strong>${r.requirement_title}</strong>
@@ -1194,7 +1194,7 @@ Select Subject and Section
                                                 ${deadlineText}
                                                 ${requirementFilesHtml}
                                             </div>
-                                            <button class="btn btn-danger" onclick="deleteRequirement(${r.requirement_id})" style="margin-left:10px; white-space:nowrap; padding:6px 12px; font-size:12px;">Delete</button>
+                                            <button class="btn btn-danger" data-requirement-id="${r.requirement_id}" onclick="deleteRequirement(${r.requirement_id})" style="margin-left:10px; white-space:nowrap; padding:6px 12px; font-size:12px;">Delete</button>
                                         </div>
                                     </div>`;
                         }).join('')
@@ -1359,6 +1359,24 @@ Select Subject and Section
 
             async function deleteRequirement(requirementId) {
                 showConfirmModal('Delete', 'Delete this requirement and its files?', async () => {
+                    if (!navigator.onLine) {
+                        try {
+                            const requirement = (requirements || []).find(item => String(item.requirement_id) === String(requirementId));
+                            await queueTeacherOperation(supabaseClient, 'requirement_delete', {
+                                requirement_id: Number(requirementId),
+                                subject_id: Number(requirement?.subject_id || selectedSubjectId || document.getElementById('subjectSelect').value),
+                                teacher_id: Number(teacherId)
+                            });
+                            document.querySelectorAll(`[data-requirement-id="${requirementId}"]`).forEach(element => element.remove());
+                            showAlert('success', 'Queued Offline', 'Requirement delete saved on this device and will sync when online.');
+                            closeConfirmModal();
+                            return;
+                        } catch (queueError) {
+                            closeConfirmModal();
+                            return showAlert('error', 'Offline Delete Failed', queueError.message || 'Unable to save this delete on the device.');
+                        }
+                    }
+
                     const { error: requirementError } = await supabaseClient
                         .from('student_requirements')
                         .delete()
