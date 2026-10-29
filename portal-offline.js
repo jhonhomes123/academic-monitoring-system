@@ -645,7 +645,7 @@
             return filterIds.slice(0, changedIndex).every(id => saved[id] === (id === changedFilterId ? changedValue : currentValues[id]));
         }).sort((first, second) => Date.parse(second.savedAt) - Date.parse(first.savedAt));
         const snapshot = candidates[0];
-        if (!snapshot) return false;
+        if (!snapshot || !snapshot.filterState) return false;
 
         const main = document.querySelector('.main');
         if (!main) return false;
