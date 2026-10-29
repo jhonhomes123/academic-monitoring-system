@@ -263,7 +263,7 @@
         if (!currentUserId || !main) return false;
         const snapshotMain = main.cloneNode(true);
         snapshotMain.querySelectorAll('.modal,.modal-overlay,.confirm-modal-overlay,.ams-alert').forEach(element => {
-            if (!['createStudentModal', 'createTeacherModal', 'departmentModal', 'majorModal', 'sectionModal', 'subjectModal', 'deleteDepartmentModal', 'deleteMajorModal', 'deleteSectionModal', 'deleteSubjectModal'].includes(element.id)) {
+            if (!['createStudentModal', 'createTeacherModal', 'departmentModal', 'majorModal', 'sectionModal', 'subjectModal', 'deleteDepartmentModal', 'deleteMajorModal', 'deleteSectionModal', 'deleteSubjectModal', 'teacherAssignModal', 'teacherSectionModal'].includes(element.id)) {
                 element.remove();
                 return;
             }
@@ -321,11 +321,11 @@
                 modal.classList.remove('show');
             });
             document.querySelectorAll('input,select,textarea,button').forEach(control => {
-                const inAllowedModal = control.closest('#createStudentModal,#createTeacherModal,#departmentModal,#majorModal,#sectionModal,#subjectModal,#deleteDepartmentModal,#deleteMajorModal,#deleteSectionModal,#deleteSubjectModal');
+                const inAllowedModal = control.closest('#createStudentModal,#createTeacherModal,#departmentModal,#majorModal,#sectionModal,#subjectModal,#deleteDepartmentModal,#deleteMajorModal,#deleteSectionModal,#deleteSubjectModal,#teacherAssignModal,#teacherSectionModal');
                 const opensAllowedModal = control.matches('button')
-                    && /openCreateStudentModal|openCreateTeacherModal|openDepartmentModal|openMajorModal|openSectionModal|openSubjectModal|openDeleteDepartmentModal|openDeleteMajorModal|openDeleteSectionModal|openDeleteSubjectModal/.test(control.getAttribute('onclick') || '');
+                    && /openCreateStudentModal|openCreateTeacherModal|openDepartmentModal|openMajorModal|openSectionModal|openSubjectModal|openDeleteDepartmentModal|openDeleteMajorModal|openDeleteSectionModal|openDeleteSubjectModal|openTeacherAssignModal|openAddSectionModal/.test(control.getAttribute('onclick') || '');
                 const isAllowedOfflineAction = control.matches('button')
-                    && /createStudentAccount|createTeacherAccount|addDepartment|addMajor|addSection|addSubject|setActiveSemester|deleteDepartment|deleteMajor|deleteSectionModalAction|deleteSubject|closeCreateStudentModal|closeModal|closeDepartmentModal|closeMajorModal|closeSectionModal|closeSubjectModal|closeDeleteDepartmentModal|closeDeleteMajorModal|closeDeleteSectionModal|closeDeleteSubjectModal|loadDepartmentDeleteOptions|loadMajorsForDelete|loadMajorsForDeleteSection|loadSectionsForDelete|loadMajorsForDeleteSubject|loadSubjectsForDelete/.test(control.getAttribute('onclick') || '');
+                    && /createStudentAccount|createTeacherAccount|addDepartment|addMajor|addSection|addSubject|setActiveSemester|deleteDepartment|deleteMajor|deleteSectionModalAction|deleteSubject|assignTeacherToSubject|saveTeacherSection|closeCreateStudentModal|closeModal|closeDepartmentModal|closeMajorModal|closeSectionModal|closeSubjectModal|closeDeleteDepartmentModal|closeDeleteMajorModal|closeDeleteSectionModal|closeDeleteSubjectModal|closeTeacherAssignModal|closeTeacherSectionModal|loadDepartmentDeleteOptions|loadMajorsForDelete|loadMajorsForDeleteSection|loadSectionsForDelete|loadMajorsForDeleteSubject|loadSubjectsForDelete/.test(control.getAttribute('onclick') || '');
                 const isSemesterPicker = control.id === 'activeSemesterSelect';
                 const isExplorerBack = control.id === 'backButton';
                 control.disabled = !(opensAllowedModal || isSemesterPicker || (control.matches('button') && /setActiveSemester/.test(control.getAttribute('onclick') || ''))
@@ -440,21 +440,24 @@
 
     async function saveAdminAccountLookups(client, userId) {
         try {
-            const [departmentsResult, majorsResult, sectionsResult, semestersResult, subjectsResult, teacherAssignmentsResult] = await Promise.all([
+            const [departmentsResult, majorsResult, sectionsResult, semestersResult, subjectsResult, teacherAssignmentsResult, teachersResult, teacherSectionsResult] = await Promise.all([
                 client.from('departments').select('department_id, department_name').order('department_name'),
                 client.from('majors').select('major_id, department_id, major_name').order('major_name'),
                 client.from('sections').select('section_id, major_id, year_level, section_name').order('section_name'),
                 client.from('semesters').select('semester_id, semester_name, is_active').order('semester_id'),
                 client.from('subjects').select('subject_id, subject_code, subject_name, major_id, semester_id, year_level, semesters(semester_name)').order('subject_name'),
-                client.from('teacher_subject_assignments').select('assignment_id, subject_id, teachers(first_name,middle_initial,last_name)').order('assignment_id')
+                client.from('teacher_subject_assignments').select('assignment_id, teacher_id, subject_id, teachers(first_name,middle_initial,last_name,teacher_number), subjects(subject_name,subject_code,major_id,year_level)').order('assignment_id'),
+                client.from('teachers').select('teacher_id, teacher_number, first_name, middle_initial, last_name').order('last_name'),
+                client.from('teacher_section_assignments').select('teacher_section_id, assignment_id, section_id, sections(section_name)')
             ]);
-            const lookupError = departmentsResult.error || majorsResult.error || sectionsResult.error || semestersResult.error || subjectsResult.error || teacherAssignmentsResult.error;
+            const lookupError = departmentsResult.error || majorsResult.error || sectionsResult.error || semestersResult.error || subjectsResult.error || teacherAssignmentsResult.error || teachersResult.error || teacherSectionsResult.error;
             if (lookupError) throw lookupError;
             await adminStoreRequest(adminLookupStoreName, 'readwrite', store => store.put({
                 key: `${userId}:lookups`, userId,
                 departments: departmentsResult.data || [], majors: majorsResult.data || [], sections: sectionsResult.data || [],
                 semesters: semestersResult.data || [], subjects: subjectsResult.data || [],
                 teacherAssignments: teacherAssignmentsResult.data || [],
+                teachers: teachersResult.data || [], teacherSections: teacherSectionsResult.data || [],
                 savedAt: new Date().toISOString()
             }));
         } catch (error) {
@@ -472,7 +475,7 @@
         const userId = await getUserId(client);
         if (!userId) throw new Error('Sign in while connected before making offline admin changes.');
         const operationId = createOperationId();
-        const localRef = ['department_add', 'major_add', 'section_add', 'subject_add'].includes(type)
+        const localRef = ['department_add', 'major_add', 'section_add', 'subject_add', 'teacher_subject_assign'].includes(type)
             ? `local:${operationId}`
             : null;
         await adminStoreRequest(adminStructureQueueStoreName, 'readwrite', store => store.put({
@@ -541,12 +544,16 @@
                 if (!navigator.onLine) break;
                 currentOperation = operation;
                 const payload = { ...operation.payload, type: operation.type };
-                for (const field of ['department_id', 'major_id', 'semester_id']) {
+                for (const field of ['department_id', 'major_id', 'semester_id', 'teacher_id', 'subject_id', 'section_id', 'assignment_id']) {
                     const value = payload[field];
                     if (typeof value === 'string' && value.startsWith('local:')) {
                         if (!idMap.has(value)) throw new Error(`An earlier queued ${field.replace('_id', '')} is still waiting to sync.`);
                         payload[field] = idMap.get(value);
                     }
+                }
+                if (typeof payload.assignment_id === 'string' && payload.assignment_id.startsWith('local-assignment:')) {
+                    if (!idMap.has(payload.assignment_id)) throw new Error('The teacher-to-subject assignment is still waiting to sync.');
+                    payload.assignment_id = idMap.get(payload.assignment_id);
                 }
 
                 const { data, error } = await client.rpc('sync_admin_offline_operation', {
@@ -567,6 +574,12 @@
                     const mapping = { key: `${userId}:${operation.localRef}`, userId, localRef: operation.localRef, realId: data.record_id };
                     await adminStoreRequest(adminStructureMapStoreName, 'readwrite', store => store.put(mapping));
                     idMap.set(operation.localRef, data.record_id);
+                }
+                if (operation.type === 'teacher_subject_assign' && data?.record_id !== undefined) {
+                    const mappingRef = operation.localRef || `local:${operation.operationId}`;
+                    const mapping = { key: `${userId}:${mappingRef}`, userId, localRef: mappingRef, realId: data.record_id };
+                    await adminStoreRequest(adminStructureMapStoreName, 'readwrite', store => store.put(mapping));
+                    idMap.set(mappingRef, data.record_id);
                 }
                 await adminStoreRequest(adminStructureQueueStoreName, 'readwrite', store => store.delete(operation.key));
                 currentOperation = null;
