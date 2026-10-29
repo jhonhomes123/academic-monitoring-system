@@ -1357,9 +1357,9 @@ Select Subject and Section
                     }
                 }
 
-                showAlert('success', 'Requirements Added', `Added "${title}" for ${insertedData.length} student${insertedData.length === 1 ? '' : 's'}.`);
                 closeRequirementModal();
                 await loadStudents();
+                showAlert('success', 'Requirements Added', `Added "${title}" for ${insertedData.length} student${insertedData.length === 1 ? '' : 's'}.`);
             }
 
             async function deleteRequirement(requirementId) {
@@ -1403,8 +1403,8 @@ Select Subject and Section
                         return showAlert('error', 'Error', fileError.message || 'Unable to delete files');
                     }
 
-                    showAlert('success', 'Deleted', 'Requirement and files removed');
                     await loadStudents();
+                    showAlert('success', 'Deleted', 'Requirement and files removed');
                 });
             }
 
