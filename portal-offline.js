@@ -708,6 +708,7 @@
     window.submitAdminAccountCreation = submitAdminAccountCreation;
     window.getAdminAccountData = getAdminAccountData;
     window.discardQueuedAdminAccountRequest = discardQueuedAdminAccountRequest;
+    window.clearPortalOfflineNotice = () => setNotice('', false);
     window.clearAdminAccountResults = clearAdminAccountResults;
     window.syncAdminAccountQueue = syncAdminAccountQueue;
     window.getAdminAccountLookups = getAdminAccountLookups;

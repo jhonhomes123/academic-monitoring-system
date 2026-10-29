@@ -7735,13 +7735,16 @@ async function removeQueuedAdminAccount(operationId, failed = false) {
     const prompt = failed
         ? 'Discard this failed offline account request from this device? This does not delete the account that already exists online.'
         : 'Remove this saved account request from this device? Any account already created online will not be deleted.';
-    if (!window.confirm(prompt)) return;
-    try {
-        await window.discardQueuedAdminAccountRequest(supabaseClient, operationId);
-        showAlert('success', failed ? 'Failed Request Discarded' : 'Request Removed', 'The queued request was removed from this device. Existing online accounts were not changed.');
-    } catch (error) {
-        showAlert('error', 'Could Not Remove Request', error.message || 'Unable to remove the saved request.');
-    }
+    showConfirmModal(failed ? 'Discard Failed Request' : 'Remove Saved Request', prompt, async () => {
+        try {
+            await window.discardQueuedAdminAccountRequest(supabaseClient, operationId);
+            const { queued } = await window.getAdminAccountData(supabaseClient);
+            if (!queued.some(item => item.lastError || item.processing)) window.clearPortalOfflineNotice();
+            showAlert('success', failed ? 'Failed Request Discarded' : 'Request Removed', 'The queued request was removed from this device. Any existing online account was not changed.');
+        } catch (error) {
+            showAlert('error', 'Could Not Remove Request', error.message || 'Unable to remove the saved request.');
+        }
+    });
 }
 
 async function clearAdminCreatedAccounts() {
