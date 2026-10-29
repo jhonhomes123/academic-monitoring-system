@@ -46,6 +46,22 @@
         document.body.classList.toggle('student-offline-view', visible);
     }
 
+    function setPreparationProgress(active) {
+        let progress = document.getElementById('studentOfflineProgress');
+        if (!progress) {
+            const style = document.createElement('style');
+            style.textContent = '@keyframes amsOfflineProgress { from { transform: translateX(-120%); } to { transform: translateX(350%); } } #studentOfflineProgress { position:fixed; z-index:10001; top:0; left:0; right:0; height:3px; overflow:hidden; background:rgba(29,78,216,.16); pointer-events:none; } #studentOfflineProgress::after { content:""; display:block; width:30%; height:100%; background:#2563eb; animation:amsOfflineProgress 1.15s ease-in-out infinite; }';
+            document.head.appendChild(style);
+            progress = document.createElement('div');
+            progress.id = 'studentOfflineProgress';
+            progress.setAttribute('role', 'progressbar');
+            progress.setAttribute('aria-label', 'Preparing student pages for offline use');
+            document.body.appendChild(progress);
+        }
+        progress.hidden = !active;
+        progress.setAttribute('aria-valuetext', active ? 'Preparing offline pages' : 'Preparation complete');
+    }
+
     async function getUserId(client) {
         const { data, error } = await client.auth.getSession();
         if (error) throw error;
@@ -158,7 +174,7 @@
             }
             if (!missingPages.length) return;
 
-            setNotice('Preparing the rest of your student pages for offline viewing...', true, 'sync');
+            setPreparationProgress(true);
             await Promise.all(missingPages.map(async page => {
                 if (!navigator.onLine) return;
                 const frame = document.createElement('iframe');
@@ -180,15 +196,13 @@
                     frame.remove();
                 }
             }));
+            setPreparationProgress(false);
 
             if (navigator.onLine) {
                 const hasAllPages = await Promise.all(studentPages.map(async page =>
                     Boolean(await readSnapshot(snapshotKey(userId, page.key)))
                 ));
-                if (hasAllPages.every(Boolean)) {
-                    setNotice('All student pages are saved for offline viewing on this device.', true, 'ready');
-                    window.setTimeout(() => setNotice('', false), 6000);
-                } else {
+                if (!hasAllPages.every(Boolean)) {
                     setNotice('Some student pages could not be saved for offline viewing. Open them while online to try again.', true, 'sync');
                 }
             }

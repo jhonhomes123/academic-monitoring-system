@@ -244,6 +244,62 @@ FOR ADMIN + TEACHER
 
     }
 
+    #requirementsListTable{
+        width:100% !important;
+        min-width:0 !important;
+        table-layout:fixed;
+    }
+
+    #requirementsListTable thead{
+        display:none;
+    }
+
+    #requirementsListTable tbody,
+    #requirementsListTable tr,
+    #requirementsListTable td{
+        display:block;
+        width:100%;
+        min-width:0;
+        white-space:normal !important;
+        overflow-wrap:anywhere;
+        word-break:break-word;
+    }
+
+    #requirementsListTable tr{
+        margin-bottom:12px;
+        border:1px solid #dbe4f0;
+        border-radius:10px;
+        overflow:hidden;
+        background:#fff;
+    }
+
+    #requirementsListTable td{
+        box-sizing:border-box;
+        padding:10px !important;
+    }
+
+    #requirementsListTable td:first-child{
+        background:#eef4ff;
+        color:#0b3d91;
+        font-weight:700;
+        border-bottom:1px solid #dbe4f0;
+    }
+
+    #requirementsListTable td:last-child,
+    #requirementsListTable .req-desc,
+    #requirementsListTable .attached-files,
+    #requirementsListTable a,
+    #requirementsListTable button{
+        max-width:100%;
+        white-space:normal !important;
+        overflow-wrap:anywhere;
+        word-break:break-word;
+    }
+
+    #requirementsListTable .req-desc{
+        white-space:pre-wrap !important;
+    }
+
     /* =========================================
     BUTTONS
     ========================================= */
