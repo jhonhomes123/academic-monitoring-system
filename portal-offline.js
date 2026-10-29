@@ -501,6 +501,7 @@
     async function syncAdminStructureQueue(client) {
         if (!navigator.onLine || window.adminStructureSyncInProgress) return;
         window.adminStructureSyncInProgress = true;
+        let currentOperation = null;
         try {
             const userId = await getUserId(client);
             if (!userId) return;
@@ -508,6 +509,7 @@
             const idMap = await getAdminStructureIdMap(userId);
             for (const operation of pending) {
                 if (!navigator.onLine) break;
+                currentOperation = operation;
                 const payload = { ...operation.payload, type: operation.type };
                 for (const field of ['department_id', 'major_id', 'semester_id']) {
                     const value = payload[field];
@@ -523,7 +525,7 @@
                 });
                 if (error) {
                     await adminStoreRequest(adminStructureQueueStoreName, 'readwrite', store => store.put({ ...operation, lastError: error.message }));
-                    setNotice('An admin change is still waiting to apply. It remains saved on this device and will retry.', true, 'sync');
+                    setNotice(`An admin change is still waiting to apply. ${error.message || 'It remains saved and will retry.'}`, true, 'sync');
                     window.setTimeout(() => {
                         if (navigator.onLine && window.currentOfflineRole === 'admin') {
                             void syncAdminStructureQueue(client);
@@ -537,6 +539,7 @@
                     idMap.set(operation.localRef, data.record_id);
                 }
                 await adminStoreRequest(adminStructureQueueStoreName, 'readwrite', store => store.delete(operation.key));
+                currentOperation = null;
             }
             const remaining = await getAdminStructureData(client);
             if (!remaining.pending.length && pending.length) {
@@ -546,7 +549,14 @@
             window.dispatchEvent(new CustomEvent('admin-structure-data-changed'));
         } catch (error) {
             console.warn('Unable to sync queued admin structure changes.', error);
-            setNotice('An admin change is still waiting to apply. It remains saved on this device and will retry.', true, 'sync');
+            if (currentOperation) {
+                await adminStoreRequest(adminStructureQueueStoreName, 'readwrite', store => store.put({
+                    ...currentOperation,
+                    lastError: error?.message || 'Unable to apply this change.'
+                }));
+            }
+            const reason = error?.message || 'The change remains saved and will retry.';
+            setNotice(`An admin change is still waiting to apply: ${reason}`, true, 'sync');
             window.setTimeout(() => {
                 if (navigator.onLine && window.currentOfflineRole === 'admin') {
                     void syncAdminStructureQueue(client);
