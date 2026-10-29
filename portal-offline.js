@@ -313,7 +313,7 @@
                 document.querySelectorAll('button').forEach(button => {
                     if (button.textContent.trim() === 'Queued offline') button.textContent = 'Save';
                 });
-                setNotice('Teacher changes synced. Refreshing offline rosters...', true, 'ready');
+                setNotice('Teacher changes synced. Refreshing saved teacher data...', true, 'ready');
                 await preloadTeacherAssignedRosters(client, true);
                 window.setTimeout(() => setNotice('', false), 6000);
             }
@@ -569,10 +569,10 @@
                     return Boolean(await readSnapshot(snapshotKey(userId, task.pageKey, 'teacher', filterState)));
                 }));
                 if (savedRoutes.every(Boolean)) {
-                    setNotice('All assigned teacher rosters are saved for offline viewing.', true, 'ready');
+                    setNotice('Your assigned teacher data is saved for offline viewing.', true, 'ready');
                     window.setTimeout(() => setNotice('', false), 6000);
                 } else {
-                    setNotice('Some assigned rosters were not saved. Keep this page online and retry.', true, 'sync');
+                    setNotice('Some assigned teacher data could not be saved. Stay online and try again.', true, 'sync');
                 }
             }
         })().finally(() => {
@@ -650,7 +650,7 @@
             }
             const savedTime = new Date(snapshot.savedAt).toLocaleString();
             setNotice(role === 'teacher'
-                ? `Offline view: data saved ${savedTime}. ${pendingCount ? `${pendingCount} change${pendingCount === 1 ? '' : 's'} waiting to sync. ` : ''}Only cached rosters are available.`
+                ? `Offline view: teacher data saved ${savedTime}. ${pendingCount ? `${pendingCount} change${pendingCount === 1 ? '' : 's'} waiting to sync. ` : ''}Only saved teacher data is available.`
                 : `Offline read-only view: showing saved student information from ${savedTime}. Changes and attachments require internet.`, true);
             return true;
         } catch (error) {
@@ -721,7 +721,7 @@
                         const element = document.getElementById(field.id);
                         if (element) element.value = field.value;
                     });
-                    setNotice('That teacher roster was not saved on this device. Choose a section while online before using it offline.', true);
+                    setNotice('That class data is not saved on this device. Choose the section while online to save it for offline use.', true);
                 }
             });
         });
@@ -780,7 +780,7 @@
         makeOfflineViewReadOnly(main);
         bindTeacherOfflineFilters(client, pageKey, main, snapshot);
         await applyQueuedTeacherOperations(client, pageKey, main);
-        setNotice(`Offline read-only view: showing the saved roster from ${new Date(snapshot.savedAt).toLocaleString()}.`, true);
+        setNotice(`Offline view: showing saved teacher data from ${new Date(snapshot.savedAt).toLocaleString()}.`, true);
         return true;
     }
 
