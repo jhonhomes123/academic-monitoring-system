@@ -7670,7 +7670,11 @@ async function renderAdminCreatedAccounts() {
                     ? lookups?.sections.find(section => String(section.section_id) === String(item.payload.section_id))?.section_name || String(item.payload.section_id || '')
                     : '—',
                 password: 'Available after sync',
-                status: item.lastError ? `Retrying: ${item.lastError}` : 'Waiting for connection'
+                status: item.processing
+                    ? 'Being created'
+                    : item.lastError
+                        ? `Retrying: ${item.lastError}`
+                        : 'Waiting for connection'
             })),
             ...completed.map(item => ({
                 role: item.role,

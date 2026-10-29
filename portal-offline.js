@@ -666,13 +666,20 @@
                     await adminStoreRequest(adminQueueStoreName, 'readwrite', store => store.delete(item.key));
                 } catch (error) {
                     const failureReason = error?.message || 'Account creation is waiting to retry.';
-                    await adminStoreRequest(adminQueueStoreName, 'readwrite', store => store.put({ ...item, lastError: failureReason }));
-                    setNotice(`A saved ${item.role} account could not be created yet: ${failureReason}`, true, 'sync');
+                    const stillProcessing = failureReason.includes('Account creation is still processing.');
+                    await adminStoreRequest(adminQueueStoreName, 'readwrite', store => store.put({
+                        ...item,
+                        processing: stillProcessing,
+                        lastError: stillProcessing ? null : failureReason
+                    }));
+                    setNotice(stillProcessing
+                        ? `The saved ${item.role} account is being created. We’ll check again shortly.`
+                        : `A saved ${item.role} account could not be created yet: ${failureReason}`, true, 'sync');
                     window.setTimeout(() => {
                         if (navigator.onLine && window.currentOfflineRole === 'admin') {
                             void syncAdminAccountQueue(client);
                         }
-                    }, 15000);
+                    }, stillProcessing ? 125000 : 15000);
                     break;
                 }
             }
