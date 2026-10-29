@@ -786,7 +786,7 @@
     }
 
     function clearTeacherFilterSelections(container, pageKey) {
-        const filterIds = pageKey === 'status'
+        const filterIds = ['status', 'students'].includes(pageKey)
             ? ['yearFilter', 'departmentFilter', 'majorFilter', 'subjectFilter', 'sectionFilter']
             : ['yearSelect', 'departmentSelect', 'majorSelect', 'subjectSelect', 'sectionSelect'];
         filterIds.forEach(id => {

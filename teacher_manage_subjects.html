@@ -279,9 +279,10 @@
 
         .ams-alert {
             position: fixed;
-            top: 30px;
-            right: 30px;
-            min-width: 340px;
+            top: 16px;
+            right: 16px;
+            width: min(420px, calc(100vw - 32px));
+            min-width: 0;
             max-width: 420px;
             background: white;
             border-radius: 20px;
@@ -347,12 +348,14 @@
             margin-bottom: 8px;
             font-size: 18px;
             color: var(--primary);
+            overflow-wrap: anywhere;
         }
 
         .alert-content p {
             color: var(--gray);
             line-height: 1.7;
             font-size: 14px;
+            overflow-wrap: anywhere;
         }
 
         .alert-close {
@@ -367,10 +370,12 @@
         @media(max-width:600px) {
 
             .ams-alert {
-                left: 20px;
-                right: 20px;
-                min-width: auto;
+                left: 12px;
+                right: 12px;
+                width: auto;
                 max-width: none;
+                padding: 16px;
+                gap: 12px;
             }
 
         }
@@ -1639,6 +1644,8 @@ Select Subject and Section
 
             /* ================= ALERT FUNCTION ================= */
 
+            let alertCloseTimer = null;
+
             function showAlert(type, title, message) {
 
                 const alertBox =
@@ -1654,6 +1661,8 @@ Select Subject and Section
                     document.getElementById('alertIcon');
 
                 // RESET CLASSES
+
+                clearTimeout(alertCloseTimer);
 
                 alertBox.className = 'ams-alert';
 
@@ -1692,25 +1701,24 @@ Select Subject and Section
 
                 // SHOW
 
-                setTimeout(() => {
-
+                requestAnimationFrame(() => {
                     alertBox.classList.add('show');
-
-                }, 100);
+                });
 
                 // AUTO CLOSE
 
-                setTimeout(() => {
-
+                alertCloseTimer = setTimeout(() => {
                     closeAlert();
-
-                }, 4000);
+                }, 7000);
 
             }
 
             /* CLOSE ALERT */
 
             function closeAlert() {
+
+                clearTimeout(alertCloseTimer);
+                alertCloseTimer = null;
 
                 document
                     .getElementById('amsAlert')
