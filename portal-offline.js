@@ -712,6 +712,9 @@
             if (select.dataset.offlineFilterBound) return;
             select.dataset.offlineFilterBound = 'true';
             select.addEventListener('change', async () => {
+                if (['students', 'subjects', 'status'].includes(pageKey) && !hasCompleteTeacherFilters(container, pageKey)) {
+                    clearTeacherResultTable(container, pageKey, 'Select each filter, including Section, to open this class list.');
+                }
                 const loaded = await restoreTeacherSnapshotForFilterChange(client, pageKey, select.id, select.value, currentSnapshot);
                 if (!loaded) {
                     (currentSnapshot.formState || []).forEach(field => {
@@ -735,7 +738,7 @@
             request.onerror = () => reject(request.error || new Error('Unable to inspect saved roster filters.'));
         });
 
-        const filterIds = teacherFilterState().map(([id]) => id).filter(id => snapshots.some(snapshot => snapshot.filterState?.some(([filterId]) => filterId === id)));
+        const filterIds = getTeacherFilterIds(pageKey);
         const changedIndex = filterIds.indexOf(changedFilterId);
         const currentValues = Object.fromEntries(teacherFilterState());
         const candidates = snapshots.filter(snapshot => {
@@ -771,12 +774,8 @@
             const element = document.getElementById(id);
             if (element) element.selectedIndex = 0;
         });
-        if (changedIndex < filterIds.length - 1) {
-            const tableBody = main.querySelector('#studentStatusBody, #studentTableBody, #studentsTable');
-            if (tableBody) {
-                const columnCount = pageKey === 'status' ? 5 : 3;
-                tableBody.innerHTML = `<tr><td colspan="${columnCount}" class="empty">Select the remaining filters to open this class list.</td></tr>`;
-            }
+        if (['students', 'subjects', 'status'].includes(pageKey) && !hasCompleteTeacherFilters(main, pageKey)) {
+            clearTeacherResultTable(main, pageKey, 'Select each filter, including Section, to open this class list.');
         }
         makeOfflineViewReadOnly(main);
         bindTeacherOfflineFilters(client, pageKey, main, snapshot);
@@ -786,17 +785,31 @@
     }
 
     function clearTeacherFilterSelections(container, pageKey) {
-        const filterIds = ['status', 'students'].includes(pageKey)
-            ? ['yearFilter', 'departmentFilter', 'majorFilter', 'subjectFilter', 'sectionFilter']
-            : ['yearSelect', 'departmentSelect', 'majorSelect', 'subjectSelect', 'sectionSelect'];
-        filterIds.forEach(id => {
+        getTeacherFilterIds(pageKey).forEach(id => {
             const select = container.querySelector(`#${id}`);
             if (select) select.selectedIndex = 0;
         });
+        clearTeacherResultTable(container, pageKey, 'Select each filter, including Section, to open this class list.');
+    }
+
+    function getTeacherFilterIds(pageKey) {
+        return ['students', 'status'].includes(pageKey)
+            ? ['yearFilter', 'departmentFilter', 'majorFilter', 'subjectFilter', 'sectionFilter']
+            : ['yearSelect', 'departmentSelect', 'majorSelect', 'subjectSelect', 'sectionSelect'];
+    }
+
+    function hasCompleteTeacherFilters(container, pageKey) {
+        return getTeacherFilterIds(pageKey).every(id => {
+            const select = container.querySelector(`#${id}`);
+            return Boolean(select?.value);
+        });
+    }
+
+    function clearTeacherResultTable(container, pageKey, message) {
         const tableBody = container.querySelector('#studentStatusBody, #studentTableBody, #studentsTable');
         if (tableBody) {
             const columnCount = pageKey === 'status' ? 5 : 3;
-            tableBody.innerHTML = `<tr><td colspan="${columnCount}" class="empty">Select each filter to open a saved class list.</td></tr>`;
+            tableBody.innerHTML = `<tr><td colspan="${columnCount}" class="empty">${message}</td></tr>`;
         }
     }
 
