@@ -1115,49 +1115,6 @@ table td{
                 </div>
 
             </div>
-            <!-- RECENT APPROVED USERS -->
-            <div class="table-section">
-
-                <div class="section-header">
-
-                    <h2>Recently Approved Users</h2>
-
-                    <p>
-                        Latest approved student and teacher accounts
-                    </p>
-
-                </div>
-                <div class="table-responsive">
-
-                <table>
-
-                    <thead>
-
-                        <tr>
-                            <th>Name</th>
-                            <th>Email</th>
-                            <th>Role</th>
-                            <th>Status</th>
-                        </tr>
-
-                    </thead>
-
-                    <tbody id="approvedUsersTable">
-
-                        <tr>
-
-                            <td colspan="4">
-                                Loading approved users...
-                            </td>
-
-                        </tr>
-
-                    </tbody>
-
-                </table>
-                </div>
-            </div>
-
             <div class="table-section">
                 <div class="section-header" style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
                     <div>
@@ -1168,8 +1125,8 @@ table td{
                 </div>
                 <div class="table-responsive">
                     <table>
-                        <thead><tr><th>Account</th><th>Name</th><th>ID</th><th>Temporary Password</th><th>Status</th></tr></thead>
-                        <tbody id="adminCreatedAccountsTable"><tr><td colspan="5">No account requests yet</td></tr></tbody>
+                        <thead><tr><th>Account</th><th>Name</th><th>ID</th><th>Year</th><th>Section</th><th>Temporary Password</th><th>Status</th></tr></thead>
+                        <tbody id="adminCreatedAccountsTable"><tr><td colspan="7">No account requests yet</td></tr></tbody>
                     </table>
                 </div>
             </div>
@@ -2668,7 +2625,6 @@ onchange="loadSubjectsForTeacherAssign()">
             if (sectionId === 'dashboardSection') {
 
                 loadDashboardCounts();
-                loadApprovedUsers();
 
             }
 
@@ -2725,12 +2681,10 @@ onchange="loadSubjectsForTeacherAssign()">
                 return;
             }
             loadDashboardCounts();
-            loadApprovedUsers();
             void renderAdminCreatedAccounts();
         }).catch(error => {
             console.warn('Offline admin view could not be prepared.', error);
             loadDashboardCounts();
-            loadApprovedUsers();
         });
         // LOAD DASHBOARD COUNTS
         async function loadDashboardCounts() {
@@ -3433,8 +3387,6 @@ async function approveAccount(id) {
         async function reloadAllAdminData() {
 
             await loadDashboardCounts();
-
-            await loadApprovedUsers();
 
             await loadDepartmentExplorer();
             loadTeachersManagement();
@@ -7477,12 +7429,17 @@ async function renderAdminCreatedAccounts() {
     if (!table || !window.getAdminAccountData) return;
     try {
         const { queued, completed } = await window.getAdminAccountData(supabaseClient);
+        const lookups = await window.getAdminAccountLookups(supabaseClient);
         table.replaceChildren();
         const rows = [
             ...queued.map(item => ({
                 role: item.role,
                 name: [item.payload.first_name, item.payload.middle_initial, item.payload.last_name].filter(Boolean).join(' '),
                 id: item.role === 'student' ? item.payload.student_number : item.payload.teacher_number,
+                year: item.role === 'student' ? item.payload.year_level || '' : '—',
+                section: item.role === 'student'
+                    ? lookups?.sections.find(section => String(section.section_id) === String(item.payload.section_id))?.section_name || String(item.payload.section_id || '')
+                    : '—',
                 password: 'Available after sync',
                 status: item.lastError ? 'Waiting to retry' : 'Waiting for connection'
             })),
@@ -7490,6 +7447,8 @@ async function renderAdminCreatedAccounts() {
                 role: item.role,
                 name: [item.payload.first_name, item.payload.middle_initial, item.payload.last_name].filter(Boolean).join(' '),
                 id: item.accountId,
+                year: item.payload.year_level || '—',
+                section: item.payload.section_name || '—',
                 password: item.temporaryPassword,
                 status: 'Created'
             }))
@@ -7497,7 +7456,7 @@ async function renderAdminCreatedAccounts() {
         if (!rows.length) {
             const emptyRow = document.createElement('tr');
             const emptyCell = document.createElement('td');
-            emptyCell.colSpan = 5;
+            emptyCell.colSpan = 7;
             emptyCell.textContent = 'No account requests yet';
             emptyRow.appendChild(emptyCell);
             table.appendChild(emptyRow);
@@ -7505,7 +7464,7 @@ async function renderAdminCreatedAccounts() {
         }
         rows.forEach(account => {
             const row = document.createElement('tr');
-            [account.role === 'student' ? 'Student' : 'Teacher', account.name, account.id || '', account.password, account.status]
+            [account.role === 'student' ? 'Student' : 'Teacher', account.name, account.id || '', account.year || '—', account.section || '—', account.password, account.status]
                 .forEach(value => {
                     const cell = document.createElement('td');
                     cell.textContent = value;

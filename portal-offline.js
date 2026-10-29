@@ -390,12 +390,20 @@
     }
 
     async function saveAdminAccountResult(userId, operationId, role, payload, result) {
+        const lookups = role === 'student' ? await getAdminAccountLookups(null, userId) : null;
+        const section = lookups?.sections.find(item => String(item.section_id) === String(payload.section_id || result.section_id));
         await adminStoreRequest(adminResultsStoreName, 'readwrite', store => store.put({
             key: `${userId}:${operationId}`, userId, operationId, role,
             accountId: role === 'student' ? result.login_id : result.teacher_number,
             temporaryPassword: result.temporary_password,
             createdAt: new Date().toISOString(),
-            payload: { first_name: payload.first_name, middle_initial: payload.middle_initial, last_name: payload.last_name }
+            payload: {
+                first_name: payload.first_name,
+                middle_initial: payload.middle_initial,
+                last_name: payload.last_name,
+                year_level: payload.year_level || section?.year_level || '',
+                section_name: section?.section_name || ''
+            }
         }));
         window.dispatchEvent(new CustomEvent('admin-account-data-changed'));
     }
@@ -419,8 +427,8 @@
         }
     }
 
-    async function getAdminAccountLookups(client) {
-        const userId = await getUserId(client);
+    async function getAdminAccountLookups(client, suppliedUserId = null) {
+        const userId = suppliedUserId || await getUserId(client);
         if (!userId) return null;
         return await adminStoreRequest(adminLookupStoreName, 'readonly', store => store.get(`${userId}:lookups`)) || null;
     }
