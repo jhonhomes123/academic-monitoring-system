@@ -792,7 +792,7 @@
             const studentPicker = window.currentOfflineRole === 'teacher'
                 && control.matches('.requirement-student-check');
             const safeTeacherAction = window.currentOfflineRole === 'teacher' && control.matches('button')
-                && /openRequirementModal|saveRequirement|closeRequirementModal|selectRequirementStudents|updateRequirementStudentCount|openUploadModal|closeUploadModal|uploadInstruction|saveGrade|updateStatusColor|closeModal/.test(control.getAttribute('onclick') || '');
+                && /openRequirementModal|saveRequirement|deleteRequirement|closeRequirementModal|selectRequirementStudents|updateRequirementStudentCount|openUploadModal|closeUploadModal|uploadInstruction|saveGrade|updateStatusColor|closeModal/.test(control.getAttribute('onclick') || '');
             control.disabled = !(teacherFilter || teacherGradeField || requirementInput || studentPicker || safeTeacherAction);
         });
         container.querySelectorAll('*').forEach(element => {
