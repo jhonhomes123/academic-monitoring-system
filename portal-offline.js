@@ -80,6 +80,8 @@
             document.body.appendChild(notice);
         }
         notice.style.background = type === 'ready' ? '#166534' : type === 'sync' ? '#1d4ed8' : '#7c2d12';
+        const connectivityBanner = document.getElementById('amsConnectivityBanner');
+        notice.style.top = connectivityBanner && !connectivityBanner.hidden ? `${connectivityBanner.offsetHeight}px` : '0';
         notice.replaceChildren(document.createTextNode(message));
         if (action) {
             const actionButton = document.createElement('button');
@@ -91,6 +93,28 @@
         }
         notice.hidden = !visible;
         document.body.classList.toggle('student-offline-view', visible);
+    }
+
+    function updateConnectivityBanner() {
+        let banner = document.getElementById('amsConnectivityBanner');
+        if (!banner) {
+            banner = document.createElement('div');
+            banner.id = 'amsConnectivityBanner';
+            banner.setAttribute('role', 'status');
+            banner.setAttribute('aria-live', 'polite');
+            banner.style.cssText = 'position:fixed;z-index:10002;top:0;left:0;right:0;min-height:36px;padding:8px 14px;background:#991b1b;color:#fff;text-align:center;font:600 13px/1.5 sans-serif;box-shadow:0 2px 6px rgba(0,0,0,.18);';
+            banner.textContent = 'Offline. Your saved data and changes remain on this device until the connection returns.';
+            document.body.appendChild(banner);
+        }
+        banner.hidden = navigator.onLine;
+        const notice = document.getElementById('studentOfflineNotice');
+        if (notice) notice.style.top = navigator.onLine ? '0' : `${banner.offsetHeight}px`;
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', updateConnectivityBanner, { once: true });
+    } else {
+        updateConnectivityBanner();
     }
 
     function setPreparationProgress(active) {
@@ -1381,6 +1405,7 @@
     window.clearStudentOfflineSnapshots = clearStudentOfflineSnapshots;
 
     window.addEventListener('offline', async () => {
+        updateConnectivityBanner();
         const client = window.supabaseClientForOffline;
         if (client && window.currentOfflineRole === 'admin') {
             await restoreAdminOfflineSnapshot(client);
@@ -1393,6 +1418,7 @@
     });
 
     window.addEventListener('online', async () => {
+        updateConnectivityBanner();
         if (window.portalLogoutInProgress) return;
         const client = window.supabaseClientForOffline;
         if (client) {
