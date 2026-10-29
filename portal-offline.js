@@ -632,6 +632,12 @@
                 element.value = field.value;
                 if (field.checked !== undefined) element.checked = field.checked;
             });
+            const routeParams = new URLSearchParams(window.location.search);
+            const hasStatusRoute = role === 'teacher' && pageKey === 'status'
+                && ['year', 'department_id', 'major_id', 'subject_id', 'section_id'].every(key => routeParams.get(key));
+            if (role === 'teacher' && !hasStatusRoute) {
+                clearTeacherFilterSelections(main, pageKey);
+            }
             if (role === 'teacher' && typeof window.restorePortalOfflineState === 'function') {
                 window.restorePortalOfflineState(snapshot.pageState);
             }
@@ -761,11 +767,37 @@
             const element = document.getElementById(id);
             if (element && currentValues[id] !== undefined) element.value = currentValues[id];
         });
+        filterIds.slice(changedIndex + 1).forEach(id => {
+            const element = document.getElementById(id);
+            if (element) element.selectedIndex = 0;
+        });
+        if (changedIndex < filterIds.length - 1) {
+            const tableBody = main.querySelector('#studentStatusBody, #studentsTable');
+            if (tableBody) {
+                const columnCount = pageKey === 'status' ? 5 : 3;
+                tableBody.innerHTML = `<tr><td colspan="${columnCount}" class="empty">Select the remaining filters to open this class list.</td></tr>`;
+            }
+        }
         makeOfflineViewReadOnly(main);
         bindTeacherOfflineFilters(client, pageKey, main, snapshot);
         await applyQueuedTeacherOperations(client, pageKey, main);
         setNotice(`Offline read-only view: showing the saved roster from ${new Date(snapshot.savedAt).toLocaleString()}.`, true);
         return true;
+    }
+
+    function clearTeacherFilterSelections(container, pageKey) {
+        const filterIds = pageKey === 'status'
+            ? ['yearFilter', 'departmentFilter', 'majorFilter', 'subjectFilter', 'sectionFilter']
+            : ['yearSelect', 'departmentSelect', 'majorSelect', 'subjectSelect', 'sectionSelect'];
+        filterIds.forEach(id => {
+            const select = container.querySelector(`#${id}`);
+            if (select) select.selectedIndex = 0;
+        });
+        const tableBody = container.querySelector('#studentStatusBody, #studentsTable');
+        if (tableBody) {
+            const columnCount = pageKey === 'status' ? 5 : 3;
+            tableBody.innerHTML = `<tr><td colspan="${columnCount}" class="empty">Select each filter to open a saved class list.</td></tr>`;
+        }
     }
 
     async function applyQueuedTeacherOperations(client, pageKey, container) {

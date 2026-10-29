@@ -1739,6 +1739,10 @@ Select Subject and Section
 
                 document.getElementById(
                     'confirmModal'
+                ).style.display = 'flex';
+
+                document.getElementById(
+                    'confirmModal'
                 ).classList.add('show');
 
                 document.getElementById(
@@ -1757,9 +1761,9 @@ Select Subject and Section
 
             function closeConfirmModal() {
 
-                document.getElementById(
-                    'confirmModal'
-                ).classList.remove('show');
+                const modal = document.getElementById('confirmModal');
+                modal.classList.remove('show');
+                modal.style.display = '';
 
             }
             function updateRequirementStudentCount() {

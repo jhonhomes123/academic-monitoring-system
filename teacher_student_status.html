@@ -1019,13 +1019,16 @@ async function initialize(){
 
 function focusStatusRouteTarget() {
     if (!targetStudentId) return;
-    const target = document.getElementById(`student-row-${targetStudentId}`);
-    if (!target) return;
-    const termControl = targetTerm
-        ? document.getElementById(`${targetTerm}-status-${targetStudentId}`)
-        : null;
-    (termControl || target).scrollIntoView({ behavior: 'smooth', block: 'center' });
-    if (termControl) termControl.focus({ preventScroll: true });
+    requestAnimationFrame(() => {
+        const target = document.getElementById(`student-row-${targetStudentId}`);
+        if (!target) return;
+        target.classList.add('selected-student-row');
+        const termControl = targetTerm
+            ? document.getElementById(`${targetTerm}-status-${targetStudentId}`)
+            : null;
+        (termControl || target).scrollIntoView({ behavior: 'smooth', block: 'center' });
+        if (termControl) termControl.focus({ preventScroll: true });
+    });
 }
 
 /* ==================================================
