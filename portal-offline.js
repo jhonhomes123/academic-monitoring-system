@@ -679,7 +679,7 @@
                         if (navigator.onLine && window.currentOfflineRole === 'admin') {
                             void syncAdminAccountQueue(client);
                         }
-                    }, stillProcessing ? 125000 : 15000);
+                    }, stillProcessing ? 35000 : 15000);
                     break;
                 }
             }
