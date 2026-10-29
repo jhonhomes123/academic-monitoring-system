@@ -433,6 +433,9 @@
             }
         }));
         window.dispatchEvent(new CustomEvent('admin-account-data-changed'));
+        if (typeof window.renderAdminCreatedAccounts === 'function') {
+            await window.renderAdminCreatedAccounts();
+        }
     }
 
     async function saveAdminAccountLookups(client, userId) {
@@ -634,6 +637,17 @@
         };
     }
 
+    async function discardQueuedAdminAccountRequest(client, operationId) {
+        const userId = await getUserId(client);
+        if (!userId) throw new Error('Sign in again before managing saved account requests.');
+        const key = `${userId}:${operationId}`;
+        const queuedItem = await adminStoreRequest(adminQueueStoreName, 'readonly', store => store.get(key));
+        if (!queuedItem || queuedItem.userId !== userId) throw new Error('This saved account request was not found.');
+        await adminStoreRequest(adminQueueStoreName, 'readwrite', store => store.delete(key));
+        window.dispatchEvent(new CustomEvent('admin-account-data-changed'));
+        return true;
+    }
+
     async function clearAdminAccountResults(client) {
         const userId = await getUserId(client);
         if (!userId) return;
@@ -693,6 +707,7 @@
 
     window.submitAdminAccountCreation = submitAdminAccountCreation;
     window.getAdminAccountData = getAdminAccountData;
+    window.discardQueuedAdminAccountRequest = discardQueuedAdminAccountRequest;
     window.clearAdminAccountResults = clearAdminAccountResults;
     window.syncAdminAccountQueue = syncAdminAccountQueue;
     window.getAdminAccountLookups = getAdminAccountLookups;

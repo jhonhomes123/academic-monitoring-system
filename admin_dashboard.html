@@ -1124,8 +1124,8 @@ table td{
                 </div>
                 <div class="table-responsive">
                     <table>
-                        <thead><tr><th>Account</th><th>Name</th><th>ID</th><th>Year</th><th>Section</th><th>Temporary Password</th><th>Status</th></tr></thead>
-                        <tbody id="adminCreatedAccountsTable"><tr><td colspan="7">No account requests yet</td></tr></tbody>
+                        <thead><tr><th>Account</th><th>Name</th><th>ID</th><th>Year</th><th>Section</th><th>Temporary Password</th><th>Status</th><th>Action</th></tr></thead>
+                        <tbody id="adminCreatedAccountsTable"><tr><td colspan="8">No account requests yet</td></tr></tbody>
                     </table>
                 </div>
             </div>
@@ -7662,6 +7662,8 @@ async function renderAdminCreatedAccounts() {
         table.replaceChildren();
         const rows = [
             ...queued.map(item => ({
+                operationId: item.operationId,
+                processing: Boolean(item.processing),
                 role: item.role,
                 name: [item.payload.first_name, item.payload.middle_initial, item.payload.last_name].filter(Boolean).join(' '),
                 id: item.role === 'student' ? item.payload.student_number : item.payload.teacher_number,
@@ -7689,7 +7691,7 @@ async function renderAdminCreatedAccounts() {
         if (!rows.length) {
             const emptyRow = document.createElement('tr');
             const emptyCell = document.createElement('td');
-            emptyCell.colSpan = 7;
+            emptyCell.colSpan = 8;
             emptyCell.textContent = 'No account requests yet';
             emptyRow.appendChild(emptyCell);
             table.appendChild(emptyRow);
@@ -7703,10 +7705,38 @@ async function renderAdminCreatedAccounts() {
                     cell.textContent = value;
                     row.appendChild(cell);
                 });
+            const actionCell = document.createElement('td');
+            if (account.operationId) {
+                if (account.processing) {
+                    actionCell.textContent = 'Creating';
+                } else {
+                    const removeButton = document.createElement('button');
+                    removeButton.type = 'button';
+                    removeButton.className = 'btn reject-btn';
+                    removeButton.textContent = 'Remove request';
+                    removeButton.addEventListener('click', () => removeQueuedAdminAccount(account.operationId));
+                    actionCell.appendChild(removeButton);
+                }
+            } else {
+                actionCell.textContent = '—';
+            }
+            row.appendChild(actionCell);
             table.appendChild(row);
         });
     } catch (error) {
         console.warn('Unable to render saved account creation results.', error);
+    }
+}
+
+window.renderAdminCreatedAccounts = renderAdminCreatedAccounts;
+
+async function removeQueuedAdminAccount(operationId) {
+    if (!window.confirm('Remove this saved request from this device? This will not delete any account that may already exist online.')) return;
+    try {
+        await window.discardQueuedAdminAccountRequest(supabaseClient, operationId);
+        showAlert('success', 'Request Removed', 'The saved account request was removed from this device. Existing online accounts were not changed.');
+    } catch (error) {
+        showAlert('error', 'Could Not Remove Request', error.message || 'Unable to remove the saved request.');
     }
 }
 
