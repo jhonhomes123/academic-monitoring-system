@@ -2,7 +2,16 @@
     const databaseName = 'ams-student-offline';
     const storeName = 'page-snapshots';
     const serviceWorkerPath = './service-worker.js';
+    const studentPages = [
+        { key: 'dashboard', file: 'student_dashboard.html' },
+        { key: 'subjects', file: 'student_subjects.html' },
+        { key: 'academic', file: 'student_academic.html' },
+        { key: 'requirements', file: 'student_requirements.html' },
+        { key: 'profile', file: 'student_profile.html' }
+    ];
     let databasePromise;
+    let warmupPromise;
+    const isWarmupFrame = new URLSearchParams(window.location.search).get('amsOfflineWarm') === '1';
 
     function openDatabase() {
         if (!('indexedDB' in window)) return Promise.reject(new Error('Offline storage is unavailable.'));
@@ -22,15 +31,16 @@
         return databasePromise;
     }
 
-    function setNotice(message, visible) {
+    function setNotice(message, visible, type = 'offline') {
         let notice = document.getElementById('studentOfflineNotice');
         if (!notice) {
             notice = document.createElement('div');
             notice.id = 'studentOfflineNotice';
             notice.setAttribute('role', 'status');
-            notice.style.cssText = 'position:fixed;z-index:10000;top:0;left:0;right:0;padding:9px 16px;text-align:center;background:#7c2d12;color:#fff;font:600 14px/1.4 sans-serif;';
+            notice.style.cssText = 'position:fixed;z-index:10000;top:0;left:0;right:0;padding:9px 16px;text-align:center;color:#fff;font:600 14px/1.4 sans-serif;';
             document.body.appendChild(notice);
         }
+        notice.style.background = type === 'ready' ? '#166534' : type === 'sync' ? '#1d4ed8' : '#7c2d12';
         notice.textContent = message;
         notice.hidden = !visible;
         document.body.classList.toggle('student-offline-view', visible);
@@ -117,7 +127,76 @@
             html: main.innerHTML,
             savedAt: new Date().toISOString()
         });
+        if (!isWarmupFrame) {
+            void warmStudentPages(client, pageKey, userId).catch(error => {
+                console.warn('Could not prepare all student pages for offline viewing.', error);
+            });
+        }
         return true;
+    }
+
+    async function waitForSnapshot(userId, pageKey, savedAfter, timeoutMs = 30000) {
+        const startedAt = Date.now();
+        while (Date.now() - startedAt < timeoutMs) {
+            if (!navigator.onLine) return false;
+            const snapshot = await readSnapshot(snapshotKey(userId, pageKey));
+            if (snapshot?.html && Date.parse(snapshot.savedAt) >= savedAfter) return true;
+            await new Promise(resolve => setTimeout(resolve, 500));
+        }
+        return false;
+    }
+
+    async function warmStudentPages(client, currentPageKey, userId) {
+        if (!navigator.onLine || isWarmupFrame) return;
+        if (warmupPromise) return warmupPromise;
+
+        warmupPromise = (async () => {
+            const pagesToWarm = studentPages.filter(page => page.key !== currentPageKey);
+            const missingPages = [];
+            for (const page of pagesToWarm) {
+                if (!(await readSnapshot(snapshotKey(userId, page.key)))) missingPages.push(page);
+            }
+            if (!missingPages.length) return;
+
+            setNotice('Preparing the rest of your student pages for offline viewing...', true, 'sync');
+            await Promise.all(missingPages.map(async page => {
+                if (!navigator.onLine) return;
+                const frame = document.createElement('iframe');
+                frame.title = 'Preparing offline student page';
+                frame.setAttribute('aria-hidden', 'true');
+                frame.tabIndex = -1;
+                frame.style.cssText = 'position:fixed;left:-10000px;top:0;width:1px;height:1px;border:0;';
+                const pageUrl = new URL(page.file, window.location.href);
+                pageUrl.searchParams.set('amsOfflineWarm', '1');
+                frame.src = pageUrl.href;
+                const saveStartedAt = Date.now();
+                document.body.appendChild(frame);
+
+                try {
+                    await waitForSnapshot(userId, page.key, saveStartedAt);
+                } catch (error) {
+                    console.warn(`Could not prepare offline ${page.key} page.`, error);
+                } finally {
+                    frame.remove();
+                }
+            }));
+
+            if (navigator.onLine) {
+                const hasAllPages = await Promise.all(studentPages.map(async page =>
+                    Boolean(await readSnapshot(snapshotKey(userId, page.key)))
+                ));
+                if (hasAllPages.every(Boolean)) {
+                    setNotice('All student pages are saved for offline viewing on this device.', true, 'ready');
+                    window.setTimeout(() => setNotice('', false), 6000);
+                } else {
+                    setNotice('Some student pages could not be saved for offline viewing. Open them while online to try again.', true, 'sync');
+                }
+            }
+        })().finally(() => {
+            warmupPromise = null;
+        });
+
+        return warmupPromise;
     }
 
     async function restoreStudentOfflineSnapshot(client, pageKey, force = false) {
