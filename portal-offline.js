@@ -772,7 +772,7 @@
             if (element) element.selectedIndex = 0;
         });
         if (changedIndex < filterIds.length - 1) {
-            const tableBody = main.querySelector('#studentStatusBody, #studentsTable');
+            const tableBody = main.querySelector('#studentStatusBody, #studentTableBody, #studentsTable');
             if (tableBody) {
                 const columnCount = pageKey === 'status' ? 5 : 3;
                 tableBody.innerHTML = `<tr><td colspan="${columnCount}" class="empty">Select the remaining filters to open this class list.</td></tr>`;
@@ -793,7 +793,7 @@
             const select = container.querySelector(`#${id}`);
             if (select) select.selectedIndex = 0;
         });
-        const tableBody = container.querySelector('#studentStatusBody, #studentsTable');
+        const tableBody = container.querySelector('#studentStatusBody, #studentTableBody, #studentsTable');
         if (tableBody) {
             const columnCount = pageKey === 'status' ? 5 : 3;
             tableBody.innerHTML = `<tr><td colspan="${columnCount}" class="empty">Select each filter to open a saved class list.</td></tr>`;
