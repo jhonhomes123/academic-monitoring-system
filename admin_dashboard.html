@@ -1043,10 +1043,7 @@ table td{
                     <h1>Welcome Administrator</h1>
                     <p>
                         Academic Monitoring System Dashboard
-                    </p>
-                </div>
-
-            </div>
+                    onclick='viewMajors(${JSON.stringify(dep.department_id)}, ${JSON.stringify(dep.department_name)})'>
             <!-- DASHBOARD CARDS -->
             <div class="dashboard-grid">
 
@@ -3426,6 +3423,43 @@ async function approveAccount(id) {
         let currentTeacherAssignmentId = null;
         let currentRejectUserId = null;
 
+        async function getAdminExplorerRecords() {
+            if (navigator.onLine || !window.getAdminStructureData) return null;
+            const { lookups, pending } = await window.getAdminStructureData(supabaseClient);
+            if (!lookups) return { departments: [], majors: [], sections: [], subjects: [] };
+
+            const hasDelete = (type, id) => pending.some(item => item.type === type && String(item.payload[`${type.replace('_delete', '')}_id`]) === String(id));
+            const departmentDeleted = id => hasDelete('department_delete', id);
+            const majorDeleted = id => hasDelete('major_delete', id);
+            const departmentIdsDeleted = new Set((lookups.departments || []).filter(item => departmentDeleted(item.department_id)).map(item => String(item.department_id)));
+            const majorDepartment = new Map((lookups.majors || []).map(item => [String(item.major_id), String(item.department_id)]));
+            const majorIdsDeleted = new Set((lookups.majors || []).filter(item => majorDeleted(item.major_id) || departmentIdsDeleted.has(String(item.department_id))).map(item => String(item.major_id)));
+            const sectionIdsDeleted = new Set((lookups.sections || []).filter(item => hasDelete('section_delete', item.section_id) || majorIdsDeleted.has(String(item.major_id))).map(item => String(item.section_id)));
+            const subjectIdsDeleted = new Set((lookups.subjects || []).filter(item => hasDelete('subject_delete', item.subject_id) || majorIdsDeleted.has(String(item.major_id))).map(item => String(item.subject_id)));
+
+            const departments = (lookups.departments || []).filter(item => !departmentDeleted(item.department_id));
+            const majors = (lookups.majors || []).filter(item => !majorIdsDeleted.has(String(item.major_id)));
+            const sections = (lookups.sections || []).filter(item => !sectionIdsDeleted.has(String(item.section_id)));
+            const subjects = (lookups.subjects || []).filter(item => !subjectIdsDeleted.has(String(item.subject_id)));
+
+            pending.forEach(item => {
+                if (item.type === 'department_add') departments.push({ department_id: item.localRef, department_name: item.payload.department_name, pending: true });
+                if (item.type === 'major_add' && !departmentDeleted(item.payload.department_id)) {
+                    majors.push({ major_id: item.localRef, department_id: item.payload.department_id, major_name: item.payload.major_name, pending: true });
+                    majorDepartment.set(String(item.localRef), String(item.payload.department_id));
+                }
+                if (item.type === 'section_add' && !majorDeleted(item.payload.major_id)) {
+                    sections.push({ section_id: item.localRef, major_id: item.payload.major_id, year_level: item.payload.year_level, section_name: item.payload.section_name, pending: true });
+                }
+                if (item.type === 'subject_add' && !majorDeleted(item.payload.major_id)) {
+                    const semester = (lookups.semesters || []).find(value => String(value.semester_id) === String(item.payload.semester_id));
+                    subjects.push({ ...item.payload, subject_id: item.localRef, semesters: semester ? { semester_name: semester.semester_name } : null, pending: true });
+                }
+            });
+
+            return { departments, majors, sections, subjects, pending, lookups };
+        }
+
         /* =========================================================
    MANAGE TEACHERS VARIABLES
 ========================================================= */
@@ -3860,18 +3894,17 @@ async function viewDepartmentsByYear(year) {
 ).innerText =
     `${year}`;
 
-    const { data, error } =
-        await supabaseClient
-            .from('departments')
-            .select('*')
-            .order('department_name');
-
-    if (error) {
-
-        console.log(error);
-
-        return;
-
+    let data;
+    if (!navigator.onLine) {
+        const offlineRecords = await getAdminExplorerRecords();
+        data = offlineRecords.departments;
+    } else {
+        const result = await supabaseClient.from('departments').select('*').order('department_name');
+        if (result.error) {
+            console.log(result.error);
+            return;
+        }
+        data = result.data || [];
     }
 
     table.innerHTML = `
@@ -3896,13 +3929,10 @@ async function viewDepartmentsByYear(year) {
 
 <tr
 class="explorer-row"
-onclick="viewMajors(
-${dep.department_id},
-decodeURIComponent('${encodeURIComponent(dep.department_name)}')
-)">
+onclick="viewMajors(${JSON.stringify(dep.department_id)}, decodeURIComponent('${encodeURIComponent(dep.department_name)}'))">
 
     <td>
-        ${dep.department_name}
+        ${dep.department_name}${dep.pending ? ' (waiting to sync)' : ''}
     </td>
 
     <td>
@@ -3943,19 +3973,17 @@ decodeURIComponent('${encodeURIComponent(dep.department_name)}')
 ).innerText =
     `${currentExplorerYear} | ${departmentName}`;
 
-    const { data, error } =
-        await supabaseClient
-            .from('majors')
-            .select('*')
-            .eq('department_id', departmentId)
-            .order('major_name');
-
-    if (error) {
-
-        console.log(error);
-
-        return;
-
+    let data;
+    if (!navigator.onLine) {
+        const offlineRecords = await getAdminExplorerRecords();
+        data = offlineRecords.majors.filter(major => String(major.department_id) === String(departmentId));
+    } else {
+        const result = await supabaseClient.from('majors').select('*').eq('department_id', departmentId).order('major_name');
+        if (result.error) {
+            console.log(result.error);
+            return;
+        }
+        data = result.data || [];
     }
 
    table.innerHTML = `
@@ -4003,13 +4031,10 @@ data.forEach(major => {
 
         <tr
         class="explorer-row"
-       onclick='viewSubjectsByMajor(
-    ${major.major_id},
-    ${JSON.stringify(major.major_name)}
-)'>
+    onclick="viewSubjectsByMajor(decodeURIComponent('${encodeURIComponent(major.major_id)}'), decodeURIComponent('${encodeURIComponent(major.major_name)}'))">
 
             <td>
-                ${major.major_name}
+                ${major.major_name}${major.pending ? ' (waiting to sync)' : ''}
             </td>
 
             <td>
@@ -4081,14 +4106,20 @@ data.forEach(major => {
                LOAD SECTIONS
             ====================== */
 
-            const {
-                data: sections,
-                error: sectionError
-            } = await supabaseClient
-                .from('sections')
-                .select('*')
-               .eq('major_id', majorId)
-.eq('year_level', currentExplorerYear);
+            let sections;
+            let sectionError = null;
+            if (!navigator.onLine) {
+                const offlineRecords = await getAdminExplorerRecords();
+                sections = offlineRecords.sections.filter(section =>
+                    String(section.major_id) === String(majorId)
+                    && section.year_level === currentExplorerYear
+                );
+            } else {
+                const result = await supabaseClient.from('sections').select('*')
+                    .eq('major_id', majorId).eq('year_level', currentExplorerYear);
+                sections = result.data || [];
+                sectionError = result.error;
+            }
 
             const sectionColumn =
                 document.getElementById(
@@ -4120,7 +4151,7 @@ data.forEach(major => {
                     background:#f5f5f5;
                     border-radius:8px;
                 ">
-                    ${section.section_name}
+                        ${section.section_name}${section.pending ? ' (waiting to sync)' : ''}
                 </div>
 
             `).join('');
@@ -4131,15 +4162,21 @@ data.forEach(major => {
                LOAD SUBJECTS
             ====================== */
 
-            const {
-                data: subjects,
-                error: subjectError
-            } = await supabaseClient
-                .from('subjects')
-                .select('subject_id, subject_code, subject_name, semester_id, semesters(semester_name)')
-                .eq('major_id', majorId)
-                .eq('year_level', currentExplorerYear)
-                .order('subject_name');
+            let subjects;
+            let subjectError = null;
+            if (!navigator.onLine) {
+                const offlineRecords = await getAdminExplorerRecords();
+                subjects = offlineRecords.subjects.filter(subject =>
+                    String(subject.major_id) === String(majorId)
+                    && subject.year_level === currentExplorerYear
+                );
+            } else {
+                const result = await supabaseClient.from('subjects')
+                    .select('subject_id, subject_code, subject_name, semester_id, semesters(semester_name)')
+                    .eq('major_id', majorId).eq('year_level', currentExplorerYear).order('subject_name');
+                subjects = result.data || [];
+                subjectError = result.error;
+            }
 
             const subjectColumn =
                 document.getElementById(
@@ -4191,16 +4228,13 @@ data.forEach(major => {
 
     <br>
 
-    ${sub.subject_name}
+    ${sub.subject_name}${sub.pending ? ' (waiting to sync)' : ''}
 
     <br><br>
 
     <button
     class="btn"
-    onclick='viewSubjectTeachers(
-    ${sub.subject_id},
-    ${JSON.stringify(sub.subject_name)}
-)'>
+    onclick="viewSubjectTeachers(decodeURIComponent('${encodeURIComponent(sub.subject_id)}'), decodeURIComponent('${encodeURIComponent(sub.subject_name)}'))">
 
     Open
 
@@ -4254,8 +4288,13 @@ data.forEach(major => {
     
     `;
 
-            const { data, error } =
-                await supabaseClient
+            let data;
+            let error = null;
+            if (!navigator.onLine) {
+                const offlineRecords = await getAdminExplorerRecords();
+                data = (offlineRecords.lookups?.teacherAssignments || []).filter(item => String(item.subject_id) === String(subjectId));
+            } else {
+                const result = await supabaseClient
                     .from('teacher_subject_assignments')
                     .select(`
                 assignment_id,
@@ -4266,6 +4305,9 @@ data.forEach(major => {
                 )
             `)
                     .eq('subject_id', subjectId);
+                data = result.data || [];
+                error = result.error;
+            }
 
             if (error) {
 
@@ -4328,7 +4370,7 @@ data.forEach(major => {
             <td>
 
 
-                <button
+                ${navigator.onLine ? `<button
                     class="btn reject-btn"
                     onclick="removeTeacherAssignment(
                         ${assign.assignment_id}
@@ -4336,7 +4378,7 @@ data.forEach(major => {
 
                     Remove
 
-                </button>
+                </button>` : 'Offline view'}
 
             </td>
 
@@ -4660,11 +4702,9 @@ async function refreshCurrentExplorer() {
 
             let data;
             if (!navigator.onLine && window.getAdminStructureData) {
-                const offlineData = await window.getAdminStructureData(supabaseClient);
-                data = [...(offlineData.lookups?.departments || [])];
-                offlineData.pending.filter(item => item.type === 'department_add').forEach(item => {
-                    data.push({ department_id: item.localRef, department_name: item.payload.department_name });
-                });
+                const offlineRecords = await getAdminExplorerRecords();
+                data = [...offlineRecords.departments];
+                if (selectId.startsWith('delete')) data = data.filter(item => !item.pending);
             } else {
                 const result = await supabaseClient.from('departments').select('*').order('department_name');
                 data = result.data || [];
@@ -4676,6 +4716,7 @@ async function refreshCurrentExplorer() {
                         }
                     });
                 }
+                if (selectId.startsWith('delete')) data = data.filter(item => !item.pending);
             }
 
             // PLACEHOLDER
@@ -4692,7 +4733,7 @@ async function refreshCurrentExplorer() {
                 select.innerHTML += `
         
         <option value="${dep.department_id}">
-            ${dep.department_name}
+                ${dep.department_name}${dep.pending ? ' (waiting to sync)' : ''}
         </option>
         
         `;
@@ -4733,7 +4774,7 @@ async function refreshCurrentExplorer() {
                 majorSelect.innerHTML += `
         
         <option value="${major.major_id}">
-            ${major.major_name}
+                ${major.major_name}${major.pending ? ' (waiting to sync)' : ''}
         </option>
         
         `;
@@ -5567,6 +5608,18 @@ async function loadDepartmentDeleteOptions() {
 
         async () => {
 
+            if (!navigator.onLine) {
+                try {
+                    await window.queueAdminStructureDelete(supabaseClient, 'department_delete', id);
+                    closeDeleteDepartmentModal();
+                    showAlert('success', 'Department Delete Queued', 'The department and its academic data will be deleted when you are online. Students will be left unassigned.');
+                    await refreshCurrentExplorer();
+                } catch (error) {
+                    showAlert('error', 'Delete Failed', error.message);
+                }
+                return;
+            }
+
             const { error } = await supabaseClient.rpc('admin_delete_department', {
                 p_department_id: id,
             });
@@ -5652,18 +5705,14 @@ async function loadDepartmentDeleteOptions() {
 
             if (!departmentId) return;
 
-            const { data, error } =
-                await supabaseClient
-                    .from('majors')
-                    .select('*')
-                    .eq('department_id', departmentId)
-                    .order('major_name');
-
-            if (error) {
-
-                console.log(error);
-                return;
-
+            let data;
+            if (!navigator.onLine) {
+                const offlineRecords = await getAdminExplorerRecords();
+                data = offlineRecords.majors.filter(major => String(major.department_id) === String(departmentId) && !major.pending);
+            } else {
+                const result = await supabaseClient.from('majors').select('*').eq('department_id', departmentId).order('major_name');
+                if (result.error) { console.log(result.error); return; }
+                data = result.data || [];
             }
 
             if (!data.length) {
@@ -5742,6 +5791,18 @@ async function loadDepartmentDeleteOptions() {
         `Are you sure you want to delete "${majorName}"?`,
 
         async () => {
+
+            if (!navigator.onLine) {
+                try {
+                    await window.queueAdminStructureDelete(supabaseClient, 'major_delete', id);
+                    closeDeleteMajorModal();
+                    showAlert('success', 'Major Delete Queued', 'The major will be deleted when you are online if it has no sections or subjects.');
+                    await refreshCurrentExplorer();
+                } catch (error) {
+                    showAlert('error', 'Delete Failed', error.message);
+                }
+                return;
+            }
 
             const { error } = await supabaseClient.rpc('admin_delete_major', {
                 p_major_id: id,
@@ -5841,18 +5902,14 @@ async function loadDepartmentDeleteOptions() {
 
             if (!departmentId) return;
 
-            const { data, error } =
-                await supabaseClient
-                    .from('majors')
-                    .select('*')
-                    .eq('department_id', departmentId)
-                    .order('major_name');
-
-            if (error) {
-
-                console.log(error);
-                return;
-
+            let data;
+            if (!navigator.onLine) {
+                const offlineRecords = await getAdminExplorerRecords();
+                data = offlineRecords.majors.filter(major => String(major.department_id) === String(departmentId) && !major.pending);
+            } else {
+                const result = await supabaseClient.from('majors').select('*').eq('department_id', departmentId).order('major_name');
+                if (result.error) { console.log(result.error); return; }
+                data = result.data || [];
             }
 
             if (!data.length) {
@@ -5910,19 +5967,14 @@ async function loadDepartmentDeleteOptions() {
 
     if (!majorId || !yearLevel) return;
 
-    const { data, error } =
-        await supabaseClient
-            .from('sections')
-            .select('*')
-            .eq('major_id', majorId)
-            .eq('year_level', yearLevel)
-            .order('section_name');
-
-    if (error) {
-
-        console.log(error);
-        return;
-
+    let data;
+    if (!navigator.onLine) {
+        const offlineRecords = await getAdminExplorerRecords();
+        data = offlineRecords.sections.filter(section => String(section.major_id) === String(majorId) && section.year_level === yearLevel && !section.pending);
+    } else {
+        const result = await supabaseClient.from('sections').select('*').eq('major_id', majorId).eq('year_level', yearLevel).order('section_name');
+        if (result.error) { console.log(result.error); return; }
+        data = result.data || [];
     }
 
     if (!data.length) {
@@ -6011,6 +6063,18 @@ async function loadDepartmentDeleteOptions() {
         `Are you sure you want to delete "${sectionName}"?`,
 
         async () => {
+
+            if (!navigator.onLine) {
+                try {
+                    await window.queueAdminStructureDelete(supabaseClient, 'section_delete', id);
+                    closeDeleteSectionModal();
+                    showAlert('success', 'Section Delete Queued', 'The section will be deleted when you are online if no students are assigned to it.');
+                    await refreshCurrentExplorer();
+                } catch (error) {
+                    showAlert('error', 'Delete Failed', error.message);
+                }
+                return;
+            }
 
             const { error } = await supabaseClient.rpc('admin_delete_section', {
                 p_section_id: id,
@@ -6141,19 +6205,14 @@ async function loadDepartmentDeleteOptions() {
 
             if (!departmentId) return;
 
-            const { data, error } =
-                await supabaseClient
-                    .from('majors')
-                    .select('*')
-                    .eq('department_id', departmentId)
-                    .order('major_name');
-
-            if (error) {
-
-                console.log(error);
-
-                return;
-
+            let data;
+            if (!navigator.onLine) {
+                const offlineRecords = await getAdminExplorerRecords();
+                data = offlineRecords.majors.filter(major => String(major.department_id) === String(departmentId) && !major.pending);
+            } else {
+                const result = await supabaseClient.from('majors').select('*').eq('department_id', departmentId).order('major_name');
+                if (result.error) { console.log(result.error); return; }
+                data = result.data || [];
             }
 
             if (!data || data.length === 0) {
@@ -6211,19 +6270,14 @@ async function loadSubjectsForDelete() {
 
     if (!majorId || !yearLevel) return;
 
-    const { data, error } =
-        await supabaseClient
-            .from('subjects')
-            .select('*')
-            .eq('major_id', majorId)
-            .eq('year_level', yearLevel)
-            .order('subject_name');
-
-    if (error) {
-
-        console.log(error);
-        return;
-
+    let data;
+    if (!navigator.onLine) {
+        const offlineRecords = await getAdminExplorerRecords();
+        data = offlineRecords.subjects.filter(subject => String(subject.major_id) === String(majorId) && subject.year_level === yearLevel && !subject.pending);
+    } else {
+        const result = await supabaseClient.from('subjects').select('*').eq('major_id', majorId).eq('year_level', yearLevel).order('subject_name');
+        if (result.error) { console.log(result.error); return; }
+        data = result.data || [];
     }
 
     if (!data || data.length === 0) {
@@ -6312,6 +6366,18 @@ async function loadSubjectsForDelete() {
         `Are you sure you want to delete "${subjectName}"?`,
 
         async () => {
+
+            if (!navigator.onLine) {
+                try {
+                    await window.queueAdminStructureDelete(supabaseClient, 'subject_delete', id);
+                    closeDeleteSubjectModal();
+                    showAlert('success', 'Subject Delete Queued', 'The subject and its associated records will be deleted when you are online.');
+                    await refreshCurrentExplorer();
+                } catch (error) {
+                    showAlert('error', 'Delete Failed', error.message);
+                }
+                return;
+            }
 
             const { error } = await supabaseClient.rpc('admin_delete_subject', {
                 p_subject_id: Number(id),
@@ -7666,7 +7732,11 @@ async function renderAdminStructureQueue() {
         department_add: 'Add department',
         major_add: 'Add major',
         section_add: 'Add section',
-        subject_add: 'Add subject'
+        subject_add: 'Add subject',
+        department_delete: 'Delete department',
+        major_delete: 'Delete major',
+        section_delete: 'Delete section',
+        subject_delete: 'Delete subject'
     };
     pending.forEach(item => {
         const details = item.type === 'semester_set'
@@ -7677,7 +7747,9 @@ async function renderAdminStructureQueue() {
                     ? item.payload.major_name
                     : item.type === 'section_add'
                         ? `${item.payload.section_name}, ${item.payload.year_level}`
-                        : `${item.payload.subject_code} - ${item.payload.subject_name}, ${item.payload.year_level}`;
+                        : item.type === 'subject_add'
+                            ? `${item.payload.subject_code} - ${item.payload.subject_name}, ${item.payload.year_level}`
+                            : `${item.type.replace('_delete', '')} ID ${item.payload[`${item.type.replace('_delete', '')}_id`]}`;
         const row = document.createElement('tr');
         [labels[item.type] || 'Admin change', details, item.lastError ? 'Waiting to retry' : 'Waiting for connection']
             .forEach(value => {
@@ -7694,6 +7766,9 @@ window.addEventListener('admin-account-data-changed', () => {
 });
 window.addEventListener('admin-structure-data-changed', () => {
     void renderAdminStructureQueue();
+    if (document.getElementById('departmentSection')?.classList.contains('active-section')) {
+        void refreshCurrentExplorer();
+    }
 });
 
 function openCreateStudentModal() {

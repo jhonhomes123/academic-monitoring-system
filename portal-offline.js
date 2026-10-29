@@ -261,7 +261,7 @@
         if (!currentUserId || !main) return false;
         const snapshotMain = main.cloneNode(true);
         snapshotMain.querySelectorAll('.modal,.modal-overlay,.confirm-modal-overlay,.ams-alert').forEach(element => {
-            if (!['createStudentModal', 'createTeacherModal', 'departmentModal', 'majorModal', 'sectionModal', 'subjectModal'].includes(element.id)) {
+            if (!['createStudentModal', 'createTeacherModal', 'departmentModal', 'majorModal', 'sectionModal', 'subjectModal', 'deleteDepartmentModal', 'deleteMajorModal', 'deleteSectionModal', 'deleteSubjectModal'].includes(element.id)) {
                 element.remove();
                 return;
             }
@@ -314,13 +314,14 @@
                 modal.classList.remove('show');
             });
             document.querySelectorAll('input,select,textarea,button').forEach(control => {
-                const inAllowedModal = control.closest('#createStudentModal,#createTeacherModal,#departmentModal,#majorModal,#sectionModal,#subjectModal');
+                const inAllowedModal = control.closest('#createStudentModal,#createTeacherModal,#departmentModal,#majorModal,#sectionModal,#subjectModal,#deleteDepartmentModal,#deleteMajorModal,#deleteSectionModal,#deleteSubjectModal');
                 const opensAllowedModal = control.matches('button')
-                    && /openCreateStudentModal|openCreateTeacherModal|openDepartmentModal|openMajorModal|openSectionModal|openSubjectModal/.test(control.getAttribute('onclick') || '');
+                    && /openCreateStudentModal|openCreateTeacherModal|openDepartmentModal|openMajorModal|openSectionModal|openSubjectModal|openDeleteDepartmentModal|openDeleteMajorModal|openDeleteSectionModal|openDeleteSubjectModal/.test(control.getAttribute('onclick') || '');
                 const isAllowedOfflineAction = control.matches('button')
-                    && /createStudentAccount|createTeacherAccount|addDepartment|addMajor|addSection|addSubject|setActiveSemester|closeCreateStudentModal|closeModal|closeDepartmentModal|closeMajorModal|closeSectionModal|closeSubjectModal/.test(control.getAttribute('onclick') || '');
+                    && /createStudentAccount|createTeacherAccount|addDepartment|addMajor|addSection|addSubject|setActiveSemester|deleteDepartment|deleteMajor|deleteSectionModalAction|deleteSubject|closeCreateStudentModal|closeModal|closeDepartmentModal|closeMajorModal|closeSectionModal|closeSubjectModal|closeDeleteDepartmentModal|closeDeleteMajorModal|closeDeleteSectionModal|closeDeleteSubjectModal|loadDepartmentDeleteOptions|loadMajorsForDelete|loadMajorsForDeleteSection|loadSectionsForDelete|loadMajorsForDeleteSubject|loadSubjectsForDelete/.test(control.getAttribute('onclick') || '');
                 const isSemesterPicker = control.id === 'activeSemesterSelect';
                 control.disabled = !(opensAllowedModal || isSemesterPicker || (control.matches('button') && /setActiveSemester/.test(control.getAttribute('onclick') || ''))
+                    || control.id === 'confirmActionBtn' || control.matches('.cancel-btn')
                     || (inAllowedModal && (!control.matches('button') || isAllowedOfflineAction)));
             });
             window.adminOfflineView = true;
@@ -428,18 +429,21 @@
 
     async function saveAdminAccountLookups(client, userId) {
         try {
-            const [departmentsResult, majorsResult, sectionsResult, semestersResult] = await Promise.all([
+            const [departmentsResult, majorsResult, sectionsResult, semestersResult, subjectsResult, teacherAssignmentsResult] = await Promise.all([
                 client.from('departments').select('department_id, department_name').order('department_name'),
                 client.from('majors').select('major_id, department_id, major_name').order('major_name'),
                 client.from('sections').select('section_id, major_id, year_level, section_name').order('section_name'),
-                client.from('semesters').select('semester_id, semester_name, is_active').order('semester_id')
+                client.from('semesters').select('semester_id, semester_name, is_active').order('semester_id'),
+                client.from('subjects').select('subject_id, subject_code, subject_name, major_id, semester_id, year_level, semesters(semester_name)').order('subject_name'),
+                client.from('teacher_subject_assignments').select('assignment_id, subject_id, teachers(first_name,middle_initial,last_name)').order('assignment_id')
             ]);
-            const lookupError = departmentsResult.error || majorsResult.error || sectionsResult.error || semestersResult.error;
+            const lookupError = departmentsResult.error || majorsResult.error || sectionsResult.error || semestersResult.error || subjectsResult.error || teacherAssignmentsResult.error;
             if (lookupError) throw lookupError;
             await adminStoreRequest(adminLookupStoreName, 'readwrite', store => store.put({
                 key: `${userId}:lookups`, userId,
                 departments: departmentsResult.data || [], majors: majorsResult.data || [], sections: sectionsResult.data || [],
-                semesters: semestersResult.data || [],
+                semesters: semestersResult.data || [], subjects: subjectsResult.data || [],
+                teacherAssignments: teacherAssignmentsResult.data || [],
                 savedAt: new Date().toISOString()
             }));
         } catch (error) {
@@ -467,6 +471,21 @@
         setNotice('Admin change saved on this device. It will apply when connected.', true, 'sync');
         window.dispatchEvent(new CustomEvent('admin-structure-data-changed'));
         return { operationId, localRef };
+    }
+
+    async function queueAdminStructureDelete(client, type, recordId) {
+        if (recordId === null || recordId === undefined || String(recordId).startsWith('local:')) {
+            throw new Error('This pending item must sync before it can be deleted.');
+        }
+        const idFields = {
+            department_delete: 'department_id',
+            major_delete: 'major_id',
+            section_delete: 'section_id',
+            subject_delete: 'subject_id'
+        };
+        const idField = idFields[type];
+        if (!idField) throw new Error('This delete action is not supported offline.');
+        return queueAdminStructureOperation(client, type, { [idField]: String(recordId) });
     }
 
     async function getAdminStructureData(client) {
@@ -662,6 +681,7 @@
     window.syncAdminAccountQueue = syncAdminAccountQueue;
     window.getAdminAccountLookups = getAdminAccountLookups;
     window.queueAdminStructureOperation = queueAdminStructureOperation;
+    window.queueAdminStructureDelete = queueAdminStructureDelete;
     window.getAdminStructureData = getAdminStructureData;
     window.syncAdminStructureQueue = syncAdminStructureQueue;
     window.clearAdminStructureQueue = clearAdminStructureQueue;
