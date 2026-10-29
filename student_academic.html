@@ -284,6 +284,7 @@ async function getActiveSemesterId() {
 }
 
 async function loadAcademicStatus() {
+    if (await beginStudentOfflinePage(supabaseClient, 'academic')) return;
     try {
         const { data: sessionData } = await supabaseClient.auth.getSession();
         let user = sessionData?.session?.user;
@@ -294,6 +295,7 @@ async function loadAcademicStatus() {
         }
 
         if (!user) {
+            if (await restoreStudentOfflineSnapshot(supabaseClient, 'academic', true)) return;
             renderAcademic([], "No authenticated user.");
             return;
         }
@@ -327,6 +329,7 @@ async function loadAcademicStatus() {
         }
 
         if (studentError || !student) {
+            if (await restoreStudentOfflineSnapshot(supabaseClient, 'academic', true)) return;
             console.error("Student lookup failed", studentError);
             renderAcademic([], "Student record not found.");
             return;
@@ -335,6 +338,7 @@ async function loadAcademicStatus() {
         const activeSemester = await getActiveSemesterId();
         if (!activeSemester) {
             renderAcademic([], 'No active semester is set by the administrator.');
+            await saveStudentOfflineSnapshot(supabaseClient, 'academic');
             return;
         }
         document.getElementById('activeSemesterLabel').textContent = `Showing grades for ${activeSemester.semester_name}`;
@@ -359,8 +363,7 @@ async function loadAcademicStatus() {
 
         if (gradesError) {
             console.error("Failed to load grades", gradesError);
-            renderAcademic([], "Failed to load grades.");
-            return;
+            throw gradesError;
         }
 
         const gradesBySubject = new Map((gradeRows || []).map(grade => [String(grade.subject_id), grade]));
@@ -371,8 +374,10 @@ async function loadAcademicStatus() {
         }));
 
         renderAcademic(grades || []);
+        await saveStudentOfflineSnapshot(supabaseClient, 'academic');
     } catch (err) {
         console.error("Error loading academic status", err);
+        if (await restoreStudentOfflineSnapshot(supabaseClient, 'academic', true)) return;
         renderAcademic([], "Error loading academic status.");
     }
 }
@@ -418,3 +423,4 @@ function renderAcademic(grades, message) {
 window.addEventListener("DOMContentLoaded", loadAcademicStatus);
 </script>
 <script src="auth-session.js"></script>
+<script src="student-offline.js"></script>

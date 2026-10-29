@@ -816,9 +816,11 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 async function loadStudentDashboard() {
+    if (await beginStudentOfflinePage(supabaseClient, 'dashboard')) return;
     try {
         const { data: { user }, error: userErr } = await supabaseClient.auth.getUser();
         if (userErr || !user) {
+            if (await restoreStudentOfflineSnapshot(supabaseClient, 'dashboard', true)) return;
             console.error('Not logged in', userErr);
             return;
         }
@@ -998,7 +1000,7 @@ async function loadStudentDashboard() {
                 .limit(10)
             : { data: [], error: null };
 
-        if (reqErr) console.error('Error loading requirements', reqErr);
+        if (reqErr) throw reqErr;
 
         const recentBody = document.getElementById('recentMissingBody');
         let reqHtml = '';
@@ -1013,8 +1015,11 @@ async function loadStudentDashboard() {
         }
         if (recentBody) recentBody.innerHTML = reqHtml;
 
+        await saveStudentOfflineSnapshot(supabaseClient, 'dashboard');
+
     } catch (e) {
         console.error('Error loading dashboard', e);
+        await restoreStudentOfflineSnapshot(supabaseClient, 'dashboard', true);
     }
 }
 
@@ -1022,5 +1027,6 @@ window.addEventListener('DOMContentLoaded', loadStudentDashboard);
 </script>
 
 <script src="auth-session.js"></script>
+<script src="student-offline.js"></script>
 </body>
 </html>

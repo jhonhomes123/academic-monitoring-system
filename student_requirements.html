@@ -334,10 +334,12 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 async function loadStudentRequirements() {
+    if (await beginStudentOfflinePage(supabaseClient, 'requirements')) return;
     try {
         // Get current user
         const { data: { user }, error: userError } = await supabaseClient.auth.getUser();
         if (userError || !user) {
+            if (await restoreStudentOfflineSnapshot(supabaseClient, 'requirements', true)) return;
             console.error('Not logged in');
             return;
         }
@@ -374,6 +376,7 @@ async function loadStudentRequirements() {
         }
 
         if (studentError || !student) {
+            if (await restoreStudentOfflineSnapshot(supabaseClient, 'requirements', true)) return;
             console.error('Student record not found', studentError, student);
             return;
         }
@@ -419,12 +422,14 @@ async function loadStudentRequirements() {
 
         if (reqError) {
             console.error('Error loading requirements', reqError);
+            if (await restoreStudentOfflineSnapshot(supabaseClient, 'requirements', true)) return;
             return;
         }
         const requirements = (requirementRows || []).filter(requirement => activeSubjectIds.has(String(requirement.subject_id)));
 
         // Load all files for this student's requirements (guard empty requirement list)
         let files = [];
+        let attachmentLoadFailed = false;
         try {
             if (requirements && requirements.length > 0) {
                 const reqIds = requirements.map(r => r.requirement_id).filter(id => id != null);
@@ -453,11 +458,13 @@ async function loadStudentRequirements() {
                                 .select('file_url, file_name, requirement_id, student_id, subject_id')
                                 .eq('requirement_id', r.requirement_id);
                             if (fErr) {
+                                attachmentLoadFailed = true;
                                 console.warn('Error fetching files for requirement', r.requirement_id, fErr);
                             } else if (fData && fData.length) {
                                 files.push(...fData);
                             }
                         } catch (e) {
+                            attachmentLoadFailed = true;
                             console.warn('Exception fetching files for requirement', r.requirement_id, e);
                         }
                     }
@@ -468,8 +475,11 @@ async function loadStudentRequirements() {
                 console.log('No requirements to fetch files for.');
             }
         } catch (e) {
+            attachmentLoadFailed = true;
             console.error('Exception while loading files', e);
         }
+
+        if (attachmentLoadFailed && await restoreStudentOfflineSnapshot(supabaseClient, 'requirements', true)) return;
 
         console.log('requirements ->', requirements || []);
         console.log('files ->', files || []);
@@ -478,6 +488,7 @@ async function loadStudentRequirements() {
 
         if (!requirements || requirements.length === 0) {
             tableBody.innerHTML = '<tr><td colspan="2" class="empty">No requirements assigned</td></tr>';
+            await saveStudentOfflineSnapshot(supabaseClient, 'requirements');
             return;
         }
 
@@ -516,9 +527,11 @@ async function loadStudentRequirements() {
         });
 
         tableBody.innerHTML = rows;
+        await saveStudentOfflineSnapshot(supabaseClient, 'requirements');
 
     } catch (err) {
         console.error('Error loading requirements', err);
+        await restoreStudentOfflineSnapshot(supabaseClient, 'requirements', true);
     }
 }
 
@@ -607,5 +620,6 @@ window.onclick = function(event){
 </script>
 
 <script src="auth-session.js"></script>
+<script src="student-offline.js"></script>
 </body>
 </html>

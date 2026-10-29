@@ -280,6 +280,7 @@ async function getActiveSemesterId() {
 }
 
 async function loadStudentSubjects() {
+    if (await beginStudentOfflinePage(supabaseClient, 'subjects')) return;
     try {
         const { data: sessionData } = await supabaseClient.auth.getSession();
         let user = sessionData?.session?.user;
@@ -290,6 +291,7 @@ async function loadStudentSubjects() {
         }
 
         if (!user) {
+            if (await restoreStudentOfflineSnapshot(supabaseClient, 'subjects', true)) return;
             renderSubjects([], "No authenticated user found.");
             return;
         }
@@ -314,6 +316,7 @@ async function loadStudentSubjects() {
         }
 
         if (studentError || !student) {
+            if (await restoreStudentOfflineSnapshot(supabaseClient, 'subjects', true)) return;
             renderSubjects([], "No student record found.");
             return;
         }
@@ -321,12 +324,14 @@ async function loadStudentSubjects() {
         const activeSemester = await getActiveSemesterId();
         if (!activeSemester) {
             renderSubjects([], 'No active semester is set by the administrator.');
+            await saveStudentOfflineSnapshot(supabaseClient, 'subjects');
             return;
         }
         document.getElementById('activeSemesterLabel').textContent = `Showing subjects for ${activeSemester.semester_name}`;
 
         if (!student.sections?.majors) {
             renderSubjects([], 'Your student profile is not assigned to a major and section.');
+            await saveStudentOfflineSnapshot(supabaseClient, 'subjects');
             return;
         }
 
@@ -341,6 +346,7 @@ async function loadStudentSubjects() {
         if (sectionSubjectsError) throw sectionSubjectsError;
         if (!sectionSubjects?.length) {
             renderSubjects([], `No subjects are assigned to ${activeSemester.semester_name} for your major and year.`);
+            await saveStudentOfflineSnapshot(supabaseClient, 'subjects');
             return;
         }
 
@@ -371,8 +377,10 @@ async function loadStudentSubjects() {
         });
 
         renderSubjects(rows);
+        await saveStudentOfflineSnapshot(supabaseClient, 'subjects');
     } catch (err) {
         console.error("Error loading student subjects", err);
+        if (await restoreStudentOfflineSnapshot(supabaseClient, 'subjects', true)) return;
         renderSubjects([], "Error loading subjects.");
     }
 }
@@ -404,5 +412,6 @@ function renderSubjects(subjects, message) {
 window.addEventListener("DOMContentLoaded", loadStudentSubjects);
 </script>
 <script src="auth-session.js"></script>
+<script src="student-offline.js"></script>
 </body>
 </html>

@@ -2,7 +2,17 @@ async function logoutAndRedirect(event, client) {
     event.preventDefault();
 
     try {
-        const { error } = await client.auth.signOut();
+        const { data: { session } = {} } = await client.auth.getSession();
+        if (session?.user?.id && typeof window.clearStudentOfflineSnapshots === 'function') {
+            await window.clearStudentOfflineSnapshots();
+            document.querySelector('.main')?.replaceChildren();
+        }
+    } catch (error) {
+        console.warn('Unable to inspect the local sign-in session before logout.', error);
+    }
+
+    try {
+        const { error } = await client.auth.signOut(navigator.onLine ? undefined : { scope: 'local' });
         if (error) throw error;
     } catch (error) {
         console.error('Unable to clear the sign-in session', error);
