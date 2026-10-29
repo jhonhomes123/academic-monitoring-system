@@ -303,7 +303,7 @@
         } catch (error) {
             console.error('Unable to sync queued teacher changes.', error);
             const syncMessage = navigator.onLine
-                ? 'Connected, but some queued teacher changes are still waiting to sync. The app will retry automatically.'
+                ? `Connected, but some queued teacher changes are still waiting to sync. ${error?.message ? `Reason: ${error.message}` : 'The app will retry automatically.'}`
                 : 'Some teacher changes could not sync. They remain saved on this device; retry when online.';
             setNotice(syncMessage, true, 'sync');
         } finally {
