@@ -1579,8 +1579,9 @@ async function saveGrade(
 studentId
 ){
 
-    const subjectId =
-    subjectFilter.value;
+    const currentSubjectFilter = document.getElementById("subjectFilter");
+    const currentSectionFilter = document.getElementById("sectionFilter");
+    const subjectId = currentSubjectFilter?.value || "";
 
     const prelim =
     document.getElementById(
@@ -1610,7 +1611,7 @@ studentId
                 : null;
 
     if (!Number.isInteger(Number(subjectId)) || Number(subjectId) <= 0
-        || !Number.isInteger(Number(sectionFilter.value)) || Number(sectionFilter.value) <= 0) {
+        || !Number.isInteger(Number(currentSectionFilter?.value)) || Number(currentSectionFilter.value) <= 0) {
         showAlert("warning", "Choose a Class", "Select a valid subject and section before saving this grade.");
         return;
     }
@@ -1620,7 +1621,7 @@ studentId
             await queueTeacherOperation(supabaseClient, 'grade', {
                 student_id: Number(studentId),
                 subject_id: Number(subjectId),
-                section_id: Number(sectionFilter.value),
+                section_id: Number(currentSectionFilter.value),
                 prelim,
                 midterm,
                 final: finalGrade,

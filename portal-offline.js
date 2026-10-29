@@ -319,30 +319,26 @@
             }
         } catch (error) {
             console.error('Unable to sync queued teacher changes.', error);
-            const failedPayload = failedOperation?.payload || {};
             const failedType = failedOperation?.type || 'unknown';
-            const operationDetails = failedType === 'grade'
-                ? `Grade for student ${failedPayload.student_id ?? 'unknown'}, subject ${failedPayload.subject_id ?? 'unknown'}, section ${failedPayload.section_id ?? 'unknown'}`
-                : failedType === 'attachment'
-                    ? `Attachment for subject ${failedPayload.subject_id ?? 'unknown'}, section ${failedPayload.section_id ?? 'unknown'}`
-                    : failedType === 'requirement_delete'
-                        ? `Requirement delete ${failedPayload.requirement_id ?? 'unknown'}, subject ${failedPayload.subject_id ?? 'unknown'}`
-                        : failedType === 'requirement'
-                            ? `Requirement for subject ${failedPayload.subject_id ?? 'unknown'}`
-                            : 'Queued change';
-            const syncMessage = navigator.onLine
-                ? `Connected, but a queued ${operationDetails.toLowerCase()} is still waiting to sync. ${error?.message ? `Reason: ${error.message}` : 'The app will retry automatically.'}`
-                : 'Some teacher changes could not sync. They remain saved on this device; retry when online.';
+            const failedPayload = failedOperation?.payload || {};
             const invalidGrade = failedOperation?.type === 'grade'
                 && (!Number.isInteger(Number(failedPayload.subject_id)) || Number(failedPayload.subject_id) <= 0
                     || !Number.isInteger(Number(failedPayload.section_id)) || Number(failedPayload.section_id) <= 0);
+            const assignmentError = String(error?.message || '').includes('You are not assigned to this active subject and section.');
+            const syncMessage = navigator.onLine
+                ? invalidGrade
+                    ? 'An older saved grade is missing its subject and section, so it cannot sync. Remove it here, then enter the grade again after selecting the class.'
+                    : assignmentError && failedType === 'grade'
+                    ? 'A saved grade could not sync because this teacher is not assigned to that class. It will keep trying until the issue is fixed or the saved grade is removed.'
+                    : `A saved ${failedType === 'grade' ? 'grade' : failedType === 'attachment' ? 'file' : failedType === 'requirement_delete' ? 'requirement deletion' : failedType === 'requirement' ? 'requirement' : 'change'} could not sync. It is still saved on this device and will be retried.`
+                : 'Some teacher changes could not sync. They remain saved on this device; retry when online.';
             const discardAction = invalidGrade ? {
-                label: 'Remove invalid queued grade',
+                label: 'Remove this saved grade',
                 onClick: async () => {
-                    const confirmed = window.confirm('This queued grade has no valid subject or section and cannot sync. Remove this queued item? You can re-enter the grade after choosing the correct subject and section.');
+                    const confirmed = window.confirm('This saved grade is missing its subject and section, so it cannot sync. Remove it from this device? You can enter it again after selecting the correct subject and section.');
                     if (!confirmed) return;
                     await removeQueuedTeacherOperation(failedOperation.key);
-                    setNotice('Invalid queued grade removed. Other queued changes are still saved.', true, 'ready');
+                    setNotice('The unsynced grade was removed. Your other saved changes are still here.', true, 'ready');
                     void syncTeacherQueue(client);
                 }
             } : null;
