@@ -287,7 +287,10 @@
 
             const remaining = await getTeacherQueue(client);
             if (remaining.length) {
-                setNotice(`${remaining.length} teacher change${remaining.length === 1 ? '' : 's'} still waiting to sync. Reconnect and retry.`, true, 'sync');
+                const retryMessage = navigator.onLine
+                    ? `${remaining.length} teacher change${remaining.length === 1 ? '' : 's'} is still waiting to sync. The app will retry automatically while connected.`
+                    : `${remaining.length} teacher change${remaining.length === 1 ? '' : 's'} still waiting to sync. Reconnect and retry.`;
+                setNotice(retryMessage, true, 'sync');
             } else if (operations.length) {
                 document.querySelectorAll('.offline-queued-requirement').forEach(element => element.remove());
                 document.querySelectorAll('button').forEach(button => {
@@ -299,7 +302,10 @@
             }
         } catch (error) {
             console.error('Unable to sync queued teacher changes.', error);
-            setNotice('Some teacher changes could not sync. They remain saved on this device; retry when online.', true, 'sync');
+            const syncMessage = navigator.onLine
+                ? 'Connected, but some queued teacher changes are still waiting to sync. The app will retry automatically.'
+                : 'Some teacher changes could not sync. They remain saved on this device; retry when online.';
+            setNotice(syncMessage, true, 'sync');
         } finally {
             syncInProgress = false;
         }
