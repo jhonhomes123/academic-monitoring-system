@@ -296,6 +296,19 @@
                 return false;
             }
             main.innerHTML = snapshot.html;
+            const userLookups = await getAdminAccountLookups(client, userId);
+            const semesterSelect = main.querySelector('#activeSemesterSelect');
+            if (semesterSelect && userLookups?.semesters?.length) {
+                semesterSelect.innerHTML = '<option value="">Select Semester</option>';
+                userLookups.semesters.forEach(semester => {
+                    semesterSelect.add(new Option(`${semester.semester_name}${semester.is_active ? ' (Active)' : ''}`, semester.semester_id));
+                });
+                const { pending } = await getAdminStructureData(client);
+                const queuedSemester = pending.filter(item => item.type === 'semester_set').at(-1);
+                const selectedSemesterId = queuedSemester?.payload.semester_id
+                    || userLookups.semesters.find(semester => semester.is_active)?.semester_id;
+                semesterSelect.value = selectedSemesterId ? String(selectedSemesterId) : '';
+            }
             document.querySelectorAll('.modal,.modal-overlay,.confirm-modal-overlay').forEach(modal => {
                 modal.style.display = 'none';
                 modal.classList.remove('show');
@@ -307,10 +320,11 @@
                 const isAllowedOfflineAction = control.matches('button')
                     && /createStudentAccount|createTeacherAccount|addDepartment|addMajor|addSection|addSubject|setActiveSemester|closeCreateStudentModal|closeModal|closeDepartmentModal|closeMajorModal|closeSectionModal|closeSubjectModal/.test(control.getAttribute('onclick') || '');
                 const isSemesterPicker = control.id === 'activeSemesterSelect';
-                control.disabled = !(opensAllowedModal || isSemesterPicker || (inAllowedModal && (!control.matches('button') || isAllowedOfflineAction)));
+                control.disabled = !(opensAllowedModal || isSemesterPicker || (control.matches('button') && /setActiveSemester/.test(control.getAttribute('onclick') || ''))
+                    || (inAllowedModal && (!control.matches('button') || isAllowedOfflineAction)));
             });
             window.adminOfflineView = true;
-            setNotice(`Offline admin view: showing saved admin data from ${new Date(snapshot.savedAt).toLocaleString()}. Changes are unavailable offline.`, true);
+            setNotice(`Offline admin view: showing saved admin data from ${new Date(snapshot.savedAt).toLocaleString()}. Selected changes will sync when connected.`, true);
             return true;
         } catch (error) {
             console.warn('Unable to restore the offline admin view.', error);
@@ -699,7 +713,7 @@
                 });
                 setNotice('Teacher changes synced. Refreshing saved teacher data...', true, 'ready');
                 await preloadTeacherAssignedRosters(client, true);
-                window.setTimeout(() => setNotice('', false), 6000);
+                window.setTimeout(() => window.location.reload(), 1200);
             }
         } catch (error) {
             console.error('Unable to sync queued teacher changes.', error);
