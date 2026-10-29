@@ -3,12 +3,22 @@ async function logoutAndRedirect(event, client) {
 
     try {
         const { data: { session } = {} } = await client.auth.getSession();
+        if (session && typeof window.getTeacherOfflineQueue === 'function') {
+            let pending = await window.getTeacherOfflineQueue(client);
+            if (pending.length && navigator.onLine && typeof window.syncTeacherOfflineQueue === 'function') {
+                await window.syncTeacherOfflineQueue(client);
+                pending = await window.getTeacherOfflineQueue(client);
+            }
+            if (pending.length && !window.confirm(`${pending.length} teacher change${pending.length === 1 ? '' : 's'} still need to sync. Logging out will keep them on this device for your next sign-in. Log out anyway?`)) {
+                return;
+            }
+        }
         if (session?.user?.id && typeof window.clearStudentOfflineSnapshots === 'function') {
             await window.clearStudentOfflineSnapshots();
             document.querySelector('.main')?.replaceChildren();
         }
     } catch (error) {
-        console.warn('Unable to inspect the local sign-in session before logout.', error);
+        console.warn('Unable to inspect local offline data before logout.', error);
     }
 
     try {

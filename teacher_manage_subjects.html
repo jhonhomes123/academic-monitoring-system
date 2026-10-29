@@ -867,6 +867,15 @@ Select Subject and Section
             let teacherUserId = null;
             let currentRequirementStudents = [];
 
+            window.capturePortalOfflineState = () => ({ currentRequirementStudents, teacherId, teacherUserId });
+            window.restorePortalOfflineState = state => {
+                currentRequirementStudents = Array.isArray(state?.currentRequirementStudents)
+                    ? state.currentRequirementStudents
+                    : [];
+                teacherId = state?.teacherId || null;
+                teacherUserId = state?.teacherUserId || null;
+            };
+
             function formatPersonTableName(person) {
                 const middleInitial = String(person.middle_initial || '').trim();
                 return `${String(person.last_name || '').trim()}, ${String(person.first_name || '').trim()}${middleInitial ? ` ${middleInitial.charAt(0).toUpperCase()}.` : ''}`;
@@ -1212,7 +1221,7 @@ Select Subject and Section
                             : "";
 
                     html += `
-                        <tr>
+                        <tr data-student-id="${student.student_id}">
                             <td>${formatPersonTableName(student)}</td>
                             <td>${requirementList}</td>
                             <td>
@@ -1240,6 +1249,25 @@ Select Subject and Section
 
                 if (!studentIds.length || !subjectId || !title) {
                     return showAlert('warning', 'Validation', 'Select at least one student and enter a requirement title.');
+                }
+
+                if (!navigator.onLine) {
+                    try {
+                        await queueTeacherOperation(supabaseClient, 'requirement', {
+                            teacher_id: Number(teacherId),
+                            subject_id: Number(subjectId),
+                            section_id: Number(document.getElementById('sectionSelect').value),
+                            student_ids: studentIds,
+                            requirement_title: title,
+                            requirement_description: description,
+                            deadline: deadline || null
+                        }, file || null);
+                        closeRequirementModal();
+                        return;
+                    } catch (queueError) {
+                        showAlert('error', 'Offline Save Failed', queueError.message || 'Unable to save this requirement on the device.');
+                        return;
+                    }
                 }
 
                 const { data: insertedData, error } = await supabaseClient
@@ -1366,6 +1394,27 @@ Select Subject and Section
                     return showAlert('error', 'Error', 'Teacher profile not loaded. Please reload and try again.');
                 }
 
+                if (!navigator.onLine) {
+                    if (!document.getElementById('sectionSelect').value) {
+                        return showAlert('warning', 'Select a Section', 'Choose the assigned section before queueing an offline attachment.');
+                    }
+                    try {
+                        await queueTeacherOperation(supabaseClient, 'attachment', {
+                            teacher_id: Number(teacherId),
+                            subject_id: Number(subjectId),
+                            section_id: Number(document.getElementById('sectionSelect').value),
+                            student_ids: selectedStudentId ? [Number(selectedStudentId)] : []
+                        }, file);
+                        selectedSubjectId = null;
+                        selectedStudentId = null;
+                        document.getElementById('instructionFile').value = '';
+                        closeUploadModal();
+                        return;
+                    } catch (queueError) {
+                        return showAlert('error', 'Offline Upload Failed', queueError.message || 'Unable to save this attachment for later upload.');
+                    }
+                }
+
                 const fileName = `${Date.now()}_${file.name}`;
                 const bucketCandidates = ['instruction-files'];
                 let uploadError = null;
@@ -1449,6 +1498,20 @@ Select Subject and Section
                 }
 
                 await loadYears();
+                const warmRoute = new URLSearchParams(window.location.search);
+                if (warmRoute.get('amsTeacherRosterWarm') === '1') {
+                    document.getElementById('yearSelect').value = warmRoute.get('year') || '';
+                    await loadDepartments(document.getElementById('yearSelect').value);
+                    document.getElementById('departmentSelect').value = warmRoute.get('department_id') || '';
+                    await loadMajors(document.getElementById('departmentSelect').value);
+                    document.getElementById('majorSelect').value = warmRoute.get('major_id') || '';
+                    await loadSubjects(document.getElementById('majorSelect').value);
+                    document.getElementById('subjectSelect').value = warmRoute.get('subject_id') || '';
+                    await loadSections(document.getElementById('subjectSelect').value);
+                    document.getElementById('sectionSelect').value = warmRoute.get('section_id') || '';
+                    await loadStudents();
+                    return;
+                }
                 await saveTeacherOfflineSnapshot(supabaseClient, 'subjects');
             };
 

@@ -591,9 +591,64 @@ async function initialize(){
     ========================= */
 
     await loadYears();
+    const warmRoute = new URLSearchParams(window.location.search);
+    if (warmRoute.get('amsTeacherRosterWarm') === '1') {
+        await loadTeacherRosterRoute(warmRoute);
+        return;
+    }
     await saveTeacherOfflineSnapshot(supabaseClient, 'students');
 
 
+}
+
+async function loadTeacherRosterRoute(route) {
+    const yearLevel = route.get('year') || '';
+    const departmentId = route.get('department_id') || '';
+    const majorId = route.get('major_id') || '';
+    const subjectId = route.get('subject_id') || '';
+    const sectionId = route.get('section_id') || '';
+    if (!yearLevel || !departmentId || !majorId || !subjectId || !sectionId) return;
+
+    yearFilter.value = yearLevel;
+    await loadDepartments(yearLevel);
+    departmentFilter.value = departmentId;
+
+    const { data: assignments, error } = await supabaseClient
+        .from('teacher_subject_assignments')
+        .select('subject_id, subjects(subject_id, subject_code, subject_name, year_level, major_id, majors(major_name, department_id)), teacher_section_assignments(section_id, sections(section_id, section_name, year_level, major_id))')
+        .eq('teacher_id', teacherId);
+    if (error) throw error;
+
+    const activeSubjectIds = await getActiveSubjectIds();
+    const majors = new Map();
+    const subjects = new Map();
+    const sections = new Map();
+    (assignments || []).forEach(assignment => {
+        const subject = assignment.subjects;
+        if (!subject || !activeSubjectIds.has(String(subject.subject_id))
+            || subject.year_level !== yearLevel
+            || String(subject.majors?.department_id) !== String(departmentId)) return;
+        majors.set(String(subject.major_id), subject.majors);
+        if (String(subject.major_id) !== String(majorId)) return;
+        subjects.set(String(subject.subject_id), subject);
+        (assignment.teacher_section_assignments || []).forEach(sectionAssignment => {
+            const section = sectionAssignment.sections;
+            if (section && String(section.major_id) === String(majorId) && section.year_level === yearLevel) {
+                sections.set(String(section.section_id), section);
+            }
+        });
+    });
+
+    majorFilter.innerHTML = '<option value="">Select Major</option>';
+    majors.forEach((major, id) => majorFilter.add(new Option(major?.major_name || 'Major', id)));
+    majorFilter.value = majorId;
+    subjectFilter.innerHTML = '<option value="">Select Subject</option>';
+    subjects.forEach((subject, id) => subjectFilter.add(new Option(`${subject.subject_code || ''} - ${subject.subject_name || ''}`, id)));
+    subjectFilter.value = subjectId;
+    sectionFilter.innerHTML = '<option value="">Select Section</option>';
+    sections.forEach((section, id) => sectionFilter.add(new Option(section.section_name || 'Section', id)));
+    sectionFilter.value = sectionId;
+    await loadStudents();
 }
 /* =====================================================
 LOAD TEACHER

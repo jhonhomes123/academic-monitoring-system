@@ -1509,6 +1509,7 @@ async function loadStudents(){
         <td>
 
        <button
+id="save-grade-${student.student_id}"
 class="btn"
 onclick="saveGrade(${student.student_id})">
 <i class="fa-solid fa-floppy-disk"></i>
@@ -1594,6 +1595,29 @@ studentId
             : termStatuses.every(value => value === "PASSED")
                 ? "PASSED"
                 : null;
+
+    if (!navigator.onLine) {
+        try {
+            await queueTeacherOperation(supabaseClient, 'grade', {
+                student_id: Number(studentId),
+                subject_id: Number(subjectId),
+                section_id: Number(sectionFilter.value),
+                prelim,
+                midterm,
+                final: finalGrade,
+                prelim_status: prelimStatus,
+                midterm_status: midtermStatus,
+                final_status: finalStatus,
+                status
+            });
+            const saveButton = document.querySelector(`[onclick*="saveGrade(${studentId})"]`);
+            if (saveButton) saveButton.textContent = 'Queued offline';
+            return;
+        } catch (error) {
+            showAlert('error', 'Offline Save Failed', error.message || 'Unable to save this grade on the device.');
+            return;
+        }
+    }
 
     const { error } =
     await supabaseClient

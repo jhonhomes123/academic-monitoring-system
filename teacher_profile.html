@@ -123,18 +123,6 @@
         color:var(--gray);
     }
 
-    /* PROFILE MINI */
-
-    .profile-mini{
-        display:flex;
-        align-items:center;
-        gap:14px;
-        background:white;
-        padding:14px 18px;
-        border-radius:16px;
-        border:1px solid var(--border);
-    }
-
     /* PROFILE WRAPPER */
 
     .profile-wrapper{
@@ -521,22 +509,6 @@
 
             </div>
 
-            <!-- PROFILE MINI -->
-
-            <div class="profile-mini">
-
-                <div>
-
-                    <strong id="topbarTeacherName">
-                        Loading...
-                    </strong>
-
-                    <p>Teacher Panel</p>
-
-                </div>
-
-            </div>
-
         </div>
 
         <!-- PROFILE WRAPPER -->
@@ -813,9 +785,8 @@
                 ? data.users.email
                 : "-";
 
-        document.getElementById(
-            "topbarTeacherName"
-        ).innerText = fullName;
+        const topbarTeacherName = document.getElementById("topbarTeacherName");
+        if (topbarTeacherName) topbarTeacherName.innerText = fullName;
 
         await saveTeacherOfflineSnapshot(supabaseClient, 'profile');
 
