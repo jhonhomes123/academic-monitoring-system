@@ -600,9 +600,20 @@
                 return false;
             }
 
-            let snapshot = role === 'teacher' && !force
-                ? await readLatestTeacherSnapshot(userId, pageKey)
-                : await readSnapshot(snapshotKey(userId, pageKey, role));
+            let snapshot;
+            if (role === 'teacher' && !force) {
+                const routeParams = new URLSearchParams(window.location.search);
+                const hasStatusRoute = pageKey === 'status'
+                    && ['year', 'department_id', 'major_id', 'subject_id', 'section_id'].every(key => routeParams.get(key));
+                snapshot = await readTeacherRouteSnapshot(userId, pageKey);
+                if (!snapshot && hasStatusRoute) {
+                    setNotice('This class list is not saved for offline use yet. Connect to the internet, open the class once, then try again offline.', true);
+                    return true;
+                }
+                snapshot = snapshot || await readLatestTeacherSnapshot(userId, pageKey);
+            } else {
+                snapshot = await readSnapshot(snapshotKey(userId, pageKey, role));
+            }
             if (!snapshot?.html) {
                 setNotice(`Offline. This ${role} page has no saved copy on this device yet.`, true);
                 return false;
@@ -657,6 +668,36 @@
                 resolve(match || null);
             };
             request.onerror = () => reject(request.error || new Error('Unable to find saved teacher view.'));
+        });
+    }
+
+    async function readTeacherRouteSnapshot(userId, pageKey) {
+        if (pageKey !== 'status') return null;
+        const params = new URLSearchParams(window.location.search);
+        const routeFilters = {
+            yearFilter: params.get('year'),
+            departmentFilter: params.get('department_id'),
+            majorFilter: params.get('major_id'),
+            subjectFilter: params.get('subject_id'),
+            sectionFilter: params.get('section_id')
+        };
+        if (Object.values(routeFilters).some(value => !value)) return null;
+
+        const database = await openDatabase();
+        const prefix = `${userId}:teacher:${pageKey}:`;
+        return new Promise((resolve, reject) => {
+            const transaction = database.transaction(storeName, 'readonly');
+            const request = transaction.objectStore(storeName).getAll();
+            request.onsuccess = () => {
+                const match = request.result
+                    .filter(snapshot => typeof snapshot.key === 'string'
+                        && snapshot.key.startsWith(prefix)
+                        && Object.entries(routeFilters).every(([id, value]) =>
+                            (snapshot.filterState || []).some(([filterId, savedValue]) => filterId === id && String(savedValue) === String(value))))
+                    .sort((first, second) => Date.parse(second.savedAt) - Date.parse(first.savedAt))[0];
+                resolve(match || null);
+            };
+            request.onerror = () => reject(request.error || new Error('Unable to find the saved class roster.'));
         });
     }
 
@@ -795,6 +836,11 @@
                 && /openRequirementModal|saveRequirement|deleteRequirement|closeRequirementModal|selectRequirementStudents|updateRequirementStudentCount|openUploadModal|closeUploadModal|uploadInstruction|saveGrade|updateStatusColor|closeModal/.test(control.getAttribute('onclick') || '');
             control.disabled = !(teacherFilter || teacherGradeField || requirementInput || studentPicker || safeTeacherAction);
         });
+        if (window.currentOfflineRole === 'teacher') {
+            container.querySelectorAll('#confirmActionBtn, .cancel-btn').forEach(button => {
+                button.disabled = false;
+            });
+        }
         container.querySelectorAll('*').forEach(element => {
             Array.from(element.attributes).forEach(attribute => {
                 if (/^on/i.test(attribute.name)) {

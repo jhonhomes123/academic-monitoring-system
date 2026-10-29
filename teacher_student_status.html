@@ -995,7 +995,10 @@ initialize();
 
 async function initialize(){
 
-    if (await beginTeacherOfflinePage(supabaseClient, 'status')) return;
+    if (await beginTeacherOfflinePage(supabaseClient, 'status')) {
+        focusStatusRouteTarget();
+        return;
+    }
 
     const {
         data:{user}
@@ -1012,6 +1015,17 @@ async function initialize(){
     await applyStatusRoute();
     await saveTeacherOfflineSnapshot(supabaseClient, 'status');
 
+}
+
+function focusStatusRouteTarget() {
+    if (!targetStudentId) return;
+    const target = document.getElementById(`student-row-${targetStudentId}`);
+    if (!target) return;
+    const termControl = targetTerm
+        ? document.getElementById(`${targetTerm}-status-${targetStudentId}`)
+        : null;
+    (termControl || target).scrollIntoView({ behavior: 'smooth', block: 'center' });
+    if (termControl) termControl.focus({ preventScroll: true });
 }
 
 /* ==================================================
