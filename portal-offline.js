@@ -802,7 +802,7 @@
                     const isLogout = attribute.name.toLowerCase() === 'onclick' && element.matches('a[href="login.html"]');
                     const isOfflineSupportedAction = window.currentOfflineRole === 'teacher'
                         && attribute.name.toLowerCase() === 'onclick'
-                        && /openRequirementModal|saveRequirement|closeRequirementModal|selectRequirementStudents|updateRequirementStudentCount|openUploadModal|closeUploadModal|uploadInstruction|saveGrade|updateStatusColor/.test(handler);
+                        && /openRequirementModal|saveRequirement|deleteRequirement|closeRequirementModal|selectRequirementStudents|updateRequirementStudentCount|openUploadModal|closeUploadModal|uploadInstruction|saveGrade|updateStatusColor/.test(handler);
                     if (isLogout || isOfflineSupportedAction) return;
                     element.removeAttribute(attribute.name);
                 }

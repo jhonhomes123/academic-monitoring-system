@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ams-student-shell-v13';
+const CACHE_NAME = 'ams-student-shell-v14';
 const APP_FILES = [
     './student_dashboard.html',
     './student_subjects.html',
@@ -78,7 +78,7 @@ self.addEventListener('fetch', event => {
             throw new Error('The mobile stylesheet is unavailable offline.');
         }
 
-        const cached = await cache.match(request);
+        const cached = await cache.match(request, { ignoreSearch: isPortalPage });
         if (cached) {
             if (isPortalPage || isApprovedCdnAsset) {
                 event.waitUntil(fetch(request).then(response => {
