@@ -27,6 +27,7 @@
     let teacherRosterWarmupPromise;
     let adminSnapshotObserver;
     let adminSnapshotTimer;
+    let adminOfflineReadyNoticeShown = false;
     const pageParams = new URLSearchParams(window.location.search);
     const isStudentWarmupFrame = pageParams.get('amsOfflineWarm') === '1';
     const isTeacherWarmupFrame = pageParams.get('amsTeacherOfflineWarm') === '1'
@@ -279,6 +280,11 @@
             html: snapshotMain.innerHTML,
             savedAt: new Date().toISOString()
         });
+        if (!adminOfflineReadyNoticeShown) {
+            adminOfflineReadyNoticeShown = true;
+            setNotice('Admin data is saved on this device and ready for offline viewing.', true, 'ready');
+            window.setTimeout(() => setNotice('', false), 6000);
+        }
         return true;
     }
 
@@ -1386,16 +1392,35 @@
         }
     });
 
-    window.addEventListener('online', () => {
-        setNotice('Connection restored. Refreshing portal data and syncing queued teacher changes.', true, 'sync');
-        if (window.currentOfflineRole === 'admin' && window.supabaseClientForOffline) {
-            void resumeAdminOnline(clientForOffline());
+    window.addEventListener('online', async () => {
+        if (window.portalLogoutInProgress) return;
+        const client = window.supabaseClientForOffline;
+        if (client) {
+            try {
+                const { data: { session } } = await client.auth.getSession();
+                if (!session) {
+                    setNotice('', false);
+                    if (!/\/login\.html$/i.test(window.location.pathname)) window.location.replace('login.html');
+                    return;
+                }
+            } catch (error) {
+                console.warn('Unable to verify the session after reconnect.', error);
+                return;
+            }
         }
-        if (window.currentOfflineRole === 'teacher' && window.supabaseClientForOffline) {
-            void syncTeacherQueue(window.supabaseClientForOffline);
-            void preloadTeacherAssignedRosters(window.supabaseClientForOffline, true).catch(error => {
-                console.warn('Could not refresh assigned teacher rosters.', error);
+
+        if (window.currentOfflineRole === 'admin' && client) {
+            setNotice('Connection restored. Syncing saved admin changes.', true, 'sync');
+            void resumeAdminOnline(client);
+        } else if (window.currentOfflineRole === 'teacher' && client) {
+            setNotice('Connection restored. Syncing saved teacher changes.', true, 'sync');
+            void syncTeacherQueue(client);
+            void preloadTeacherAssignedRosters(client, true).catch(error => {
+                console.warn('Could not refresh assigned teacher data.', error);
             });
+        } else if (client) {
+            setNotice('Connection restored.', true, 'ready');
+            window.setTimeout(() => setNotice('', false), 4000);
         }
     });
 
