@@ -1414,29 +1414,16 @@
             setNotice('Connection restored. Syncing saved admin changes.', true, 'sync');
             void resumeAdminOnline(client);
         } else if (window.currentOfflineRole === 'teacher' && client) {
-            void resumeTeacherOnline(client);
+            setNotice('Connection restored. Syncing saved teacher changes.', true, 'sync');
+            void syncTeacherQueue(client);
+            void preloadTeacherAssignedRosters(client, true).catch(error => {
+                console.warn('Could not refresh assigned teacher data.', error);
+            });
         } else if (client) {
             setNotice('Connection restored.', true, 'ready');
             window.setTimeout(() => setNotice('', false), 4000);
         }
     });
-
-    async function resumeTeacherOnline(client) {
-        try {
-            const pending = await getTeacherQueue(client);
-            if (pending.length) {
-                setNotice(`Connection restored. Syncing ${pending.length} saved teacher change${pending.length === 1 ? '' : 's'}...`, true, 'sync');
-                await syncTeacherQueue(client);
-                return;
-            }
-
-            await preloadTeacherAssignedRosters(client, true);
-            setNotice('', false);
-        } catch (error) {
-            console.warn('Unable to resume teacher data after reconnect.', error);
-            setNotice('Connection restored, but teacher data could not refresh. Try reloading this page.', true, 'sync');
-        }
-    }
 
     function clientForOffline() {
         return window.supabaseClientForOffline;
