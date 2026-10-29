@@ -665,8 +665,9 @@
                     await saveAdminAccountResult(userId, item.operationId, item.role, item.payload, result);
                     await adminStoreRequest(adminQueueStoreName, 'readwrite', store => store.delete(item.key));
                 } catch (error) {
-                    await adminStoreRequest(adminQueueStoreName, 'readwrite', store => store.put({ ...item, lastError: error.message || 'Account creation is waiting to retry.' }));
-                    setNotice(`A saved ${item.role} account could not be created yet. It remains saved and will retry when connected.`, true, 'sync');
+                    const failureReason = error?.message || 'Account creation is waiting to retry.';
+                    await adminStoreRequest(adminQueueStoreName, 'readwrite', store => store.put({ ...item, lastError: failureReason }));
+                    setNotice(`A saved ${item.role} account could not be created yet: ${failureReason}`, true, 'sync');
                     window.setTimeout(() => {
                         if (navigator.onLine && window.currentOfflineRole === 'admin') {
                             void syncAdminAccountQueue(client);
