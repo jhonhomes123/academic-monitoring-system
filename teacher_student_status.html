@@ -1609,6 +1609,12 @@ studentId
                 ? "PASSED"
                 : null;
 
+    if (!Number.isInteger(Number(subjectId)) || Number(subjectId) <= 0
+        || !Number.isInteger(Number(sectionFilter.value)) || Number(sectionFilter.value) <= 0) {
+        showAlert("warning", "Choose a Class", "Select a valid subject and section before saving this grade.");
+        return;
+    }
+
     if (!navigator.onLine) {
         try {
             await queueTeacherOperation(supabaseClient, 'grade', {

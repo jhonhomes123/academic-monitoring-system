@@ -47,7 +47,7 @@
         return databasePromise;
     }
 
-    function setNotice(message, visible, type = 'offline') {
+    function setNotice(message, visible, type = 'offline', action = null) {
         let notice = document.getElementById('studentOfflineNotice');
         if (!notice) {
             notice = document.createElement('div');
@@ -57,7 +57,15 @@
             document.body.appendChild(notice);
         }
         notice.style.background = type === 'ready' ? '#166534' : type === 'sync' ? '#1d4ed8' : '#7c2d12';
-        notice.textContent = message;
+        notice.replaceChildren(document.createTextNode(message));
+        if (action) {
+            const actionButton = document.createElement('button');
+            actionButton.type = 'button';
+            actionButton.textContent = action.label;
+            actionButton.style.cssText = 'margin-left:10px;padding:4px 8px;border:1px solid currentColor;border-radius:4px;background:transparent;color:inherit;font:inherit;cursor:pointer;';
+            actionButton.addEventListener('click', action.onClick);
+            notice.appendChild(actionButton);
+        }
         notice.hidden = !visible;
         document.body.classList.toggle('student-offline-view', visible);
     }
@@ -325,7 +333,20 @@
             const syncMessage = navigator.onLine
                 ? `Connected, but a queued ${operationDetails.toLowerCase()} is still waiting to sync. ${error?.message ? `Reason: ${error.message}` : 'The app will retry automatically.'}`
                 : 'Some teacher changes could not sync. They remain saved on this device; retry when online.';
-            setNotice(syncMessage, true, 'sync');
+            const invalidGrade = failedOperation?.type === 'grade'
+                && (!Number.isInteger(Number(failedPayload.subject_id)) || Number(failedPayload.subject_id) <= 0
+                    || !Number.isInteger(Number(failedPayload.section_id)) || Number(failedPayload.section_id) <= 0);
+            const discardAction = invalidGrade ? {
+                label: 'Remove invalid queued grade',
+                onClick: async () => {
+                    const confirmed = window.confirm('This queued grade has no valid subject or section and cannot sync. Remove this queued item? You can re-enter the grade after choosing the correct subject and section.');
+                    if (!confirmed) return;
+                    await removeQueuedTeacherOperation(failedOperation.key);
+                    setNotice('Invalid queued grade removed. Other queued changes are still saved.', true, 'ready');
+                    void syncTeacherQueue(client);
+                }
+            } : null;
+            setNotice(syncMessage, true, 'sync', discardAction);
         } finally {
             syncInProgress = false;
         }
