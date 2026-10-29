@@ -298,6 +298,9 @@ FOR ADMIN + TEACHER
 
     #requirementsListTable .req-desc{
         white-space:pre-wrap !important;
+        max-width:100%;
+        overflow-wrap:anywhere;
+        word-break:break-word;
     }
 
     /* =========================================
