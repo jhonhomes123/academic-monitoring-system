@@ -678,6 +678,7 @@
 
     </div>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
+    <script src="portal-offline.js"></script>
     <script>
 
     /* =====================================================
@@ -698,6 +699,8 @@
 
    async function loadTeacherProfile(){
 
+    if (await beginTeacherOfflinePage(supabaseClient, 'profile')) return;
+
     try{
 
         /*
@@ -713,6 +716,8 @@
         } = await supabaseClient.auth.getUser();
 
         if(authError || !user){
+
+            if (await restoreTeacherOfflineSnapshot(supabaseClient, 'profile', true)) return;
 
             showAlert(
                 "error",
@@ -750,6 +755,8 @@
         .single();
 
         if(error){
+
+            if (await restoreTeacherOfflineSnapshot(supabaseClient, 'profile', true)) return;
 
             console.log(error);
 
@@ -810,9 +817,13 @@
             "topbarTeacherName"
         ).innerText = fullName;
 
+        await saveTeacherOfflineSnapshot(supabaseClient, 'profile');
+
     }
 
     catch(err){
+
+        if (await restoreTeacherOfflineSnapshot(supabaseClient, 'profile', true)) return;
 
         console.log(err);
 

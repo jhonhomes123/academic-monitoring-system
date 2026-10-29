@@ -603,6 +603,7 @@
     </style>
     <link rel="stylesheet" href="mobile_fix.css">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="portal-offline.js"></script>
 </head>
 
 <body>
@@ -1106,6 +1107,7 @@ Select Subject and Section
                     .eq('section_id', sectionId);
 
                 if (error) {
+                    await restoreTeacherOfflineSnapshot(supabaseClient, 'subjects', true);
                     return showAlert('error', 'Error', error.message || 'Unable to load students');
                 }
 
@@ -1115,6 +1117,7 @@ Select Subject and Section
                         <tr>
                             <td colspan="3">No students found</td>
                         </tr>`;
+                    await saveTeacherOfflineSnapshot(supabaseClient, 'subjects');
                     return;
                 }
 
@@ -1136,6 +1139,7 @@ Select Subject and Section
 
                 if (requirementsResult.error || filesResult.error) {
                     currentRequirementStudents = [];
+                    await restoreTeacherOfflineSnapshot(supabaseClient, 'subjects', true);
                     return showAlert('error', 'Error', requirementsResult.error?.message || filesResult.error?.message || 'Unable to load student requirements.');
                 }
 
@@ -1221,6 +1225,7 @@ Select Subject and Section
                 }
 
                 studentsTable.innerHTML = html;
+                await saveTeacherOfflineSnapshot(supabaseClient, 'subjects');
             }
 
             async function saveRequirement() {
@@ -1432,6 +1437,7 @@ Select Subject and Section
             }
 
             window.onload = async () => {
+                if (await beginTeacherOfflinePage(supabaseClient, 'subjects')) return;
                 const { data: { user }, error } = await supabaseClient.auth.getUser();
                 if (error) {
                     console.error(error);
@@ -1443,6 +1449,7 @@ Select Subject and Section
                 }
 
                 await loadYears();
+                await saveTeacherOfflineSnapshot(supabaseClient, 'subjects');
             };
 
             document.getElementById('yearSelect').addEventListener('change', async function () {

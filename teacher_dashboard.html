@@ -867,6 +867,7 @@ function closeConfirmModal(){
 }
 </script>
 
+<script src="portal-offline.js"></script>
 <script>
 const SUPABASE_URL = 'https://nrqrsolfowebujogawti.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5ycXJzb2xmb3dlYnVqb2dhd3RpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkyODE2NjksImV4cCI6MjA5NDg1NzY2OX0.XcawTf9niOIZbG0hBTtwSXjySWfdVl3LAClbWdZmfl8';
@@ -894,14 +895,21 @@ async function getActiveSubjectIds() {
 }
 
 async function initializeTeacherDashboard() {
+    if (await beginTeacherOfflinePage(supabaseClient, 'dashboard')) return;
+    try {
     const { data: { user }, error } = await supabaseClient.auth.getUser();
     if (error || !user) {
+        if (await restoreTeacherOfflineSnapshot(supabaseClient, 'dashboard', true)) return;
         console.error('Teacher dashboard auth error', error);
         return;
     }
     teacherUserId = user.id;
     await loadTeacher();
     await loadTeacherSummary();
+    } catch (error) {
+        console.error('Unable to load teacher dashboard', error);
+        await restoreTeacherOfflineSnapshot(supabaseClient, 'dashboard', true);
+    }
 }
 
 async function loadTeacher() {
@@ -912,8 +920,7 @@ async function loadTeacher() {
         .maybeSingle();
 
     if (error) {
-        console.error(error);
-        return;
+        throw error;
     }
 
     const teacher = data;
@@ -963,8 +970,7 @@ async function loadTeacherSummary() {
         .eq('teacher_id', teacherId);
 
     if (error) {
-        console.error('Unable to load assignments', error);
-        return;
+        throw error;
     }
 
     const sectionRows = [];
@@ -1009,7 +1015,7 @@ async function loadTeacherSummary() {
             .in('section_id', sectionIds);
 
         if (studentError) {
-            console.error('Unable to load student counts', studentError);
+            throw studentError;
         } else {
             studentCounts = (students || []).reduce((acc, student) => {
                 if (!student.section_id) return acc;
@@ -1031,6 +1037,7 @@ async function loadTeacherSummary() {
             <tr>
                 <td colspan="6" class="empty">No assigned sections found.</td>
             </tr>`;
+        await saveTeacherOfflineSnapshot(supabaseClient, 'dashboard');
         return;
     }
 
@@ -1044,6 +1051,7 @@ async function loadTeacherSummary() {
             <td>${studentCounts[row.section_id] || 0}</td>
         </tr>
     `).join('');
+    await saveTeacherOfflineSnapshot(supabaseClient, 'dashboard');
 }
 
 initializeTeacherDashboard();

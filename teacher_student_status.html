@@ -795,6 +795,7 @@ id="confirmModal">
 
 </div>
 
+<script src="portal-offline.js"></script>
 <script>
 
 /* ================= ALERT FUNCTION ================= */
@@ -987,6 +988,8 @@ initialize();
 
 async function initialize(){
 
+    if (await beginTeacherOfflinePage(supabaseClient, 'status')) return;
+
     const {
         data:{user}
     } =
@@ -1000,6 +1003,7 @@ async function initialize(){
 
     await loadYears();
     await applyStatusRoute();
+    await saveTeacherOfflineSnapshot(supabaseClient, 'status');
 
 }
 
@@ -1384,7 +1388,7 @@ async function loadStudents(){
 
     tableBody.innerHTML = '<tr><td colspan="5" class="empty">Loading students...</td></tr>';
 
-    const { data:students }
+    const { data:students, error: studentsError }
     =
     await supabaseClient
 
@@ -1404,6 +1408,12 @@ async function loadStudents(){
         sectionId
     );
 
+    if (studentsError) {
+        console.error('Unable to load students', studentsError);
+        await restoreTeacherOfflineSnapshot(supabaseClient, 'status', true);
+        return;
+    }
+
     tableBody.innerHTML = "";
 
     const formatGradeInput = (value) => {
@@ -1422,6 +1432,8 @@ async function loadStudents(){
         </tr>
         `;
 
+        await saveTeacherOfflineSnapshot(supabaseClient, 'status');
+
         return;
     }
 
@@ -1434,6 +1446,7 @@ async function loadStudents(){
     if (gradesError) {
         tableBody.innerHTML = '<tr><td colspan="5" class="empty">Unable to load student grades</td></tr>';
         console.error('Unable to load student grades', gradesError);
+        await restoreTeacherOfflineSnapshot(supabaseClient, 'status', true);
         return;
     }
 
@@ -1520,6 +1533,8 @@ onclick="saveGrade(${student.student_id})">
             if(termControl) termControl.focus({preventScroll:true});
         }
     }
+
+    await saveTeacherOfflineSnapshot(supabaseClient, 'status');
 
 }
 function updateStatusColor(select){

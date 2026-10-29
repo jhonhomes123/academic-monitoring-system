@@ -486,6 +486,7 @@ TABLE SCROLLBAR
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
+<script src="portal-offline.js"></script>
     <script>
 
     /* =====================================================
@@ -552,6 +553,8 @@ INIT
 
 async function initialize(){
 
+    if (await beginTeacherOfflinePage(supabaseClient, 'students')) return;
+
     /* =========================
        GET LOGGED IN USER
     ========================= */
@@ -588,6 +591,7 @@ async function initialize(){
     ========================= */
 
     await loadYears();
+    await saveTeacherOfflineSnapshot(supabaseClient, 'students');
 
 
 }
@@ -991,6 +995,7 @@ async function loadStudents(){
     if(error){
 
         console.log(error);
+        await restoreTeacherOfflineSnapshot(supabaseClient, 'students', true);
         return;
 
     }
@@ -1002,6 +1007,8 @@ async function loadStudents(){
         <tr>
             <td colspan="3" class="empty">No students found</td>
         </tr>`;
+
+        await saveTeacherOfflineSnapshot(supabaseClient, 'students');
 
         return;
 
@@ -1015,7 +1022,7 @@ async function loadStudents(){
 
     if (gradesError) {
         console.error("Unable to load student grades", gradesError);
-        tableBody.innerHTML = '<tr><td colspan="3" class="empty">Unable to load student grades</td></tr>';
+        await restoreTeacherOfflineSnapshot(supabaseClient, 'students', true);
         return;
     }
 
@@ -1089,6 +1096,8 @@ async function loadStudents(){
 
         `;
     }
+
+    await saveTeacherOfflineSnapshot(supabaseClient, 'students');
 }
 /* =========================
    START PAGE
