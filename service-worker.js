@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ams-student-shell-v20';
+const CACHE_NAME = 'ams-student-shell-v24';
 const APP_FILES = [
     './student_dashboard.html',
     './student_subjects.html',
@@ -10,6 +10,7 @@ const APP_FILES = [
     './teacher_manage_subjects.html',
     './teacher_student_status.html',
     './teacher_profile.html',
+    './admin_dashboard.html',
     './auth-session.js',
     './portal-offline.js',
     './mobile_fix.css',
@@ -52,7 +53,7 @@ self.addEventListener('fetch', event => {
 
     const requestUrl = new URL(request.url);
     const sameOrigin = requestUrl.origin === self.location.origin;
-    const isPortalPage = sameOrigin && /\/(student_(dashboard|subjects|academic|requirements|profile)|teacher_(dashboard|manage_students|manage_subjects|student_status|profile))\.html$/.test(requestUrl.pathname);
+    const isPortalPage = sameOrigin && /\/(student_(dashboard|subjects|academic|requirements|profile)|teacher_(dashboard|manage_students|manage_subjects|student_status|profile)|admin_dashboard)\.html$/.test(requestUrl.pathname);
     const isMobileStylesheet = sameOrigin && requestUrl.pathname.endsWith('/mobile_fix.css');
     const isLocalAsset = sameOrigin && /\/(auth-session\.js|portal-offline\.js|mobile_fix\.css|school_logo\.png)$/.test(requestUrl.pathname);
     const isApprovedCdnAsset = !sameOrigin && CACHEABLE_CDN_HOSTS.has(requestUrl.hostname)
@@ -94,9 +95,11 @@ self.addEventListener('fetch', event => {
             return response;
         } catch (error) {
             if (isPortalPage) {
-                const fallbackFile = requestUrl.pathname.includes('/teacher_')
-                    ? './teacher_dashboard.html'
-                    : './student_dashboard.html';
+                const fallbackFile = requestUrl.pathname.endsWith('/admin_dashboard.html')
+                    ? './admin_dashboard.html'
+                    : requestUrl.pathname.includes('/teacher_')
+                        ? './teacher_dashboard.html'
+                        : './student_dashboard.html';
                 const fallback = await cache.match(fallbackFile);
                 if (fallback) return fallback;
             }

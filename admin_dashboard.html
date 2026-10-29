@@ -1158,6 +1158,22 @@ table td{
                 </div>
             </div>
 
+            <div class="table-section">
+                <div class="section-header" style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+                    <div>
+                        <h2>Accounts Created on This Device</h2>
+                        <p>Queued account requests and temporary credentials returned after creation</p>
+                    </div>
+                    <button class="btn reject-btn" onclick="clearAdminCreatedAccounts()">Clear saved credentials</button>
+                </div>
+                <div class="table-responsive">
+                    <table>
+                        <thead><tr><th>Account</th><th>Name</th><th>ID</th><th>Temporary Password</th><th>Status</th></tr></thead>
+                        <tbody id="adminCreatedAccountsTable"><tr><td colspan="5">No account requests yet</td></tr></tbody>
+                    </table>
+                </div>
+            </div>
+
         </div>
         <!-- MANAGE DEPARTMENT -->
         <div class="content-section" id="departmentSection">
@@ -2647,6 +2663,7 @@ onchange="loadSubjectsForTeacherAssign()">
             });
 
             element.classList.add('active');
+            if (window.adminOfflineView) return;
             // AUTO RELOAD DATA WHEN SWITCHING
             if (sectionId === 'dashboardSection') {
 
@@ -2686,6 +2703,7 @@ onchange="loadSubjectsForTeacherAssign()">
       
     </script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
+    <script src="portal-offline.js"></script>
     <script>
 
         const SUPABASE_URL =
@@ -2701,6 +2719,19 @@ onchange="loadSubjectsForTeacherAssign()">
             );
 
         console.log("Admin Dashboard Connected!");
+        window.beginAdminOfflinePage(supabaseClient).then(restoredOffline => {
+            if (restoredOffline) {
+                void renderAdminCreatedAccounts();
+                return;
+            }
+            loadDashboardCounts();
+            loadApprovedUsers();
+            void renderAdminCreatedAccounts();
+        }).catch(error => {
+            console.warn('Offline admin view could not be prepared.', error);
+            loadDashboardCounts();
+            loadApprovedUsers();
+        });
         // LOAD DASHBOARD COUNTS
         async function loadDashboardCounts() {
             // TOTAL STUDENTS
@@ -3061,10 +3092,6 @@ onchange="loadSubjectsForTeacherAssign()">
             }
 
         }
-        // LOAD DASHBOARD
-        loadDashboardCounts();
-
-        loadApprovedUsers();
         // LOAD STUDENT APPROVALS
         async function loadStudentApprovals() {
 
@@ -7445,6 +7472,70 @@ async function callStudentAccountFunction(action, payload) {
     return result;
 }
 
+async function renderAdminCreatedAccounts() {
+    const table = document.getElementById('adminCreatedAccountsTable');
+    if (!table || !window.getAdminAccountData) return;
+    try {
+        const { queued, completed } = await window.getAdminAccountData(supabaseClient);
+        table.replaceChildren();
+        const rows = [
+            ...queued.map(item => ({
+                role: item.role,
+                name: [item.payload.first_name, item.payload.middle_initial, item.payload.last_name].filter(Boolean).join(' '),
+                id: item.role === 'student' ? item.payload.student_number : item.payload.teacher_number,
+                password: 'Available after sync',
+                status: item.lastError ? 'Waiting to retry' : 'Waiting for connection'
+            })),
+            ...completed.map(item => ({
+                role: item.role,
+                name: [item.payload.first_name, item.payload.middle_initial, item.payload.last_name].filter(Boolean).join(' '),
+                id: item.accountId,
+                password: item.temporaryPassword,
+                status: 'Created'
+            }))
+        ];
+        if (!rows.length) {
+            const emptyRow = document.createElement('tr');
+            const emptyCell = document.createElement('td');
+            emptyCell.colSpan = 5;
+            emptyCell.textContent = 'No account requests yet';
+            emptyRow.appendChild(emptyCell);
+            table.appendChild(emptyRow);
+            return;
+        }
+        rows.forEach(account => {
+            const row = document.createElement('tr');
+            [account.role === 'student' ? 'Student' : 'Teacher', account.name, account.id || '', account.password, account.status]
+                .forEach(value => {
+                    const cell = document.createElement('td');
+                    cell.textContent = value;
+                    row.appendChild(cell);
+                });
+            table.appendChild(row);
+        });
+    } catch (error) {
+        console.warn('Unable to render saved account creation results.', error);
+    }
+}
+
+async function clearAdminCreatedAccounts() {
+    if (!window.confirm('Clear saved temporary passwords from this device? This does not delete the created accounts.')) return;
+    await window.clearAdminAccountResults(supabaseClient);
+    ['createdStudentLoginId', 'createdStudentPassword', 'createdTeacherLoginId', 'createdTeacherPassword'].forEach(id => {
+        const value = document.getElementById(id);
+        if (value) value.textContent = '';
+    });
+    ['createdStudentCredentials', 'createdTeacherCredentials'].forEach(id => {
+        const credentials = document.getElementById(id);
+        if (credentials) credentials.style.display = 'none';
+    });
+    showAlert('success', 'Credentials Cleared', 'Saved temporary credentials were removed from this device.');
+}
+
+window.addEventListener('admin-account-data-changed', () => {
+    void renderAdminCreatedAccounts();
+});
+
 function openCreateStudentModal() {
     document.getElementById('createStudentNumber').value = '';
     document.getElementById('createStudentFirstName').value = '';
@@ -7463,6 +7554,12 @@ function openCreateStudentModal() {
 
 async function loadCreateStudentDepartments() {
     const select = document.getElementById('createStudentDepartment');
+    if (!navigator.onLine) {
+        const lookups = await window.getAdminAccountLookups(supabaseClient);
+        if (!lookups) throw new Error('Student account options are not saved on this device. Open this form while online first.');
+        lookups.departments.forEach(department => select.add(new Option(department.department_name, department.department_id)));
+        return;
+    }
     const { data, error } = await supabaseClient.from('departments').select('department_id, department_name').order('department_name');
     if (error) throw error;
     (data || []).forEach(department => select.add(new Option(department.department_name, department.department_id)));
@@ -7475,6 +7572,13 @@ async function loadCreateStudentMajors() {
     sectionSelect.innerHTML = '<option value="">Select Section</option>';
     const departmentId = document.getElementById('createStudentDepartment').value;
     if (!departmentId) return;
+    if (!navigator.onLine) {
+        const lookups = await window.getAdminAccountLookups(supabaseClient);
+        if (!lookups) throw new Error('Student account options are not saved on this device.');
+        lookups.majors.filter(major => String(major.department_id) === String(departmentId))
+            .forEach(major => select.add(new Option(major.major_name, major.major_id)));
+        return;
+    }
     const { data, error } = await supabaseClient.from('majors').select('major_id, major_name').eq('department_id', departmentId).order('major_name');
     if (error) throw error;
     (data || []).forEach(major => select.add(new Option(major.major_name, major.major_id)));
@@ -7486,6 +7590,13 @@ async function loadCreateStudentSections() {
     const majorId = document.getElementById('createStudentMajor').value;
     const yearLevel = document.getElementById('createStudentYear').value;
     if (!majorId || !yearLevel) return;
+    if (!navigator.onLine) {
+        const lookups = await window.getAdminAccountLookups(supabaseClient);
+        if (!lookups) throw new Error('Student account options are not saved on this device.');
+        lookups.sections.filter(section => String(section.major_id) === String(majorId) && section.year_level === yearLevel)
+            .forEach(section => select.add(new Option(section.section_name, section.section_id)));
+        return;
+    }
     const { data, error } = await supabaseClient.from('sections').select('section_id, section_name').eq('major_id', majorId).eq('year_level', yearLevel).order('section_name');
     if (error) throw error;
     (data || []).forEach(section => select.add(new Option(section.section_name, section.section_id)));
@@ -7499,7 +7610,7 @@ async function createStudentAccount() {
     const errorBox = document.getElementById('createStudentError');
     errorBox.textContent = '';
     try {
-        const result = await callStudentAccountFunction('admin-create', {
+        const payload = {
             student_number: document.getElementById('createStudentNumber').value.trim(),
             first_name: document.getElementById('createStudentFirstName').value.trim(),
             middle_initial: document.getElementById('createStudentMiddleInitial').value.trim(),
@@ -7509,7 +7620,20 @@ async function createStudentAccount() {
             major_id: document.getElementById('createStudentMajor').value,
             year_level: document.getElementById('createStudentYear').value,
             section_id: document.getElementById('createStudentSection').value
-        });
+        };
+        const result = await window.submitAdminAccountCreation(
+            supabaseClient,
+            'student',
+            payload,
+            STUDENT_ACCOUNT_FUNCTION_URL,
+            SUPABASE_ANON_KEY
+        );
+        if (result.queued) {
+            showAlert('success', 'Student Account Queued', 'This account will be created automatically when the device reconnects.');
+            closeCreateStudentModal();
+            await renderAdminCreatedAccounts();
+            return;
+        }
         document.getElementById('createStudentNumber').value = '';
         document.getElementById('createStudentFirstName').value = '';
         document.getElementById('createStudentMiddleInitial').value = '';
@@ -7519,6 +7643,7 @@ async function createStudentAccount() {
         document.getElementById('createdStudentPassword').textContent = result.temporary_password;
         document.getElementById('createdStudentCredentials').style.display = 'block';
         showAlert('success', 'Student Account Created', 'Give the Student ID and temporary password to the student now.');
+        await renderAdminCreatedAccounts();
         document.getElementById('manageStudentYear').value = document.getElementById('createStudentYear').value;
         await loadDepartmentsForManageStudents();
         document.getElementById('manageStudentDepartment').value = document.getElementById('createStudentDepartment').value;
@@ -8417,31 +8542,32 @@ async function createTeacherAccount() {
     const errorBox = document.getElementById('createTeacherError');
     errorBox.textContent = '';
     try {
-        const { data: { session } } = await supabaseClient.auth.getSession();
-        if (!session) throw new Error('Please sign in again as an administrator.');
-        const response = await fetch(TEACHER_ACCOUNT_FUNCTION_URL, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                apikey: SUPABASE_ANON_KEY,
-                Authorization: `Bearer ${session.access_token}`
-            },
-            body: JSON.stringify({
-                action: 'admin-create',
-                teacher_number: document.getElementById('createTeacherNumber').value.trim(),
-                first_name: document.getElementById('createTeacherFirstName').value.trim(),
-                middle_initial: document.getElementById('createTeacherMiddleInitial').value.trim(),
-                last_name: document.getElementById('createTeacherLastName').value.trim()
-            })
-        });
-        const result = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(result.error || 'Unable to create the teacher account.');
+        const payload = {
+            teacher_number: document.getElementById('createTeacherNumber').value.trim(),
+            first_name: document.getElementById('createTeacherFirstName').value.trim(),
+            middle_initial: document.getElementById('createTeacherMiddleInitial').value.trim(),
+            last_name: document.getElementById('createTeacherLastName').value.trim()
+        };
+        const result = await window.submitAdminAccountCreation(
+            supabaseClient,
+            'teacher',
+            payload,
+            TEACHER_ACCOUNT_FUNCTION_URL,
+            SUPABASE_ANON_KEY
+        );
+        if (result.queued) {
+            showAlert('success', 'Teacher Account Queued', 'This account will be created automatically when the device reconnects.');
+            closeModal('createTeacherModal');
+            await renderAdminCreatedAccounts();
+            return;
+        }
         ['createTeacherNumber', 'createTeacherFirstName', 'createTeacherMiddleInitial', 'createTeacherLastName']
             .forEach(id => document.getElementById(id).value = '');
         document.getElementById('createdTeacherLoginId').textContent = result.teacher_number;
         document.getElementById('createdTeacherPassword').textContent = result.temporary_password;
         document.getElementById('createdTeacherCredentials').style.display = 'block';
         showAlert('success', 'Teacher Account Created', 'Give the Teacher ID and temporary password to the teacher.');
+        await renderAdminCreatedAccounts();
         await loadTeachersManagement();
     } catch (error) {
         errorBox.textContent = error.message;
