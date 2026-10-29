@@ -263,10 +263,12 @@
     async function syncTeacherQueue(client) {
         if (!navigator.onLine || syncInProgress) return;
         syncInProgress = true;
+        let failedOperation = null;
         try {
             const operations = await getTeacherQueue(client);
             for (const operation of operations) {
                 if (!navigator.onLine) break;
+                failedOperation = operation;
                 let payload = { ...operation.payload, type: operation.type };
                 if (operation.file) {
                     const safeName = String(operation.file.name || 'attachment').replace(/[^A-Za-z0-9._-]/g, '_');
@@ -289,6 +291,7 @@
                 });
                 if (error) throw error;
                 await removeQueuedTeacherOperation(operation.key);
+                failedOperation = null;
             }
 
             const remaining = await getTeacherQueue(client);
@@ -308,8 +311,19 @@
             }
         } catch (error) {
             console.error('Unable to sync queued teacher changes.', error);
+            const failedPayload = failedOperation?.payload || {};
+            const failedType = failedOperation?.type || 'unknown';
+            const operationDetails = failedType === 'grade'
+                ? `Grade for student ${failedPayload.student_id ?? 'unknown'}, subject ${failedPayload.subject_id ?? 'unknown'}, section ${failedPayload.section_id ?? 'unknown'}`
+                : failedType === 'attachment'
+                    ? `Attachment for subject ${failedPayload.subject_id ?? 'unknown'}, section ${failedPayload.section_id ?? 'unknown'}`
+                    : failedType === 'requirement_delete'
+                        ? `Requirement delete ${failedPayload.requirement_id ?? 'unknown'}, subject ${failedPayload.subject_id ?? 'unknown'}`
+                        : failedType === 'requirement'
+                            ? `Requirement for subject ${failedPayload.subject_id ?? 'unknown'}`
+                            : 'Queued change';
             const syncMessage = navigator.onLine
-                ? `Connected, but some queued teacher changes are still waiting to sync. ${error?.message ? `Reason: ${error.message}` : 'The app will retry automatically.'}`
+                ? `Connected, but a queued ${operationDetails.toLowerCase()} is still waiting to sync. ${error?.message ? `Reason: ${error.message}` : 'The app will retry automatically.'}`
                 : 'Some teacher changes could not sync. They remain saved on this device; retry when online.';
             setNotice(syncMessage, true, 'sync');
         } finally {
