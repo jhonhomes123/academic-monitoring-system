@@ -314,6 +314,11 @@
         const main = document.querySelector('.main');
         if (!userId || !main || !main.innerHTML.trim()) return false;
 
+        const alertBox = document.getElementById('amsAlert');
+        if (alertBox) alertBox.classList.remove('show');
+        const confirmModal = document.getElementById('confirmModal');
+        if (confirmModal) confirmModal.classList.remove('show');
+
         await removeOtherUsers(userId);
         const formState = Array.from(main.querySelectorAll('input[id],select[id],textarea[id]')).map(element => ({
             id: element.id,
@@ -563,6 +568,10 @@
             const main = document.querySelector('.main');
             if (!main) return false;
             main.innerHTML = snapshot.html;
+            const restoredAlert = document.getElementById('amsAlert');
+            if (restoredAlert) restoredAlert.classList.remove('show');
+            const restoredConfirm = document.getElementById('confirmModal');
+            if (restoredConfirm) restoredConfirm.classList.remove('show');
             (snapshot.formState || []).forEach(field => {
                 const element = document.getElementById(field.id);
                 if (!element) return;
@@ -650,6 +659,10 @@
         const main = document.querySelector('.main');
         if (!main) return false;
         main.innerHTML = snapshot.html;
+        const restoredAlert = document.getElementById('amsAlert');
+        if (restoredAlert) restoredAlert.classList.remove('show');
+        const restoredConfirm = document.getElementById('confirmModal');
+        if (restoredConfirm) restoredConfirm.classList.remove('show');
         (snapshot.formState || []).forEach(field => {
             const element = document.getElementById(field.id);
             if (!element) return;
