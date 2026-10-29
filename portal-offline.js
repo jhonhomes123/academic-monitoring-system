@@ -5,6 +5,8 @@
     const adminQueueStoreName = 'admin-account-create-queue';
     const adminResultsStoreName = 'admin-created-account-results';
     const adminLookupStoreName = 'admin-account-lookups';
+    const adminStructureQueueStoreName = 'admin-structure-write-queue';
+    const adminStructureMapStoreName = 'admin-structure-id-map';
     const serviceWorkerPath = './service-worker.js';
     const studentPages = [
         { key: 'dashboard', file: 'student_dashboard.html' },
@@ -36,7 +38,7 @@
         if (databasePromise) return databasePromise;
 
         databasePromise = new Promise((resolve, reject) => {
-            const request = indexedDB.open(databaseName, 3);
+            const request = indexedDB.open(databaseName, 4);
             request.onupgradeneeded = () => {
                 const database = request.result;
                 if (!database.objectStoreNames.contains(storeName)) {
@@ -53,6 +55,12 @@
                 }
                 if (!database.objectStoreNames.contains(adminLookupStoreName)) {
                     database.createObjectStore(adminLookupStoreName, { keyPath: 'key' });
+                }
+                if (!database.objectStoreNames.contains(adminStructureQueueStoreName)) {
+                    database.createObjectStore(adminStructureQueueStoreName, { keyPath: 'key' });
+                }
+                if (!database.objectStoreNames.contains(adminStructureMapStoreName)) {
+                    database.createObjectStore(adminStructureMapStoreName, { keyPath: 'key' });
                 }
             };
             request.onsuccess = () => resolve(request.result);
@@ -229,8 +237,9 @@
             .eq('auth_user_id', userId)
             .maybeSingle();
         if (error || !admin) return false;
-        void saveAdminAccountLookups(client, userId);
+        await saveAdminAccountLookups(client, userId);
         void syncAdminAccountQueue(client);
+        void syncAdminStructureQueue(client);
 
         const main = document.querySelector('.main');
         if (main && !adminSnapshotObserver) {
@@ -252,7 +261,7 @@
         if (!currentUserId || !main) return false;
         const snapshotMain = main.cloneNode(true);
         snapshotMain.querySelectorAll('.modal,.modal-overlay,.confirm-modal-overlay,.ams-alert').forEach(element => {
-            if (!['createStudentModal', 'createTeacherModal'].includes(element.id)) {
+            if (!['createStudentModal', 'createTeacherModal', 'departmentModal', 'majorModal', 'sectionModal', 'subjectModal'].includes(element.id)) {
                 element.remove();
                 return;
             }
@@ -263,7 +272,7 @@
             });
         });
         snapshotMain.querySelectorAll('#adminCreatedAccountsTable tr').forEach(row => {
-            if (row.children.length >= 4) row.children[3].textContent = 'Saved locally';
+            if (row.children.length >= 6) row.children[5].textContent = 'Saved locally';
         });
         await writeSnapshot({
             key: `${currentUserId}:admin:dashboard`,
@@ -287,23 +296,18 @@
                 return false;
             }
             main.innerHTML = snapshot.html;
-            document.querySelectorAll('input,select,textarea,button').forEach(control => {
-                const inCreateAccountModal = control.closest('#createStudentModal, #createTeacherModal');
-                const opensCreateAccount = control.matches('button')
-                    && /openCreateStudentModal|openCreateTeacherModal/.test(control.getAttribute('onclick') || '');
-                control.disabled = !(inCreateAccountModal || opensCreateAccount);
-            });
             document.querySelectorAll('.modal,.modal-overlay,.confirm-modal-overlay').forEach(modal => {
                 modal.style.display = 'none';
                 modal.classList.remove('show');
             });
             document.querySelectorAll('input,select,textarea,button').forEach(control => {
-                const inCreateAccountModal = control.closest('#createStudentModal, #createTeacherModal');
-                const opensCreateAccount = control.matches('button')
-                    && /openCreateStudentModal|openCreateTeacherModal/.test(control.getAttribute('onclick') || '');
-                const safeCreateAction = control.matches('button')
-                    && /createStudentAccount|createTeacherAccount|closeCreateStudentModal|closeModal/.test(control.getAttribute('onclick') || '');
-                control.disabled = !(opensCreateAccount || (inCreateAccountModal && (!control.matches('button') || safeCreateAction)));
+                const inAllowedModal = control.closest('#createStudentModal,#createTeacherModal,#departmentModal,#majorModal,#sectionModal,#subjectModal');
+                const opensAllowedModal = control.matches('button')
+                    && /openCreateStudentModal|openCreateTeacherModal|openDepartmentModal|openMajorModal|openSectionModal|openSubjectModal/.test(control.getAttribute('onclick') || '');
+                const isAllowedOfflineAction = control.matches('button')
+                    && /createStudentAccount|createTeacherAccount|addDepartment|addMajor|addSection|addSubject|setActiveSemester|closeCreateStudentModal|closeModal|closeDepartmentModal|closeMajorModal|closeSectionModal|closeSubjectModal/.test(control.getAttribute('onclick') || '');
+                const isSemesterPicker = control.id === 'activeSemesterSelect';
+                control.disabled = !(opensAllowedModal || isSemesterPicker || (inAllowedModal && (!control.matches('button') || isAllowedOfflineAction)));
             });
             window.adminOfflineView = true;
             setNotice(`Offline admin view: showing saved admin data from ${new Date(snapshot.savedAt).toLocaleString()}. Changes are unavailable offline.`, true);
@@ -410,16 +414,18 @@
 
     async function saveAdminAccountLookups(client, userId) {
         try {
-            const [departmentsResult, majorsResult, sectionsResult] = await Promise.all([
+            const [departmentsResult, majorsResult, sectionsResult, semestersResult] = await Promise.all([
                 client.from('departments').select('department_id, department_name').order('department_name'),
                 client.from('majors').select('major_id, department_id, major_name').order('major_name'),
-                client.from('sections').select('section_id, major_id, year_level, section_name').order('section_name')
+                client.from('sections').select('section_id, major_id, year_level, section_name').order('section_name'),
+                client.from('semesters').select('semester_id, semester_name, is_active').order('semester_id')
             ]);
-            const lookupError = departmentsResult.error || majorsResult.error || sectionsResult.error;
+            const lookupError = departmentsResult.error || majorsResult.error || sectionsResult.error || semestersResult.error;
             if (lookupError) throw lookupError;
             await adminStoreRequest(adminLookupStoreName, 'readwrite', store => store.put({
                 key: `${userId}:lookups`, userId,
                 departments: departmentsResult.data || [], majors: majorsResult.data || [], sections: sectionsResult.data || [],
+                semesters: semestersResult.data || [],
                 savedAt: new Date().toISOString()
             }));
         } catch (error) {
@@ -431,6 +437,110 @@
         const userId = suppliedUserId || await getUserId(client);
         if (!userId) return null;
         return await adminStoreRequest(adminLookupStoreName, 'readonly', store => store.get(`${userId}:lookups`)) || null;
+    }
+
+    async function queueAdminStructureOperation(client, type, payload) {
+        const userId = await getUserId(client);
+        if (!userId) throw new Error('Sign in while connected before making offline admin changes.');
+        const operationId = createOperationId();
+        const localRef = ['department_add', 'major_add', 'section_add', 'subject_add'].includes(type)
+            ? `local:${operationId}`
+            : null;
+        await adminStoreRequest(adminStructureQueueStoreName, 'readwrite', store => store.put({
+            key: `${userId}:${operationId}`, userId, operationId, localRef, type, payload,
+            createdAt: new Date().toISOString(), lastError: null
+        }));
+        setNotice('Admin change saved on this device. It will apply when connected.', true, 'sync');
+        window.dispatchEvent(new CustomEvent('admin-structure-data-changed'));
+        return { operationId, localRef };
+    }
+
+    async function getAdminStructureData(client) {
+        const userId = await getUserId(client);
+        if (!userId) return { lookups: null, pending: [] };
+        const [lookups, allPending] = await Promise.all([
+            getAdminAccountLookups(client, userId),
+            adminStoreRequest(adminStructureQueueStoreName, 'readonly', store => store.getAll())
+        ]);
+        const pending = allPending.filter(item => item.userId === userId)
+            .sort((first, second) => Date.parse(first.createdAt) - Date.parse(second.createdAt));
+        return { lookups, pending };
+    }
+
+    async function clearAdminStructureQueue(client) {
+        const userId = await getUserId(client);
+        if (!userId) return;
+        const { pending } = await getAdminStructureData(client);
+        await Promise.all(pending.map(item => adminStoreRequest(
+            adminStructureQueueStoreName,
+            'readwrite',
+            store => store.delete(item.key)
+        )));
+        window.dispatchEvent(new CustomEvent('admin-structure-data-changed'));
+    }
+
+    async function getAdminStructureIdMap(userId) {
+        const mappings = await adminStoreRequest(adminStructureMapStoreName, 'readonly', store => store.getAll());
+        return new Map(mappings.filter(item => item.userId === userId).map(item => [item.localRef, item.realId]));
+    }
+
+    async function syncAdminStructureQueue(client) {
+        if (!navigator.onLine || window.adminStructureSyncInProgress) return;
+        window.adminStructureSyncInProgress = true;
+        try {
+            const userId = await getUserId(client);
+            if (!userId) return;
+            const { pending } = await getAdminStructureData(client);
+            const idMap = await getAdminStructureIdMap(userId);
+            for (const operation of pending) {
+                if (!navigator.onLine) break;
+                const payload = { ...operation.payload, type: operation.type };
+                for (const field of ['department_id', 'major_id', 'semester_id']) {
+                    const value = payload[field];
+                    if (typeof value === 'string' && value.startsWith('local:')) {
+                        if (!idMap.has(value)) throw new Error(`An earlier queued ${field.replace('_id', '')} is still waiting to sync.`);
+                        payload[field] = idMap.get(value);
+                    }
+                }
+
+                const { data, error } = await client.rpc('sync_admin_offline_operation', {
+                    p_operation_id: operation.operationId,
+                    p_payload: payload
+                });
+                if (error) {
+                    await adminStoreRequest(adminStructureQueueStoreName, 'readwrite', store => store.put({ ...operation, lastError: error.message }));
+                    setNotice('An admin change is still waiting to apply. It remains saved on this device and will retry.', true, 'sync');
+                    window.setTimeout(() => {
+                        if (navigator.onLine && window.currentOfflineRole === 'admin') {
+                            void syncAdminStructureQueue(client);
+                        }
+                    }, 15000);
+                    break;
+                }
+                if (operation.localRef && data?.record_id !== undefined) {
+                    const mapping = { key: `${userId}:${operation.localRef}`, userId, localRef: operation.localRef, realId: data.record_id };
+                    await adminStoreRequest(adminStructureMapStoreName, 'readwrite', store => store.put(mapping));
+                    idMap.set(operation.localRef, data.record_id);
+                }
+                await adminStoreRequest(adminStructureQueueStoreName, 'readwrite', store => store.delete(operation.key));
+            }
+            const remaining = await getAdminStructureData(client);
+            if (!remaining.pending.length && pending.length) {
+                setNotice('Saved admin changes have been applied.', true, 'ready');
+                await saveAdminAccountLookups(client, userId);
+            }
+            window.dispatchEvent(new CustomEvent('admin-structure-data-changed'));
+        } catch (error) {
+            console.warn('Unable to sync queued admin structure changes.', error);
+            setNotice('An admin change is still waiting to apply. It remains saved on this device and will retry.', true, 'sync');
+            window.setTimeout(() => {
+                if (navigator.onLine && window.currentOfflineRole === 'admin') {
+                    void syncAdminStructureQueue(client);
+                }
+            }, 15000);
+        } finally {
+            window.adminStructureSyncInProgress = false;
+        }
     }
 
     async function submitAdminAccountCreation(client, role, payload, functionUrl, anonKey) {
@@ -527,6 +637,10 @@
     window.clearAdminAccountResults = clearAdminAccountResults;
     window.syncAdminAccountQueue = syncAdminAccountQueue;
     window.getAdminAccountLookups = getAdminAccountLookups;
+    window.queueAdminStructureOperation = queueAdminStructureOperation;
+    window.getAdminStructureData = getAdminStructureData;
+    window.syncAdminStructureQueue = syncAdminStructureQueue;
+    window.clearAdminStructureQueue = clearAdminStructureQueue;
 
     async function removeQueuedTeacherOperation(key) {
         const database = await openDatabase();
@@ -1230,7 +1344,7 @@
     window.addEventListener('online', () => {
         setNotice('Connection restored. Refreshing portal data and syncing queued teacher changes.', true, 'sync');
         if (window.currentOfflineRole === 'admin' && window.supabaseClientForOffline) {
-            void syncAdminAccountQueue(window.supabaseClientForOffline);
+            void resumeAdminOnline(clientForOffline());
         }
         if (window.currentOfflineRole === 'teacher' && window.supabaseClientForOffline) {
             void syncTeacherQueue(window.supabaseClientForOffline);
@@ -1239,6 +1353,24 @@
             });
         }
     });
+
+    function clientForOffline() {
+        return window.supabaseClientForOffline;
+    }
+
+    async function resumeAdminOnline(client) {
+        try {
+            const userId = await getUserId(client);
+            const { data: admin, error } = await client.from('admins').select('id').eq('auth_user_id', userId).maybeSingle();
+            if (error || !admin) return;
+            await saveAdminAccountLookups(client, userId);
+            await syncAdminAccountQueue(client);
+            await syncAdminStructureQueue(client);
+            if (window.adminOfflineView) window.location.reload();
+        } catch (error) {
+            console.warn('Unable to resume admin data after reconnect.', error);
+        }
+    }
 
     window.addEventListener('DOMContentLoaded', () => {
         if (window.currentOfflineRole === 'teacher' && window.supabaseClientForOffline) {

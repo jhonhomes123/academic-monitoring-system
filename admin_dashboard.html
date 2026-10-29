@@ -1131,6 +1131,19 @@ table td{
                 </div>
             </div>
 
+            <div class="table-section">
+                <div class="section-header">
+                    <h2>Pending Academic Changes</h2>
+                    <p>Changes saved offline will apply in order after reconnecting</p>
+                </div>
+                <div class="table-responsive">
+                    <table>
+                        <thead><tr><th>Change</th><th>Details</th><th>Status</th></tr></thead>
+                        <tbody id="adminStructureQueueTable"><tr><td colspan="3">No pending changes</td></tr></tbody>
+                    </table>
+                </div>
+            </div>
+
         </div>
         <!-- MANAGE DEPARTMENT -->
         <div class="content-section" id="departmentSection">
@@ -2678,10 +2691,12 @@ onchange="loadSubjectsForTeacherAssign()">
         window.beginAdminOfflinePage(supabaseClient).then(restoredOffline => {
             if (restoredOffline) {
                 void renderAdminCreatedAccounts();
+                void renderAdminStructureQueue();
                 return;
             }
             loadDashboardCounts();
             void renderAdminCreatedAccounts();
+            void renderAdminStructureQueue();
         }).catch(error => {
             console.warn('Offline admin view could not be prepared.', error);
             loadDashboardCounts();
@@ -3588,6 +3603,25 @@ let currentManageTeacherId = null;
 
         async function loadSubjectSemesterOptions() {
             const select = document.getElementById('subjectSemesterSelect');
+            if (!navigator.onLine && window.getAdminAccountLookups) {
+                const lookups = await window.getAdminAccountLookups(supabaseClient);
+                const semesters = lookups?.semesters || [];
+                const { pending } = await window.getAdminStructureData(supabaseClient);
+                const queuedSemester = pending.filter(item => item.type === 'semester_set').at(-1);
+                const activeSemester = queuedSemester
+                    ? semesters.find(semester => String(semester.semester_id) === String(queuedSemester.payload.semester_id))
+                    : semesters.find(semester => semester.is_active);
+                select.innerHTML = '<option value="">Select Semester</option>';
+                semesters.forEach(semester => {
+                    const isActive = String(semester.semester_id) === String(activeSemester?.semester_id);
+                    select.add(new Option(`${semester.semester_name}${isActive ? ' (Active)' : ''}`, semester.semester_id));
+                });
+                select.value = activeSemester?.semester_id || '';
+                document.getElementById('subjectSemesterHint').textContent = queuedSemester
+                    ? `Using ${activeSemester?.semester_name || 'the queued semester'} after reconnecting.`
+                    : 'Using the saved semester list. New subjects will apply after reconnecting.';
+                return;
+            }
             const [{ data, error }, { data: activeSemester, error: activeError }] = await Promise.all([
                 supabaseClient
                 .from('semesters')
@@ -4440,6 +4474,15 @@ async function refreshCurrentExplorer() {
                     'activeSemesterSelect'
                 );
 
+            if (!navigator.onLine && window.getAdminAccountLookups) {
+                const lookups = await window.getAdminAccountLookups(supabaseClient);
+                activeSemesterSelect.innerHTML = '<option value="">Select Semester</option>';
+                (lookups?.semesters || []).forEach(semester => {
+                    activeSemesterSelect.add(new Option(`${semester.semester_name}${semester.is_active ? ' (Active)' : ''}`, semester.semester_id));
+                });
+                return;
+            }
+
             const { data, error } =
                 await supabaseClient
                     .from('semesters')
@@ -4494,6 +4537,18 @@ async function refreshCurrentExplorer() {
 
         return;
 
+    }
+
+    if (!navigator.onLine) {
+        try {
+            await window.queueAdminStructureOperation(supabaseClient, 'semester_set', {
+                semester_id: String(semesterId)
+            });
+            showAlert('success', 'Semester Change Queued', 'The active semester will update when you are online.');
+        } catch (error) {
+            showAlert('error', 'Semester Update Failed', error.message);
+        }
+        return;
     }
 
     try {
@@ -4603,11 +4658,25 @@ async function refreshCurrentExplorer() {
             const select =
                 document.getElementById(selectId);
 
-            const { data } =
-                await supabaseClient
-                    .from('departments')
-                    .select('*')
-                    .order('department_name');
+            let data;
+            if (!navigator.onLine && window.getAdminStructureData) {
+                const offlineData = await window.getAdminStructureData(supabaseClient);
+                data = [...(offlineData.lookups?.departments || [])];
+                offlineData.pending.filter(item => item.type === 'department_add').forEach(item => {
+                    data.push({ department_id: item.localRef, department_name: item.payload.department_name });
+                });
+            } else {
+                const result = await supabaseClient.from('departments').select('*').order('department_name');
+                data = result.data || [];
+                if (window.getAdminStructureData) {
+                    const offlineData = await window.getAdminStructureData(supabaseClient);
+                    offlineData.pending.filter(item => item.type === 'department_add').forEach(item => {
+                        if (!data.some(department => department.department_name.toLowerCase() === item.payload.department_name.toLowerCase())) {
+                            data.push({ department_id: item.localRef, department_name: item.payload.department_name });
+                        }
+                    });
+                }
+            }
 
             // PLACEHOLDER
             select.innerHTML = `
@@ -4618,7 +4687,7 @@ async function refreshCurrentExplorer() {
     
     `;
 
-            data.forEach(dep => {
+            (data || []).forEach(dep => {
 
                 select.innerHTML += `
         
@@ -4658,12 +4727,7 @@ async function refreshCurrentExplorer() {
 
             if (!departmentId) return;
 
-            const { data } =
-                await supabaseClient
-                    .from('majors')
-                    .select('*')
-                    .eq('department_id', departmentId);
-
+            const data = await getAdminMajorOptions(departmentId);
             data.forEach(major => {
 
                 majorSelect.innerHTML += `
@@ -4700,12 +4764,7 @@ async function refreshCurrentExplorer() {
 
             if (!departmentId) return;
 
-            const { data } =
-                await supabaseClient
-                    .from('majors')
-                    .select('*')
-                    .eq('department_id', departmentId);
-
+            const data = await getAdminMajorOptions(departmentId);
             data.forEach(major => {
 
                 majorSelect.innerHTML += `
@@ -4718,6 +4777,29 @@ async function refreshCurrentExplorer() {
 
             });
 
+        }
+
+        async function getAdminMajorOptions(departmentId) {
+            if (!navigator.onLine && window.getAdminStructureData) {
+                const { lookups, pending } = await window.getAdminStructureData(supabaseClient);
+                const majors = (lookups?.majors || []).filter(major => String(major.department_id) === String(departmentId));
+                pending.filter(item => item.type === 'major_add' && String(item.payload.department_id) === String(departmentId))
+                    .forEach(item => majors.push({ major_id: item.localRef, major_name: item.payload.major_name }));
+                return majors;
+            }
+            const { data, error } = await supabaseClient.from('majors').select('*').eq('department_id', departmentId);
+            if (error) throw error;
+            const majors = data || [];
+            if (window.getAdminStructureData) {
+                const { pending } = await window.getAdminStructureData(supabaseClient);
+                pending.filter(item => item.type === 'major_add' && String(item.payload.department_id) === String(departmentId))
+                    .forEach(item => {
+                        if (!majors.some(major => major.major_name.toLowerCase() === item.payload.major_name.toLowerCase())) {
+                            majors.push({ major_id: item.localRef, major_name: item.payload.major_name });
+                        }
+                    });
+            }
+            return majors;
         }
         /* =========================================================
            LOAD SECTIONS
@@ -4790,6 +4872,18 @@ async function refreshCurrentExplorer() {
 
         return;
 
+    }
+
+    if (!navigator.onLine) {
+        try {
+            await window.queueAdminStructureOperation(supabaseClient, 'department_add', { department_name: name });
+            document.getElementById('departmentName').value = '';
+            closeDepartmentModal();
+            showAlert('success', 'Department Queued', `${name} will be added when you are online.`);
+        } catch (error) {
+            showAlert('error', 'Department Error', error.message);
+        }
+        return;
     }
 
     try {
@@ -4904,6 +4998,21 @@ async function refreshCurrentExplorer() {
 
         return;
 
+    }
+
+    if (!navigator.onLine) {
+        try {
+            await window.queueAdminStructureOperation(supabaseClient, 'major_add', {
+                department_id: String(departmentId),
+                major_name: name
+            });
+            document.getElementById('majorName').value = '';
+            closeMajorModal();
+            showAlert('success', 'Major Queued', `${name} will be added when you are online.`);
+        } catch (error) {
+            showAlert('error', 'Major Error', error.message);
+        }
+        return;
     }
 
     try {
@@ -5050,6 +5159,22 @@ async function refreshCurrentExplorer() {
 
     }
 
+    if (!navigator.onLine) {
+        try {
+            await window.queueAdminStructureOperation(supabaseClient, 'section_add', {
+                major_id: String(majorId),
+                year_level: yearLevel,
+                section_name: sectionName
+            });
+            document.getElementById('sectionName').value = '';
+            closeSectionModal();
+            showAlert('success', 'Section Queued', `${sectionName} will be added when you are online.`);
+        } catch (error) {
+            showAlert('error', 'Section Error', error.message);
+        }
+        return;
+    }
+
     /* ======================
        INSERT SECTION
     ====================== */
@@ -5175,7 +5300,7 @@ async function refreshCurrentExplorer() {
    ADD SUBJECT
 ========================================================= */
 
-   async function addSubject() {
+    async function addSubject() {
 
     const departmentId =
         document.getElementById(
@@ -5228,6 +5353,25 @@ async function refreshCurrentExplorer() {
 
         return;
 
+    }
+
+    if (!navigator.onLine) {
+        try {
+            await window.queueAdminStructureOperation(supabaseClient, 'subject_add', {
+                major_id: String(majorId),
+                semester_id: String(semesterId),
+                year_level: yearLevel,
+                subject_code: subjectCode,
+                subject_name: subjectName
+            });
+            document.getElementById('subjectCode').value = '';
+            document.getElementById('subjectName').value = '';
+            closeSubjectModal();
+            showAlert('success', 'Subject Queued', `${subjectCode} will be added when you are online.`);
+        } catch (error) {
+            showAlert('error', 'Subject Error', error.message);
+        }
+        return;
     }
 
     /* ======================
@@ -6387,6 +6531,19 @@ async function loadSubjectsForDelete() {
                     'currentSemesterDisplay'
                 );
 
+            if (!navigator.onLine && window.getAdminStructureData) {
+                const { lookups, pending } = await window.getAdminStructureData(supabaseClient);
+                const queuedSemester = pending.filter(item => item.type === 'semester_set').at(-1);
+                const activeSemester = queuedSemester
+                    ? (lookups?.semesters || []).find(item => String(item.semester_id) === String(queuedSemester.payload.semester_id))
+                    : (lookups?.semesters || []).find(item => item.is_active);
+                display.innerText = activeSemester
+                    ? `${activeSemester.semester_name}${queuedSemester ? ' (will apply after reconnecting)' : ''}`
+                    : 'No Active Semester';
+                if (activeSemester) document.getElementById('activeSemesterSelect').value = activeSemester.semester_id;
+                return;
+            }
+
             const { data, error } =
                 await supabaseClient
                     .from('semesters')
@@ -7490,9 +7647,53 @@ async function clearAdminCreatedAccounts() {
     });
     showAlert('success', 'Credentials Cleared', 'Saved temporary credentials were removed from this device.');
 }
+async function renderAdminStructureQueue() {
+    const table = document.getElementById('adminStructureQueueTable');
+    if (!table || !window.getAdminStructureData) return;
+    const { pending } = await window.getAdminStructureData(supabaseClient);
+    table.replaceChildren();
+    if (!pending.length) {
+        const row = document.createElement('tr');
+        const cell = document.createElement('td');
+        cell.colSpan = 3;
+        cell.textContent = 'No pending changes';
+        row.appendChild(cell);
+        table.appendChild(row);
+        return;
+    }
+    const labels = {
+        semester_set: 'Set active semester',
+        department_add: 'Add department',
+        major_add: 'Add major',
+        section_add: 'Add section',
+        subject_add: 'Add subject'
+    };
+    pending.forEach(item => {
+        const details = item.type === 'semester_set'
+            ? `Semester ${item.payload.semester_id}`
+            : item.type === 'department_add'
+                ? item.payload.department_name
+                : item.type === 'major_add'
+                    ? item.payload.major_name
+                    : item.type === 'section_add'
+                        ? `${item.payload.section_name}, ${item.payload.year_level}`
+                        : `${item.payload.subject_code} - ${item.payload.subject_name}, ${item.payload.year_level}`;
+        const row = document.createElement('tr');
+        [labels[item.type] || 'Admin change', details, item.lastError ? 'Waiting to retry' : 'Waiting for connection']
+            .forEach(value => {
+                const cell = document.createElement('td');
+                cell.textContent = value;
+                row.appendChild(cell);
+            });
+        table.appendChild(row);
+    });
+}
 
 window.addEventListener('admin-account-data-changed', () => {
     void renderAdminCreatedAccounts();
+});
+window.addEventListener('admin-structure-data-changed', () => {
+    void renderAdminStructureQueue();
 });
 
 function openCreateStudentModal() {
