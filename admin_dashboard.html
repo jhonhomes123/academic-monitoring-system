@@ -2630,7 +2630,11 @@ onchange="loadSubjectsForTeacherAssign()">
             });
 
             element.classList.add('active');
-            if (window.adminOfflineView) return;
+            if (navigator.onLine) {
+                window.adminOfflineView = false;
+            } else if (window.adminOfflineView) {
+                return;
+            }
             // AUTO RELOAD DATA WHEN SWITCHING
             if (sectionId === 'dashboardSection') {
 
