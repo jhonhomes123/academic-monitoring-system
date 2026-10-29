@@ -7664,6 +7664,7 @@ async function renderAdminCreatedAccounts() {
             ...queued.map(item => ({
                 operationId: item.operationId,
                 processing: Boolean(item.processing),
+                failed: Boolean(item.lastError),
                 role: item.role,
                 name: [item.payload.first_name, item.payload.middle_initial, item.payload.last_name].filter(Boolean).join(' '),
                 id: item.role === 'student' ? item.payload.student_number : item.payload.teacher_number,
@@ -7713,8 +7714,8 @@ async function renderAdminCreatedAccounts() {
                     const removeButton = document.createElement('button');
                     removeButton.type = 'button';
                     removeButton.className = 'btn reject-btn';
-                    removeButton.textContent = 'Remove request';
-                    removeButton.addEventListener('click', () => removeQueuedAdminAccount(account.operationId));
+                    removeButton.textContent = account.failed ? 'Discard failed request' : 'Remove request';
+                    removeButton.addEventListener('click', () => removeQueuedAdminAccount(account.operationId, account.failed));
                     actionCell.appendChild(removeButton);
                 }
             } else {
@@ -7730,11 +7731,14 @@ async function renderAdminCreatedAccounts() {
 
 window.renderAdminCreatedAccounts = renderAdminCreatedAccounts;
 
-async function removeQueuedAdminAccount(operationId) {
-    if (!window.confirm('Remove this saved request from this device? This will not delete any account that may already exist online.')) return;
+async function removeQueuedAdminAccount(operationId, failed = false) {
+    const prompt = failed
+        ? 'Discard this failed offline account request from this device? This does not delete the account that already exists online.'
+        : 'Remove this saved account request from this device? Any account already created online will not be deleted.';
+    if (!window.confirm(prompt)) return;
     try {
         await window.discardQueuedAdminAccountRequest(supabaseClient, operationId);
-        showAlert('success', 'Request Removed', 'The saved account request was removed from this device. Existing online accounts were not changed.');
+        showAlert('success', failed ? 'Failed Request Discarded' : 'Request Removed', 'The queued request was removed from this device. Existing online accounts were not changed.');
     } catch (error) {
         showAlert('error', 'Could Not Remove Request', error.message || 'Unable to remove the saved request.');
     }
