@@ -1143,6 +1143,19 @@ table td{
                 </div>
             </div>
 
+            <div class="table-section">
+                <div class="section-header">
+                    <h2>Student Password Resets</h2>
+                    <p>Temporary passwords and email delivery status for resets requested on this device</p>
+                </div>
+                <div class="table-responsive">
+                    <table>
+                        <thead><tr><th>Student ID</th><th>Student</th><th>Temporary Password</th><th>Email Status</th><th>Reset Status</th></tr></thead>
+                        <tbody id="adminPasswordResetTable"><tr><td colspan="5">No password resets on this device</td></tr></tbody>
+                    </table>
+                </div>
+            </div>
+
         </div>
         <!-- MANAGE DEPARTMENT -->
         <div class="content-section" id="departmentSection">
@@ -1934,6 +1947,9 @@ onchange="loadSubjectsForTeacherAssign()">
 
         </div>
 
+        <button class="btn" type="button" onclick="loadUnassignedStudents()">Show Unassigned Students</button>
+        <button class="btn" type="button" onclick="loadGraduatedStudents()">Show Graduates</button>
+
     </div>
 
     <!-- STUDENT TABLE -->
@@ -2694,11 +2710,13 @@ onchange="loadSubjectsForTeacherAssign()">
         window.beginAdminOfflinePage(supabaseClient).then(restoredOffline => {
             if (restoredOffline) {
                 void renderAdminCreatedAccounts();
+                void renderAdminPasswordResets();
                 void renderAdminStructureQueue();
                 return;
             }
             loadDashboardCounts();
             void renderAdminCreatedAccounts();
+            void renderAdminPasswordResets();
             void renderAdminStructureQueue();
         }).catch(error => {
             console.warn('Offline admin view could not be prepared.', error);
@@ -3463,6 +3481,23 @@ async function approveAccount(id) {
                 }
             });
 
+            pending.filter(item => item.type === 'section_transition').forEach(item => {
+                const sectionIndex = sections.findIndex(section => String(section.section_id) === String(item.payload.section_id));
+                if (sectionIndex < 0) return;
+                const section = sections[sectionIndex];
+                if (item.payload.direction === 'promote' && section.year_level === '4th Year') {
+                    sections.splice(sectionIndex, 1);
+                    return;
+                }
+                const yearTransitions = item.payload.direction === 'promote'
+                    ? { '1st Year': '2nd Year', '2nd Year': '3rd Year', '3rd Year': '4th Year' }
+                    : { '4th Year': '3rd Year', '3rd Year': '2nd Year', '2nd Year': '1st Year' };
+                if (yearTransitions[section.year_level]) {
+                    section.year_level = yearTransitions[section.year_level];
+                    section.pending = true;
+                }
+            });
+
             return { departments, majors, sections, subjects, pending, lookups };
         }
 
@@ -3901,6 +3936,7 @@ async function viewDepartmentsByYear(year) {
     `${year}`;
 
     let data;
+    let queuedDeletedSectionIds = new Set();
     if (!navigator.onLine) {
         const offlineRecords = await getAdminExplorerRecords();
         data = offlineRecords.departments;
@@ -4151,13 +4187,12 @@ data.forEach(major => {
                     sectionColumn.innerHTML =
                         sections.map(section => `
 
-                <div style="
-                    padding:10px;
-                    margin-bottom:8px;
-                    background:#f5f5f5;
-                    border-radius:8px;
-                ">
-                        ${section.section_name}${section.pending ? ' (waiting to sync)' : ''}
+                <div style="padding:10px;margin-bottom:8px;background:#f5f5f5;border-radius:8px;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
+                    <span>${section.section_name}${section.pending ? ' (waiting to sync)' : ''}</span>
+                    <span style="display:flex;gap:6px;">
+                        ${section.year_level !== '4th Year' ? `<button class="btn" onclick="transitionAdminSection('${encodeURIComponent(String(section.section_id))}','promote')">Promote</button>` : `<button class="btn" onclick="transitionAdminSection('${encodeURIComponent(String(section.section_id))}','promote')">Graduate</button>`}
+                        ${section.year_level !== '1st Year' ? `<button class="btn reject-btn" onclick="transitionAdminSection('${encodeURIComponent(String(section.section_id))}','demote')">Demote</button>` : ''}
+                    </span>
                 </div>
 
             `).join('');
@@ -4252,6 +4287,66 @@ data.forEach(major => {
 </section>
 `).join('');
         }
+
+async function transitionAdminSection(encodedSectionId, direction) {
+    const sectionId = decodeURIComponent(String(encodedSectionId));
+    try {
+        const offlineRecords = !navigator.onLine ? await getAdminExplorerRecords() : null;
+        let section = (offlineRecords?.sections || []).find(item => String(item.section_id) === sectionId);
+        if (!section && navigator.onLine) {
+            const { data, error } = await supabaseClient.from('sections')
+                .select('section_id, section_name, year_level, major_id')
+                .eq('section_id', sectionId).single();
+            if (error) throw error;
+            section = data;
+        }
+        if (!section) throw new Error('Section details are not cached. Open the department explorer while online first.');
+
+        const fromYear = section.year_level;
+        const toYear = direction === 'demote'
+            ? ({ '4th Year': '3rd Year', '3rd Year': '2nd Year', '2nd Year': '1st Year' })[fromYear]
+            : ({ '1st Year': '2nd Year', '2nd Year': '3rd Year', '3rd Year': '4th Year', '4th Year': 'Graduate' })[fromYear];
+        if (!toYear) throw new Error(`This section cannot be ${direction === 'promote' ? 'promoted' : 'demoted'} from ${fromYear}.`);
+
+        const graduate = direction === 'promote' && fromYear === '4th Year';
+        showConfirmModal(
+            graduate ? 'Graduate Section' : `${direction === 'promote' ? 'Promote' : 'Demote'} Section`,
+            graduate
+                ? `Graduate all students in ${section.section_name}? Their accounts will remain, their section assignment will be cleared, and this section will be removed.`
+                : `${direction === 'promote' ? 'Move' : 'Move'} section ${section.section_name} from ${fromYear} to ${toYear}? Students remain assigned and inherit the new year level.`,
+            async () => {
+                try {
+                    if (!navigator.onLine) {
+                        await window.queueAdminStructureOperation(supabaseClient, 'section_transition', {
+                            section_id: String(sectionId), direction
+                        });
+                        if (!graduate) currentExplorerYear = toYear;
+                        showAlert('success', graduate ? 'Graduation Queued' : `Section ${direction === 'promote' ? 'Promotion' : 'Demotion'} Queued`, graduate
+                            ? `${section.section_name} students will be marked as graduates when you reconnect. Their accounts will remain.`
+                            : `${section.section_name} will move to ${toYear} when you reconnect.`);
+                        await refreshCurrentExplorer();
+                        return;
+                    }
+
+                    const { data, error } = await supabaseClient.rpc('admin_transition_section', {
+                        p_section_id: Number(sectionId), p_direction: direction
+                    });
+                    if (error) throw error;
+                    await window.saveAdminAccountLookups?.(supabaseClient);
+                    if (!graduate) currentExplorerYear = data.to_year;
+                    showAlert('success', graduate ? 'Students Graduated' : `Section ${direction === 'promote' ? 'Promoted' : 'Demoted'}`, graduate
+                        ? `${data.graduated_count} students were marked as graduates. Their accounts remain available in Graduates.`
+                        : `${section.section_name} is now ${data.to_year}.`);
+                    await refreshCurrentExplorer();
+                } catch (error) {
+                    showAlert('error', 'Section Update Failed', error.message);
+                }
+            }
+        );
+    } catch (error) {
+        showAlert('error', 'Section Update Failed', error.message);
+    }
+}
 
         async function viewSubjectTeachers(subjectId,subjectName) {
             currentSubjectId = subjectId;
@@ -5823,7 +5918,7 @@ async function loadDepartmentDeleteOptions() {
                 try {
                     await window.queueAdminStructureDelete(supabaseClient, 'major_delete', id);
                     closeDeleteMajorModal();
-                    showAlert('success', 'Major Delete Queued', 'The major will be deleted when you are online if it has no sections or subjects.');
+                    showAlert('success', 'Major Delete Queued', 'Its subjects and sections will be deleted and affected students will be left unassigned when you reconnect. Student and teacher accounts will remain.');
                     await refreshCurrentExplorer();
                 } catch (error) {
                     showAlert('error', 'Delete Failed', error.message);
@@ -6095,7 +6190,7 @@ async function loadDepartmentDeleteOptions() {
                 try {
                     await window.queueAdminStructureDelete(supabaseClient, 'section_delete', id);
                     closeDeleteSectionModal();
-                    showAlert('success', 'Section Delete Queued', 'The section will be deleted when you are online if no students are assigned to it.');
+                    showAlert('success', 'Section Delete Queued', 'The section will be deleted and its students will be left unassigned when you reconnect. Their accounts will remain.');
                     await refreshCurrentExplorer();
                 } catch (error) {
                     showAlert('error', 'Delete Failed', error.message);
@@ -7470,6 +7565,8 @@ async function loadSectionsForManageStudents() {
 
     `;
 
+    select.add(new Option('Unassigned students (all)', 'unassigned'));
+
     if (!majorId || !yearLevel) return;
 
     let data;
@@ -7486,17 +7583,7 @@ async function loadSectionsForManageStudents() {
     }
 
     if (!data.length) {
-
-        select.innerHTML = `
-
-        <option value="">
-            No sections found
-        </option>
-
-        `;
-
         return;
-
     }
 
     data.forEach(section => {
@@ -7511,6 +7598,22 @@ async function loadSectionsForManageStudents() {
 
     });
 
+}
+async function loadUnassignedStudents() {
+    const sectionSelect = document.getElementById('manageStudentSection');
+    if (![...sectionSelect.options].some(option => option.value === 'unassigned')) {
+        sectionSelect.add(new Option('Unassigned students (all)', 'unassigned'));
+    }
+    sectionSelect.value = 'unassigned';
+    await loadStudentsBySection();
+}
+async function loadGraduatedStudents() {
+    const sectionSelect = document.getElementById('manageStudentSection');
+    if (![...sectionSelect.options].some(option => option.value === 'graduates')) {
+        sectionSelect.add(new Option('Graduates', 'graduates'));
+    }
+    sectionSelect.value = 'graduates';
+    await loadStudentsBySection();
 }
 async function loadStudentsBySection() {
 
@@ -7559,12 +7662,49 @@ async function loadStudentsBySection() {
     `;
 
     let data;
+    let pendingGraduationSectionIds = new Set();
     if (!navigator.onLine) {
         const roster = await window.getAdminStudentRoster?.(supabaseClient);
         if (roster?.students) {
-            data = roster.students.filter(student => String(student.section_id) === String(sectionId));
+            if (sectionId === 'graduates') {
+                const { lookups, pending } = await window.getAdminStructureData(supabaseClient);
+                pendingGraduationSectionIds = new Set(pending.filter(item => item.type === 'section_transition' && item.payload.direction === 'promote')
+                    .filter(item => (lookups?.sections || []).some(section => String(section.section_id) === String(item.payload.section_id) && section.year_level === '4th Year'))
+                    .map(item => String(item.payload.section_id)));
+                data = roster.students
+                    .filter(student => student.graduated_at || pendingGraduationSectionIds.has(String(student.section_id)))
+                    .map(student => pendingGraduationSectionIds.has(String(student.section_id))
+                        ? { ...student, graduated_at: student.graduated_at || new Date().toISOString(), pendingGraduation: true }
+                        : student);
+            } else {
+                data = sectionId === 'unassigned'
+                    ? roster.students.filter(student => student.section_id === null || student.section_id === undefined)
+                    : roster.students.filter(student => String(student.section_id) === String(sectionId));
+            }
+            if (sectionId === 'unassigned') {
+                const { lookups, pending } = await window.getAdminStructureData(supabaseClient);
+                const queuedSectionIds = new Set(pending.filter(item => item.type === 'section_delete')
+                    .map(item => String(item.payload.section_id)));
+                const deletedMajorIds = new Set(pending.filter(item => item.type === 'major_delete')
+                    .map(item => String(item.payload.major_id)));
+                const deletedDepartmentIds = new Set(pending.filter(item => item.type === 'department_delete')
+                    .map(item => String(item.payload.department_id)));
+                const majorDepartmentIds = new Set((lookups?.majors || [])
+                    .filter(major => deletedDepartmentIds.has(String(major.department_id)))
+                    .map(major => String(major.major_id)));
+                queuedDeletedSectionIds = new Set((lookups?.sections || [])
+                    .filter(section => deletedMajorIds.has(String(section.major_id)) || majorDepartmentIds.has(String(section.major_id)))
+                    .map(section => String(section.section_id)));
+                queuedSectionIds.forEach(deletedSectionId => queuedDeletedSectionIds.add(deletedSectionId));
+                const pendingDeletesStudents = roster.students
+                    .filter(student => queuedDeletedSectionIds.has(String(student.section_id)))
+                    .map(student => ({ ...student, section_id: null, pendingEdit: true }));
+                pendingDeletesStudents.forEach(student => {
+                    if (!data.some(existing => String(existing.student_id) === String(student.student_id))) data.push(student);
+                });
+            }
         } else {
-            const cachedSection = await window.getAdminStudentSection?.(supabaseClient, sectionId);
+            const cachedSection = sectionId === 'unassigned' ? null : await window.getAdminStudentSection?.(supabaseClient, sectionId);
             data = cachedSection?.students || [];
         }
     } else {
@@ -7577,6 +7717,7 @@ async function loadStudentsBySection() {
                 middle_initial,
                 last_name,
                 gender,
+                graduated_at,
                 users!students_user_id_fkey (
                     user_id,
                     email,
@@ -7584,7 +7725,11 @@ async function loadStudentsBySection() {
                 )
                 `);
 
-        studentQuery = studentQuery.eq('section_id', sectionId);
+        studentQuery = sectionId === 'graduates'
+            ? studentQuery.not('graduated_at', 'is', null)
+            : sectionId === 'unassigned'
+                ? studentQuery.is('section_id', null).is('graduated_at', null)
+                : studentQuery.eq('section_id', sectionId);
         const result = await studentQuery.order('last_name');
         if (result.error) {
             console.log(result.error);
@@ -7616,12 +7761,18 @@ async function loadStudentsBySection() {
             if (roster?.students) {
                 studentEdits.forEach(item => {
                     const original = roster.students.find(student => String(student.student_id) === String(item.payload.student_id));
-                    if (String(item.payload.section_id || '') === String(sectionId)) {
+                    const requestedSectionId = item.payload.section_id ? String(item.payload.section_id) : 'unassigned';
+                    const editGraduates = Boolean(original?.graduated_at)
+                        || (requestedSectionId !== 'unassigned' && pendingGraduationSectionIds.has(requestedSectionId));
+                    const editedSectionId = editGraduates ? 'graduates' : queuedDeletedSectionIds.has(requestedSectionId) ? 'unassigned' : requestedSectionId;
+                    if (editedSectionId === String(sectionId)) {
                         const updatedStudent = {
                             ...original,
                             ...item.payload,
                             section_id: item.payload.section_id || null,
                             users: { ...(original?.users || {}), email: item.payload.email || original?.users?.email || '' },
+                            graduated_at: editGraduates ? (original?.graduated_at || new Date().toISOString()) : original?.graduated_at,
+                            pendingGraduation: editGraduates,
                             pendingEdit: true
                         };
                         const existingIndex = data.findIndex(student => String(student.student_id) === String(item.payload.student_id));
@@ -7637,9 +7788,30 @@ async function loadStudentsBySection() {
 
     if (window.getAdminAccountData) {
         const { queued } = await window.getAdminAccountData(supabaseClient);
+        const { pending: structurePending, lookups } = !navigator.onLine && sectionId === 'unassigned'
+            ? await window.getAdminStructureData(supabaseClient)
+            : { pending: [], lookups: null };
+        if (sectionId === 'unassigned') {
+            const queuedSectionIds = new Set(structurePending.filter(item => item.type === 'section_delete')
+                .map(item => String(item.payload.section_id)));
+            const deletedMajorIds = new Set(structurePending.filter(item => item.type === 'major_delete')
+                .map(item => String(item.payload.major_id)));
+            const deletedDepartmentIds = new Set(structurePending.filter(item => item.type === 'department_delete')
+                .map(item => String(item.payload.department_id)));
+            const majorDepartmentIds = new Set((lookups?.majors || [])
+                .filter(major => deletedDepartmentIds.has(String(major.department_id)))
+                .map(major => String(major.major_id)));
+            (lookups?.sections || []).filter(section => deletedMajorIds.has(String(section.major_id)) || majorDepartmentIds.has(String(section.major_id)))
+                .forEach(section => queuedDeletedSectionIds.add(String(section.section_id)));
+            queuedSectionIds.forEach(deletedSectionId => queuedDeletedSectionIds.add(deletedSectionId));
+        }
         queued.filter(item => item.role === 'student'
             && (item.action || 'admin-create') === 'admin-create'
-            && String(item.payload.section_id) === String(sectionId))
+            && (sectionId === 'graduates'
+                ? pendingGraduationSectionIds.has(String(item.payload.section_id))
+                : sectionId === 'unassigned'
+                ? (!item.payload.section_id || queuedDeletedSectionIds.has(String(item.payload.section_id)))
+                : String(item.payload.section_id) === String(sectionId)))
             .forEach(item => data.push({
                 student_id: `pending:${item.operationId}`,
                 pendingOperationId: item.operationId,
@@ -7650,7 +7822,8 @@ async function loadStudentsBySection() {
                 last_name: item.payload.last_name,
                 gender: item.payload.gender,
                 users: { email: 'Waiting to sync' },
-                pending: true
+                pending: true,
+                pendingGraduation: sectionId === 'graduates'
             }));
     }
 
@@ -7710,7 +7883,7 @@ async function loadStudentsBySection() {
 
             <td>
 
-                ${student.pending ? `${student.pendingProcessing ? 'Account sync needs attention' : 'Account creation queued'}<br>${student.pendingProcessing ? '' : `<button class="btn" onclick="openEditQueuedStudentAccount('${student.pendingOperationId}')">Edit</button>`}` : student.pendingEdit ? `<span>Edit queued</span><br><button class="btn" onclick="openEditStudentModal(${student.student_id})">Edit</button>` : `
+                ${student.pending ? `${student.pendingGraduation ? 'Graduation queued' : student.pendingProcessing ? 'Account sync needs attention' : 'Account creation queued'}<br>${student.pendingProcessing ? '' : `<button class="btn" onclick="openEditQueuedStudentAccount('${student.pendingOperationId}')">Edit</button>`}` : student.pendingGraduation ? 'Graduation queued' : student.graduated_at ? 'Graduate' : student.pendingEdit ? `<span>Edit queued</span><br><button class="btn" onclick="openEditStudentModal(${student.student_id})">Edit</button>` : `
                 <button class="btn" onclick="openEditStudentModal(${student.student_id})">Edit</button>
                 <button class="btn" onclick="resetStudentPassword(${student.student_id})">Reset Password</button>
                 <button class="btn reject-btn" onclick="deleteStudent('${student.student_id}','${student.users?.user_id}')">Delete</button>`}
@@ -7834,6 +8007,60 @@ async function renderAdminCreatedAccounts() {
 
 window.renderAdminCreatedAccounts = renderAdminCreatedAccounts;
 
+async function renderAdminPasswordResets() {
+    const table = document.getElementById('adminPasswordResetTable');
+    if (!table || !window.getAdminPasswordResetData) return;
+    const [{ queued, completed }, roster] = await Promise.all([
+        window.getAdminPasswordResetData(supabaseClient),
+        window.getAdminStudentRoster?.(supabaseClient) || Promise.resolve(null)
+    ]);
+    const rows = [
+        ...queued.map(item => {
+            const student = roster?.students?.find(candidate => String(candidate.student_id) === String(item.payload.student_id));
+            const email = student?.users?.email || '';
+            const emailAvailable = Boolean(email && !email.endsWith('@accounts.tcc.invalid'));
+            return {
+                studentNumber: student?.student_number || String(item.payload.student_id),
+                name: student ? [student.last_name, student.first_name, student.middle_initial ? `${String(student.middle_initial).replace(/\.$/, '')}.` : ''].filter(Boolean).join(', ') : 'Student',
+                password: 'Available after reset syncs',
+                emailStatus: emailAvailable ? 'Will check when connected' : 'Email not set',
+                status: item.processing
+                    ? 'Reset is processing'
+                    : item.lastError
+                        ? `Waiting to retry: ${item.lastError}`
+                        : 'Waiting for connection'
+            };
+        }),
+        ...completed.map(item => ({
+            studentNumber: item.studentNumber,
+            name: item.name || 'Student',
+            password: item.temporaryPassword || '',
+            emailStatus: item.emailError
+                ? `Email failed: ${item.emailError}`
+                : item.delivery === 'email-and-admin'
+                    ? `Email sent${item.email ? ` to ${item.email}` : ''}`
+                    : !item.emailAvailable
+                        ? 'Email not set'
+                        : 'Email not sent',
+            status: 'Reset complete'
+        }))
+    ];
+    table.replaceChildren();
+    if (!rows.length) {
+        const row = table.insertRow();
+        const cell = row.insertCell();
+        cell.colSpan = 5;
+        cell.textContent = 'No password resets on this device';
+        return;
+    }
+    rows.forEach(item => {
+        const row = table.insertRow();
+        [item.studentNumber, item.name, item.password, item.emailStatus, item.status].forEach(value => {
+            row.insertCell().textContent = value || '';
+        });
+    });
+}
+
 async function removeQueuedAdminAccount(operationId, failed = false) {
     const prompt = failed
         ? 'Discard this failed offline account request from this device? This does not delete the account that already exists online.'
@@ -7902,6 +8129,7 @@ async function renderAdminStructureQueue() {
         department_delete: 'Delete department',
         major_delete: 'Delete major',
         section_delete: 'Delete section',
+        section_transition: 'Promote/demote section',
         subject_delete: 'Delete subject',
         teacher_subject_unassign: 'Remove teacher assignment',
         student_edit: 'Edit student'
@@ -7950,6 +8178,8 @@ async function renderAdminStructureQueue() {
             : null;
         const details = item.type === 'student_edit'
             ? studentEditDetails(item.payload)
+            : item.type === 'section_transition'
+                ? `Section ${item.payload.section_id}: ${item.payload.direction}`
             : item.type === 'semester_set'
             ? (semester?.semester_name || `Unknown semester (${item.payload.semester_id})`)
             : item.type === 'department_add'
@@ -7980,6 +8210,9 @@ window.addEventListener('admin-account-data-changed', () => {
     if (navigator.onLine && document.getElementById('manageStudentSection')?.value) {
         void loadStudentsBySection();
     }
+});
+window.addEventListener('admin-password-reset-data-changed', () => {
+    void renderAdminPasswordResets();
 });
 window.addEventListener('admin-structure-data-changed', () => {
     void renderAdminStructureQueue();
@@ -8369,18 +8602,31 @@ async function saveStudentEdits() {
 async function resetStudentPassword(studentId) {
     showConfirmModal('Reset Student Password', 'Generate a new temporary password? It will be shown here and emailed to the saved Gmail when possible.', async () => {
         try {
-            const result = await callStudentAccountFunction('admin-reset', { student_id: Number(studentId) });
+            const result = await window.submitAdminPasswordReset(
+                supabaseClient,
+                studentId,
+                STUDENT_ACCOUNT_FUNCTION_URL,
+                SUPABASE_ANON_KEY
+            );
+            if (result.queued) {
+                showAlert('success', 'Password Reset Queued', 'The password will be reset after the device reconnects. The temporary password will appear in the reset table after sync.');
+                await renderAdminPasswordResets();
+                return;
+            }
             document.getElementById('resetStudentLoginId').textContent = result.student_number;
             document.getElementById('resetStudentTemporaryPassword').textContent = result.temporary_password;
             document.getElementById('resetStudentDeliveryNote').textContent = result.delivery === 'email-and-admin'
                 ? `The temporary password was also emailed to ${result.email}. You can share it directly if the student cannot access Gmail.`
                 : result.email_error
                     ? `Email delivery failed (${result.email_error}). Share this temporary password directly with the student.`
-                    : 'Share this temporary password directly with the student.';
+                    : result.email_available
+                        ? 'Email was not sent because this account is still in first-login setup. Share this temporary password directly with the student.'
+                        : 'No email is set for this student. Share this temporary password directly with the student.';
             document.getElementById('resetStudentNextStep').textContent = result.delivery === 'admin'
                 ? 'The student will add their Gmail and choose a new password during first-time setup.'
                 : 'The student must choose a new password at next sign-in.';
             openModal('resetStudentCredentialsModal');
+            await renderAdminPasswordResets();
         } catch (error) {
             showAlert('error', 'Password Reset Failed', error.message);
         }

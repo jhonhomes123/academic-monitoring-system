@@ -4,6 +4,7 @@
     const queueStoreName = 'teacher-write-queue';
     const adminQueueStoreName = 'admin-account-create-queue';
     const adminResultsStoreName = 'admin-created-account-results';
+    const adminPasswordResetResultsStoreName = 'admin-password-reset-results';
     const adminLookupStoreName = 'admin-account-lookups';
     const adminStructureQueueStoreName = 'admin-structure-write-queue';
     const adminStructureMapStoreName = 'admin-structure-id-map';
@@ -39,7 +40,7 @@
         if (databasePromise) return databasePromise;
 
         databasePromise = new Promise((resolve, reject) => {
-            const request = indexedDB.open(databaseName, 4);
+            const request = indexedDB.open(databaseName, 5);
             request.onupgradeneeded = () => {
                 const database = request.result;
                 if (!database.objectStoreNames.contains(storeName)) {
@@ -53,6 +54,9 @@
                 }
                 if (!database.objectStoreNames.contains(adminResultsStoreName)) {
                     database.createObjectStore(adminResultsStoreName, { keyPath: 'key' });
+                }
+                if (!database.objectStoreNames.contains(adminPasswordResetResultsStoreName)) {
+                    database.createObjectStore(adminPasswordResetResultsStoreName, { keyPath: 'key' });
                 }
                 if (!database.objectStoreNames.contains(adminLookupStoreName)) {
                     database.createObjectStore(adminLookupStoreName, { keyPath: 'key' });
@@ -323,9 +327,9 @@
             document.querySelectorAll('input,select,textarea,button').forEach(control => {
                 const inAllowedModal = control.closest('#createStudentModal,#createTeacherModal,#editStudentModal,#departmentModal,#majorModal,#sectionModal,#subjectModal,#deleteDepartmentModal,#deleteMajorModal,#deleteSectionModal,#deleteSubjectModal,#teacherAssignModal,#teacherSectionModal');
                 const opensAllowedModal = control.matches('button')
-                    && /openCreateStudentModal|openCreateTeacherModal|openEditStudentModal|openEditQueuedStudentAccount|openDepartmentModal|openMajorModal|openSectionModal|openSubjectModal|openDeleteDepartmentModal|openDeleteMajorModal|openDeleteSectionModal|openDeleteSubjectModal|openTeacherAssignModal|openAddSectionModal/.test(control.getAttribute('onclick') || '');
+                    && /openCreateStudentModal|openCreateTeacherModal|openEditStudentModal|openEditQueuedStudentAccount|transitionAdminSection|openDepartmentModal|openMajorModal|openSectionModal|openSubjectModal|openDeleteDepartmentModal|openDeleteMajorModal|openDeleteSectionModal|openDeleteSubjectModal|openTeacherAssignModal|openAddSectionModal/.test(control.getAttribute('onclick') || '');
                 const isAllowedOfflineAction = control.matches('button')
-                    && /createStudentAccount|createTeacherAccount|saveStudentEdits|clearAdminCreatedAccounts|createTeacherAccount|addDepartment|addMajor|addSection|addSubject|setActiveSemester|deleteDepartment|deleteMajor|deleteSectionModalAction|deleteSubject|assignTeacherToSubject|removeTeacherAssignment|saveTeacherSection|closeCreateStudentModal|closeEditStudentModal|closeModal|closeDepartmentModal|closeMajorModal|closeSectionModal|closeSubjectModal|closeDeleteDepartmentModal|closeDeleteMajorModal|closeDeleteSectionModal|closeDeleteSubjectModal|closeTeacherAssignModal|closeTeacherSectionModal|loadEditStudentMajors|loadEditStudentSections|loadDepartmentDeleteOptions|loadMajorsForDelete|loadMajorsForDeleteSection|loadSectionsForDelete|loadMajorsForDeleteSubject|loadSubjectsForDelete/.test(control.getAttribute('onclick') || '');
+                    && /createStudentAccount|createTeacherAccount|saveStudentEdits|resetStudentPassword|clearAdminCreatedAccounts|loadUnassignedStudents|loadGraduatedStudents|createTeacherAccount|addDepartment|addMajor|addSection|addSubject|setActiveSemester|deleteDepartment|deleteMajor|deleteSectionModalAction|deleteSubject|assignTeacherToSubject|removeTeacherAssignment|saveTeacherSection|closeCreateStudentModal|closeEditStudentModal|closeModal|closeDepartmentModal|closeMajorModal|closeSectionModal|closeSubjectModal|closeDeleteDepartmentModal|closeDeleteMajorModal|closeDeleteSectionModal|closeDeleteSubjectModal|closeTeacherAssignModal|closeTeacherSectionModal|loadEditStudentMajors|loadEditStudentSections|loadDepartmentDeleteOptions|loadMajorsForDelete|loadMajorsForDeleteSection|loadSectionsForDelete|loadMajorsForDeleteSubject|loadSubjectsForDelete/.test(control.getAttribute('onclick') || '');
                 const isSemesterPicker = control.id === 'activeSemesterSelect';
                 const isExplorerBack = control.id === 'backButton';
                 const isStudentFilter = ['manageStudentYear', 'manageStudentDepartment', 'manageStudentMajor', 'manageStudentSection'].includes(control.id);
@@ -439,8 +443,73 @@
         }
     }
 
-    async function saveAdminAccountLookups(client, userId) {
+    async function saveAdminPasswordResetResult(userId, operationId, payload, result) {
+        const roster = await getAdminStudentRoster(null, userId);
+        const student = roster?.students?.find(item => String(item.student_id) === String(payload.student_id));
+        const record = {
+            key: `${userId}:${operationId}`, userId, operationId,
+            studentId: String(payload.student_id),
+            studentNumber: result.student_number || student?.student_number || '',
+            name: student ? [student.last_name, student.first_name, student.middle_initial ? `${String(student.middle_initial).replace(/\.$/, '')}.` : ''].filter(Boolean).join(', ') : '',
+            temporaryPassword: result.temporary_password,
+            delivery: result.delivery,
+            email: result.email || '',
+            emailAvailable: Boolean(result.email_available),
+            emailError: result.email_error || '',
+            createdAt: new Date().toISOString()
+        };
+        await adminStoreRequest(adminPasswordResetResultsStoreName, 'readwrite', store => store.put(record));
+        window.dispatchEvent(new CustomEvent('admin-password-reset-data-changed'));
+    }
+
+    async function submitAdminPasswordReset(client, studentId, functionUrl, anonKey) {
+        const userId = await getUserId(client);
+        if (!userId) throw new Error('Sign in while connected before resetting a student password.');
+        const operationId = createOperationId();
+        const payload = { student_id: Number(studentId) };
+        if (!navigator.onLine) {
+            await adminStoreRequest(adminQueueStoreName, 'readwrite', store => store.put({
+                key: `${userId}:${operationId}`, userId, operationId, role: 'student', action: 'admin-reset', payload,
+                functionUrl, anonKey, createdAt: new Date().toISOString(), lastError: null
+            }));
+            setNotice('Student password reset saved on this device. It will run when connected.', true, 'sync');
+            window.dispatchEvent(new CustomEvent('admin-account-data-changed'));
+            window.dispatchEvent(new CustomEvent('admin-password-reset-data-changed'));
+            return { queued: true, operationId };
+        }
+
+        const { data: { session } } = await client.auth.getSession();
+        if (!session) throw new Error('Please sign in again as an administrator.');
+        const response = await fetch(functionUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', apikey: anonKey, Authorization: `Bearer ${session.access_token}` },
+            body: JSON.stringify({ action: 'admin-reset', operation_id: operationId, ...payload })
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(result.error || 'Password reset failed.');
+        await saveAdminPasswordResetResult(userId, operationId, payload, result);
+        return result;
+    }
+
+    async function getAdminPasswordResetData(client) {
+        const userId = await getUserId(client);
+        if (!userId) return { queued: [], completed: [] };
+        const [allQueued, allCompleted] = await Promise.all([
+            adminStoreRequest(adminQueueStoreName, 'readonly', store => store.getAll()),
+            adminStoreRequest(adminPasswordResetResultsStoreName, 'readonly', store => store.getAll())
+        ]);
+        return {
+            queued: allQueued.filter(item => item.userId === userId && item.action === 'admin-reset')
+                .sort((first, second) => Date.parse(first.createdAt) - Date.parse(second.createdAt)),
+            completed: allCompleted.filter(item => item.userId === userId)
+                .sort((first, second) => Date.parse(second.createdAt) - Date.parse(first.createdAt))
+        };
+    }
+
+    async function saveAdminAccountLookups(client, userId = null) {
         try {
+            userId = userId || await getUserId(client);
+            if (!userId) return;
             const [departmentsResult, majorsResult, sectionsResult, semestersResult, subjectsResult, teacherAssignmentsResult, teachersResult, teacherSectionsResult] = await Promise.all([
                 client.from('departments').select('department_id, department_name').order('department_name'),
                 client.from('majors').select('major_id, department_id, major_name').order('major_name'),
@@ -465,6 +534,7 @@
                     last_name,
                     gender,
                     section_id,
+                    graduated_at,
                     users!students_user_id_fkey (
                         user_id,
                         email,
@@ -521,8 +591,8 @@
         return await adminStoreRequest(adminLookupStoreName, 'readonly', store => store.get(`${userId}:students:${sectionId}`)) || null;
     }
 
-    async function getAdminStudentRoster(client) {
-        const userId = await getUserId(client);
+    async function getAdminStudentRoster(client, suppliedUserId = null) {
+        const userId = suppliedUserId || await getUserId(client);
         if (!userId) return null;
         return await adminStoreRequest(adminLookupStoreName, 'readonly', store => store.get(`${userId}:all-students`)) || null;
     }
@@ -735,13 +805,15 @@
     async function getAdminAccountData(client) {
         const userId = await getUserId(client);
         if (!userId) return { queued: [], completed: [] };
-        const [allQueued, allCompleted] = await Promise.all([
+        const [allQueued, allCompleted, allPasswordResets] = await Promise.all([
             adminStoreRequest(adminQueueStoreName, 'readonly', store => store.getAll()),
-            adminStoreRequest(adminResultsStoreName, 'readonly', store => store.getAll())
+            adminStoreRequest(adminResultsStoreName, 'readonly', store => store.getAll()),
+            adminStoreRequest(adminPasswordResetResultsStoreName, 'readonly', store => store.getAll())
         ]);
         return {
                 queued: allQueued.filter(item => item.userId === userId).sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt)),
-            completed: allCompleted.filter(item => item.userId === userId).sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
+            completed: allCompleted.filter(item => item.userId === userId).sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt)),
+            passwordResets: allPasswordResets.filter(item => item.userId === userId).sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
         };
     }
 
@@ -760,9 +832,13 @@
         const userId = await getUserId(client);
         if (!userId) return;
         const allResults = await adminStoreRequest(adminResultsStoreName, 'readonly', store => store.getAll());
+        const allResetResults = await adminStoreRequest(adminPasswordResetResultsStoreName, 'readonly', store => store.getAll());
         await Promise.all(allResults.filter(item => item.userId === userId).map(item =>
             adminStoreRequest(adminResultsStoreName, 'readwrite', store => store.delete(item.key))));
+        await Promise.all(allResetResults.filter(item => item.userId === userId).map(item =>
+            adminStoreRequest(adminPasswordResetResultsStoreName, 'readwrite', store => store.delete(item.key))));
         window.dispatchEvent(new CustomEvent('admin-account-data-changed'));
+        window.dispatchEvent(new CustomEvent('admin-password-reset-data-changed'));
     }
 
     async function syncAdminAccountQueue(client) {
@@ -792,19 +868,29 @@
                     if (!response.ok) throw new Error(result.error || 'Account creation failed.');
                     if ((item.action || 'admin-create') === 'admin-create') {
                         await saveAdminAccountResult(userId, item.operationId, item.role, item.payload, result);
+                    } else if (item.action === 'admin-reset') {
+                        await saveAdminPasswordResetResult(userId, item.operationId, item.payload, result);
                     }
                     await adminStoreRequest(adminQueueStoreName, 'readwrite', store => store.delete(item.key));
                 } catch (error) {
                     const failureReason = error?.message || 'Account creation is waiting to retry.';
-                    const stillProcessing = failureReason.includes('Account creation is still processing.');
+                    const stillProcessing = failureReason.includes('Account creation is still processing.')
+                        || failureReason.includes('Password reset is still processing.');
                     await adminStoreRequest(adminQueueStoreName, 'readwrite', store => store.put({
                         ...item,
                         processing: stillProcessing,
                         lastError: stillProcessing ? null : failureReason
                     }));
+                    if (item.action === 'admin-reset') {
+                        window.dispatchEvent(new CustomEvent('admin-password-reset-data-changed'));
+                    }
                     setNotice(stillProcessing
-                        ? `The saved ${item.role} account is being created. We’ll check again shortly.`
-                        : `A saved ${item.role} account could not be created yet: ${failureReason}`, true, 'sync');
+                        ? (item.action === 'admin-reset'
+                            ? 'The student password reset is still processing. We’ll check again shortly.'
+                            : `The saved ${item.role} account is being created. We’ll check again shortly.`)
+                        : (item.action === 'admin-reset'
+                            ? `A saved student password reset could not be applied yet: ${failureReason}`
+                            : `A saved ${item.role} account could not be created yet: ${failureReason}`), true, 'sync');
                     window.setTimeout(() => {
                         if (navigator.onLine && window.currentOfflineRole === 'admin') {
                             void syncAdminAccountQueue(client);
@@ -813,6 +899,7 @@
                     break;
                 }
             }
+            window.dispatchEvent(new CustomEvent('admin-password-reset-data-changed'));
             if (queued.some(item => item.action === 'admin-edit') && navigator.onLine) {
                 await saveAdminAccountLookups(client, userId);
                 window.dispatchEvent(new CustomEvent('admin-student-data-changed'));
@@ -826,12 +913,15 @@
     }
 
     window.submitAdminAccountCreation = submitAdminAccountCreation;
+    window.submitAdminPasswordReset = submitAdminPasswordReset;
     window.getAdminAccountData = getAdminAccountData;
+    window.getAdminPasswordResetData = getAdminPasswordResetData;
     window.discardQueuedAdminAccountRequest = discardQueuedAdminAccountRequest;
     window.clearPortalOfflineNotice = () => setNotice('', false);
     window.clearAdminAccountResults = clearAdminAccountResults;
     window.syncAdminAccountQueue = syncAdminAccountQueue;
     window.getAdminAccountLookups = getAdminAccountLookups;
+    window.saveAdminAccountLookups = saveAdminAccountLookups;
     window.saveAdminStudentSection = saveAdminStudentSection;
     window.getAdminStudentSection = getAdminStudentSection;
         window.getAdminStudentRoster = getAdminStudentRoster;
