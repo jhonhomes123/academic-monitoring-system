@@ -3562,17 +3562,25 @@ async function approveAccount(id) {
             const majors = (lookups.majors || []).filter(item => !majorIdsDeleted.has(String(item.major_id)));
             const sections = (lookups.sections || []).filter(item => !sectionIdsDeleted.has(String(item.section_id)));
             const subjects = (lookups.subjects || []).filter(item => !subjectIdsDeleted.has(String(item.subject_id)));
+            const isMajorDeleted = majorId => {
+                if (majorDeleted(majorId)) return true;
+                const major = (lookups.majors || []).find(item => String(item.major_id) === String(majorId));
+                const pendingMajor = pending.find(item => item.type === 'major_add' && String(item.localRef) === String(majorId));
+                return departmentDeleted(major?.department_id || pendingMajor?.payload.department_id);
+            };
 
             pending.forEach(item => {
-                if (item.type === 'department_add') departments.push({ department_id: item.localRef, department_name: item.payload.department_name, pending: true });
-                if (item.type === 'major_add' && !departmentDeleted(item.payload.department_id)) {
+                if (item.type === 'department_add' && !departmentDeleted(item.localRef)) {
+                    departments.push({ department_id: item.localRef, department_name: item.payload.department_name, pending: true });
+                }
+                if (item.type === 'major_add' && !majorDeleted(item.localRef) && !departmentDeleted(item.payload.department_id)) {
                     majors.push({ major_id: item.localRef, department_id: item.payload.department_id, major_name: item.payload.major_name, pending: true });
                     majorDepartment.set(String(item.localRef), String(item.payload.department_id));
                 }
-                if (item.type === 'section_add' && !majorDeleted(item.payload.major_id)) {
+                if (item.type === 'section_add' && !hasDelete('section_delete', item.localRef) && !isMajorDeleted(item.payload.major_id)) {
                     sections.push({ section_id: item.localRef, major_id: item.payload.major_id, year_level: item.payload.year_level, section_name: item.payload.section_name, pending: true });
                 }
-                if (item.type === 'subject_add' && !majorDeleted(item.payload.major_id)) {
+                if (item.type === 'subject_add' && !hasDelete('subject_delete', item.localRef) && !isMajorDeleted(item.payload.major_id)) {
                     const semester = (lookups.semesters || []).find(value => String(value.semester_id) === String(item.payload.semester_id));
                     subjects.push({ ...item.payload, subject_id: item.localRef, semesters: semester ? { semester_name: semester.semester_name } : null, pending: true });
                 }
@@ -3597,6 +3605,25 @@ async function approveAccount(id) {
             });
 
             return { departments, majors, sections, subjects, pending, lookups };
+        }
+
+        function getQueuedDeletedSectionIds(pending, lookups) {
+            const deletedDepartments = new Set(pending.filter(item => item.type === 'department_delete')
+                .map(item => String(item.payload.department_id)));
+            const deletedMajors = new Set(pending.filter(item => item.type === 'major_delete')
+                .map(item => String(item.payload.major_id)));
+            (lookups?.majors || []).filter(major => deletedDepartments.has(String(major.department_id)))
+                .forEach(major => deletedMajors.add(String(major.major_id)));
+            pending.filter(item => item.type === 'major_add' && deletedDepartments.has(String(item.payload.department_id)))
+                .forEach(item => deletedMajors.add(String(item.localRef)));
+
+            const deletedSections = new Set(pending.filter(item => item.type === 'section_delete')
+                .map(item => String(item.payload.section_id)));
+            (lookups?.sections || []).filter(section => deletedMajors.has(String(section.major_id)))
+                .forEach(section => deletedSections.add(String(section.section_id)));
+            pending.filter(item => item.type === 'section_add' && deletedMajors.has(String(item.payload.major_id)))
+                .forEach(item => deletedSections.add(String(item.localRef)));
+            return deletedSections;
         }
 
         async function openQueuedAcademicItem(type, payload, localRef) {
@@ -5023,7 +5050,6 @@ async function refreshCurrentExplorer() {
             if (!navigator.onLine && window.getAdminStructureData) {
                 const offlineRecords = await getAdminExplorerRecords();
                 data = [...offlineRecords.departments];
-                if (selectId.startsWith('delete')) data = data.filter(item => !item.pending);
             } else {
                 const result = await supabaseClient.from('departments').select('*').order('department_name');
                 data = result.data || [];
@@ -5035,7 +5061,6 @@ async function refreshCurrentExplorer() {
                         }
                     });
                 }
-                if (selectId.startsWith('delete')) data = data.filter(item => !item.pending);
             }
 
             // PLACEHOLDER
@@ -6038,7 +6063,7 @@ async function loadDepartmentDeleteOptions() {
             let data;
             if (!navigator.onLine) {
                 const offlineRecords = await getAdminExplorerRecords();
-                data = offlineRecords.majors.filter(major => String(major.department_id) === String(departmentId) && !major.pending);
+                data = offlineRecords.majors.filter(major => String(major.department_id) === String(departmentId));
             } else {
                 const result = await supabaseClient.from('majors').select('*').eq('department_id', departmentId).order('major_name');
                 if (result.error) { console.log(result.error); return; }
@@ -6235,7 +6260,7 @@ async function loadDepartmentDeleteOptions() {
             let data;
             if (!navigator.onLine) {
                 const offlineRecords = await getAdminExplorerRecords();
-                data = offlineRecords.majors.filter(major => String(major.department_id) === String(departmentId) && !major.pending);
+                data = offlineRecords.majors.filter(major => String(major.department_id) === String(departmentId));
             } else {
                 const result = await supabaseClient.from('majors').select('*').eq('department_id', departmentId).order('major_name');
                 if (result.error) { console.log(result.error); return; }
@@ -6300,7 +6325,7 @@ async function loadDepartmentDeleteOptions() {
     let data;
     if (!navigator.onLine) {
         const offlineRecords = await getAdminExplorerRecords();
-        data = offlineRecords.sections.filter(section => String(section.major_id) === String(majorId) && section.year_level === yearLevel && !section.pending);
+        data = offlineRecords.sections.filter(section => String(section.major_id) === String(majorId) && section.year_level === yearLevel);
     } else {
         const result = await supabaseClient.from('sections').select('*').eq('major_id', majorId).eq('year_level', yearLevel).order('section_name');
         if (result.error) { console.log(result.error); return; }
@@ -8042,21 +8067,9 @@ async function loadStudentsBySection() {
             }
             if (sectionId === 'unassigned') {
                 const { lookups, pending } = await window.getAdminStructureData(supabaseClient);
-                const queuedSectionIds = new Set(pending.filter(item => item.type === 'section_delete')
-                    .map(item => String(item.payload.section_id)));
+                queuedDeletedSectionIds = getQueuedDeletedSectionIds(pending, lookups);
                 const unassignedAllSectionIds = new Set(pending.filter(item => item.type === 'section_unassign_all')
                     .map(item => String(item.payload.section_id)));
-                const deletedMajorIds = new Set(pending.filter(item => item.type === 'major_delete')
-                    .map(item => String(item.payload.major_id)));
-                const deletedDepartmentIds = new Set(pending.filter(item => item.type === 'department_delete')
-                    .map(item => String(item.payload.department_id)));
-                const majorDepartmentIds = new Set((lookups?.majors || [])
-                    .filter(major => deletedDepartmentIds.has(String(major.department_id)))
-                    .map(major => String(major.major_id)));
-                queuedDeletedSectionIds = new Set((lookups?.sections || [])
-                    .filter(section => deletedMajorIds.has(String(section.major_id)) || majorDepartmentIds.has(String(section.major_id)))
-                    .map(section => String(section.section_id)));
-                queuedSectionIds.forEach(deletedSectionId => queuedDeletedSectionIds.add(deletedSectionId));
                 const pendingDeletesStudents = roster.students
                     .filter(student => queuedDeletedSectionIds.has(String(student.section_id)) || unassignedAllSectionIds.has(String(student.section_id)))
                     .map(student => ({ ...student, section_id: null, pendingEdit: true }));
@@ -8146,7 +8159,8 @@ async function loadStudentsBySection() {
     }
 
     if (!navigator.onLine) {
-        const { pending } = await window.getAdminStructureData(supabaseClient);
+        const { pending, lookups } = await window.getAdminStructureData(supabaseClient);
+        queuedDeletedSectionIds = getQueuedDeletedSectionIds(pending, lookups);
         const roster = await window.getAdminStudentRoster?.(supabaseClient);
         if (roster?.students) {
             const queuedAssignments = pending.filter(item => item.type === 'student_section_assign');
@@ -8154,8 +8168,11 @@ async function loadStudentsBySection() {
                 (operation.payload.student_ids || []).forEach(studentId => {
                     const original = roster.students.find(student => String(student.student_id) === String(studentId));
                     if (!original) return;
-                    if (String(operation.payload.section_id) === String(sectionId)) {
-                        const assignedStudent = { ...original, section_id: operation.payload.section_id, pendingAssignment: true };
+                    const targetSectionId = queuedDeletedSectionIds.has(String(operation.payload.section_id))
+                        ? 'unassigned'
+                        : String(operation.payload.section_id);
+                    if (targetSectionId === String(sectionId)) {
+                        const assignedStudent = { ...original, section_id: targetSectionId === 'unassigned' ? null : targetSectionId, pendingAssignment: true };
                         const existingIndex = data.findIndex(student => String(student.student_id) === String(studentId));
                         if (existingIndex >= 0) data[existingIndex] = assignedStudent;
                         else data.push(assignedStudent);
@@ -8173,18 +8190,7 @@ async function loadStudentsBySection() {
             ? await window.getAdminStructureData(supabaseClient)
             : { pending: [], lookups: null };
         if (sectionId === 'unassigned') {
-            const queuedSectionIds = new Set(structurePending.filter(item => item.type === 'section_delete')
-                .map(item => String(item.payload.section_id)));
-            const deletedMajorIds = new Set(structurePending.filter(item => item.type === 'major_delete')
-                .map(item => String(item.payload.major_id)));
-            const deletedDepartmentIds = new Set(structurePending.filter(item => item.type === 'department_delete')
-                .map(item => String(item.payload.department_id)));
-            const majorDepartmentIds = new Set((lookups?.majors || [])
-                .filter(major => deletedDepartmentIds.has(String(major.department_id)))
-                .map(major => String(major.major_id)));
-            (lookups?.sections || []).filter(section => deletedMajorIds.has(String(section.major_id)) || majorDepartmentIds.has(String(section.major_id)))
-                .forEach(section => queuedDeletedSectionIds.add(String(section.section_id)));
-            queuedSectionIds.forEach(deletedSectionId => queuedDeletedSectionIds.add(deletedSectionId));
+            queuedDeletedSectionIds = getQueuedDeletedSectionIds(structurePending, lookups);
         }
         queued.filter(item => item.role === 'student'
             && (item.action || 'admin-create') === 'admin-create'

@@ -602,13 +602,17 @@
     async function queueAdminStructureOperation(client, type, payload) {
         const userId = await getUserId(client);
         if (!userId) throw new Error('Sign in while connected before making offline admin changes.');
+        const queuedOperations = await adminStoreRequest(adminStructureQueueStoreName, 'readonly', store => store.getAll());
+        const latestTimestamp = queuedOperations.filter(item => item.userId === userId)
+            .reduce((latest, item) => Math.max(latest, Date.parse(item.createdAt) || 0), 0);
+        const createdAt = new Date(Math.max(Date.now(), latestTimestamp + 1)).toISOString();
         const operationId = createOperationId();
         const localRef = ['department_add', 'major_add', 'section_add', 'subject_add', 'teacher_subject_assign'].includes(type)
             ? `local:${operationId}`
             : null;
         await adminStoreRequest(adminStructureQueueStoreName, 'readwrite', store => store.put({
             key: `${userId}:${operationId}`, userId, operationId, localRef, type, payload,
-            createdAt: new Date().toISOString(), lastError: null
+            createdAt, lastError: null
         }));
         setNotice('Admin change saved on this device. It will apply when connected.', true, 'sync');
         window.dispatchEvent(new CustomEvent('admin-structure-data-changed'));
@@ -616,9 +620,7 @@
     }
 
     async function queueAdminStructureDelete(client, type, recordId) {
-        if (recordId === null || recordId === undefined || String(recordId).startsWith('local:')) {
-            throw new Error('This pending item must sync before it can be deleted.');
-        }
+        if (recordId === null || recordId === undefined) throw new Error('Choose an item to delete.');
         const idFields = {
             department_delete: 'department_id',
             major_delete: 'major_id',
