@@ -1210,8 +1210,11 @@ table td{
 
             <div class="table-section">
                 <div class="section-header">
-                    <h2>Student Password Resets</h2>
-                    <p>Temporary passwords and email delivery status for resets requested on this device</p>
+                    <div>
+                        <h2>Student Password Resets</h2>
+                        <p>Temporary passwords and email delivery status for resets requested on this device</p>
+                    </div>
+                    <button class="btn reject-btn" onclick="clearAdminPasswordResetResults()">Clear reset results</button>
                 </div>
                 <div class="table-responsive">
                     <table>
@@ -3596,6 +3599,60 @@ async function approveAccount(id) {
             return { departments, majors, sections, subjects, pending, lookups };
         }
 
+        async function openQueuedAcademicItem(type, payload, localRef) {
+            const records = await getAdminExplorerRecords();
+            const pending = records?.pending || [];
+            if (type === 'department_add') {
+                const year = currentExplorerYear && currentExplorerYear !== 'Graduate' ? currentExplorerYear : '1st Year';
+                currentExplorerYear = year;
+                await viewDepartmentsByYear(year);
+                return;
+            }
+            if (type === 'major_add') {
+                let department = records?.departments.find(item => String(item.department_id) === String(payload.department_id));
+                const parentDepartment = pending.find(item => item.type === 'department_add' && item.localRef === payload.department_id);
+                if (!department && !parentDepartment && navigator.onLine) {
+                    const result = await supabaseClient.from('departments').select('department_id, department_name')
+                        .eq('department_id', payload.department_id).maybeSingle();
+                    if (result.error) throw result.error;
+                    department = result.data;
+                }
+                currentDepartmentId = payload.department_id;
+                currentDepartmentName = department?.department_name || parentDepartment?.payload.department_name || '';
+                const year = currentExplorerYear && currentExplorerYear !== 'Graduate' ? currentExplorerYear : '1st Year';
+                currentExplorerYear = year;
+                await viewDepartmentsByYear(year);
+                await viewMajors(payload.department_id, currentDepartmentName);
+                return;
+            }
+            if (type === 'section_add' || type === 'subject_add') {
+                let major = records?.majors.find(item => String(item.major_id) === String(payload.major_id));
+                const parentMajor = pending.find(item => item.type === 'major_add' && item.localRef === payload.major_id);
+                if (!major && !parentMajor && navigator.onLine) {
+                    const result = await supabaseClient.from('majors').select('major_id, major_name, department_id')
+                        .eq('major_id', payload.major_id).maybeSingle();
+                    if (result.error) throw result.error;
+                    major = result.data;
+                }
+                const majorName = major?.major_name || parentMajor?.payload.major_name || '';
+                const departmentId = major?.department_id || parentMajor?.payload.department_id || '';
+                let department = records?.departments.find(item => String(item.department_id) === String(departmentId));
+                const parentDepartment = pending.find(item => item.type === 'department_add' && item.localRef === departmentId);
+                if (!department && !parentDepartment && departmentId && navigator.onLine) {
+                    const result = await supabaseClient.from('departments').select('department_id, department_name')
+                        .eq('department_id', departmentId).maybeSingle();
+                    if (result.error) throw result.error;
+                    department = result.data;
+                }
+                currentExplorerYear = payload.year_level;
+                currentDepartmentId = departmentId;
+                currentDepartmentName = department?.department_name || parentDepartment?.payload.department_name || '';
+                await viewDepartmentsByYear(payload.year_level);
+                await viewMajors(departmentId, currentDepartmentName);
+                await viewSubjectsByMajor(payload.major_id, majorName);
+            }
+        }
+
         /* =========================================================
    MANAGE TEACHERS VARIABLES
 ========================================================= */
@@ -3981,9 +4038,7 @@ let currentManageTeacherId = null;
         '1st Year',
         '2nd Year',
         '3rd Year',
-        '4th Year',
-        'Graduate'
-
+        '4th Year'
     ];
 
     years.forEach(year => {
@@ -4373,12 +4428,30 @@ data.forEach(major => {
 
 </button>
 
+${sub.pending ? `<button class="btn reject-btn" onclick="cancelUnsyncedSubject('${encodeURIComponent(String(sub.subject_id))}')">Cancel Unsynced Subject</button>` : ''}
+
 </div>
 
 `).join('')}
 </section>
 `).join('');
         }
+
+async function cancelUnsyncedSubject(encodedSubjectId) {
+    const subjectId = decodeURIComponent(String(encodedSubjectId));
+    const subject = (await getAdminExplorerRecords())?.subjects.find(item => String(item.subject_id) === subjectId);
+    showConfirmModal('Cancel Unsynced Subject', `Remove ${subject?.subject_code || 'this subject'} from the offline queue? It has not been added to the server yet.`, async () => {
+        try {
+            await window.cancelQueuedAdminSubject(supabaseClient, subjectId);
+            closeConfirmModal();
+            showAlert('success', 'Queued Subject Removed', 'The unsynced subject and dependent queued assignments were removed from this device.');
+            await refreshCurrentExplorer();
+        } catch (error) {
+            closeConfirmModal();
+            showAlert('error', 'Could Not Remove Subject', error.message || 'Unable to remove the unsynced subject.');
+        }
+    });
+}
 
 async function transitionAdminSection(encodedSectionId, direction) {
     const sectionId = decodeURIComponent(String(encodedSectionId));
@@ -4454,6 +4527,22 @@ async function refreshManageStudentsAfterSectionTransition(sectionId, yearLevel)
     const sectionSelect = document.getElementById('manageStudentSection');
     sectionSelect.value = String(sectionId);
     await loadStudentsBySection();
+}
+
+async function cancelUnsyncedSubject(encodedSubjectId) {
+    const subjectId = decodeURIComponent(String(encodedSubjectId));
+    const subject = (await getAdminExplorerRecords())?.subjects.find(item => String(item.subject_id) === subjectId);
+    showConfirmModal('Cancel Unsynced Subject', `Remove ${subject?.subject_code || 'this subject'} from the offline queue? It has not been added to the server yet.`, async () => {
+        try {
+            await window.cancelQueuedAdminSubject(supabaseClient, subjectId);
+            closeConfirmModal();
+            showAlert('success', 'Queued Subject Removed', 'The unsynced subject and any queued assignments to it were removed from this device.');
+            await refreshCurrentExplorer();
+        } catch (error) {
+            closeConfirmModal();
+            showAlert('error', 'Could Not Remove Subject', error.message || 'Unable to remove the unsynced subject.');
+        }
+    });
 }
 
         async function viewSubjectTeachers(subjectId,subjectName) {
@@ -5147,9 +5236,10 @@ async function refreshCurrentExplorer() {
 
     if (!navigator.onLine) {
         try {
-            await window.queueAdminStructureOperation(supabaseClient, 'department_add', { department_name: name });
+            const queued = await window.queueAdminStructureOperation(supabaseClient, 'department_add', { department_name: name });
             document.getElementById('departmentName').value = '';
             closeDepartmentModal();
+            await openQueuedAcademicItem('department_add', { department_name: name }, queued.localRef);
             showAlert('success', 'Department Queued', `${name} will be added when you are online.`);
         } catch (error) {
             showAlert('error', 'Department Error', error.message);
@@ -5163,14 +5253,16 @@ async function refreshCurrentExplorer() {
            INSERT DEPARTMENT
         ====================== */
 
-        const { error } =
+        const { data: createdDepartment, error } =
             await supabaseClient
                 .from('departments')
                 .insert([
                     {
                         department_name: name
                     }
-                ]);
+                ])
+                .select('department_id')
+                .single();
 
         /* ERROR */
 
@@ -5219,7 +5311,7 @@ async function refreshCurrentExplorer() {
            REFRESH
         ====================== */
 
-        await refreshCurrentExplorer();
+        await openQueuedAcademicItem('department_add', { department_name: name }, createdDepartment.department_id);
 
     }
 
@@ -5273,12 +5365,13 @@ async function refreshCurrentExplorer() {
 
     if (!navigator.onLine) {
         try {
-            await window.queueAdminStructureOperation(supabaseClient, 'major_add', {
+            const queued = await window.queueAdminStructureOperation(supabaseClient, 'major_add', {
                 department_id: String(departmentId),
                 major_name: name
             });
             document.getElementById('majorName').value = '';
             closeMajorModal();
+            await openQueuedAcademicItem('major_add', { department_id: String(departmentId), major_name: name }, queued.localRef);
             showAlert('success', 'Major Queued', `${name} will be added when you are online.`);
         } catch (error) {
             showAlert('error', 'Major Error', error.message);
@@ -5292,7 +5385,7 @@ async function refreshCurrentExplorer() {
            INSERT MAJOR
         ====================== */
 
-        const { error } =
+        const { data: createdMajor, error } =
             await supabaseClient
                 .from('majors')
                 .insert([
@@ -5303,7 +5396,9 @@ async function refreshCurrentExplorer() {
                         major_name:
                             name
                     }
-                ]);
+                ])
+                .select('major_id')
+                .single();
 
         /* ERROR */
 
@@ -5366,7 +5461,7 @@ async function refreshCurrentExplorer() {
            REFRESH
         ====================== */
 
-        await refreshCurrentExplorer();
+        await openQueuedAcademicItem('major_add', { department_id: String(departmentId), major_name: name }, createdMajor.major_id);
 
     }
 
@@ -5432,13 +5527,14 @@ async function refreshCurrentExplorer() {
 
     if (!navigator.onLine) {
         try {
-            await window.queueAdminStructureOperation(supabaseClient, 'section_add', {
+            const queued = await window.queueAdminStructureOperation(supabaseClient, 'section_add', {
                 major_id: String(majorId),
                 year_level: yearLevel,
                 section_name: sectionName
             });
             document.getElementById('sectionName').value = '';
             closeSectionModal();
+            await openQueuedAcademicItem('section_add', { major_id: String(majorId), year_level: yearLevel, section_name: sectionName }, queued.localRef);
             showAlert('success', 'Section Queued', `${sectionName} will be added when you are online.`);
         } catch (error) {
             showAlert('error', 'Section Error', error.message);
@@ -5450,7 +5546,7 @@ async function refreshCurrentExplorer() {
        INSERT SECTION
     ====================== */
 
-    const { error } =
+    const { data: createdSection, error } =
         await supabaseClient
             .from('sections')
             .insert([
@@ -5459,7 +5555,9 @@ async function refreshCurrentExplorer() {
                     year_level: yearLevel,
                     section_name: sectionName
                 }
-            ]);
+            ])
+            .select('section_id')
+            .single();
 
     /* ERROR */
 
@@ -5561,10 +5659,9 @@ async function refreshCurrentExplorer() {
        REFRESH EXPLORER
     ====================== */
 
-    await viewSubjectsByMajor(
-        majorId,
-        majorData.major_name
-    );
+    await openQueuedAcademicItem('section_add', {
+        major_id: String(majorId), year_level: yearLevel, section_name: sectionName
+    }, createdSection.section_id);
 
 }
         /* =========================================================
@@ -5628,7 +5725,7 @@ async function refreshCurrentExplorer() {
 
     if (!navigator.onLine) {
         try {
-            await window.queueAdminStructureOperation(supabaseClient, 'subject_add', {
+            const queued = await window.queueAdminStructureOperation(supabaseClient, 'subject_add', {
                 major_id: String(majorId),
                 semester_id: String(semesterId),
                 year_level: yearLevel,
@@ -5638,6 +5735,7 @@ async function refreshCurrentExplorer() {
             document.getElementById('subjectCode').value = '';
             document.getElementById('subjectName').value = '';
             closeSubjectModal();
+            await openQueuedAcademicItem('subject_add', { major_id: String(majorId), semester_id: String(semesterId), year_level: yearLevel, subject_code: subjectCode, subject_name: subjectName }, queued.localRef);
             showAlert('success', 'Subject Queued', `${subjectCode} will be added when you are online.`);
         } catch (error) {
             showAlert('error', 'Subject Error', error.message);
@@ -5649,7 +5747,7 @@ async function refreshCurrentExplorer() {
        INSERT SUBJECT
     ====================== */
 
-    const { error } =
+    const { data: createdSubject, error } =
         await supabaseClient
             .from('subjects')
             .insert([
@@ -5660,7 +5758,9 @@ async function refreshCurrentExplorer() {
                     subject_code: subjectCode,
                     subject_name: subjectName
                 }
-            ]);
+            ])
+            .select('subject_id')
+            .single();
 
     /* ERROR */
 
@@ -5772,10 +5872,10 @@ async function refreshCurrentExplorer() {
        REDIRECT EXPLORER
     ====================== */
 
-    await viewSubjectsByMajor(
-        majorId,
-        majorData.major_name
-    );
+    await openQueuedAcademicItem('subject_add', {
+        major_id: String(majorId), semester_id: String(semesterId), year_level: yearLevel,
+        subject_code: subjectCode, subject_name: subjectName
+    }, createdSubject.subject_id);
 
 }
         /* =========================================================
@@ -8429,6 +8529,20 @@ async function clearAdminCreatedAccounts() {
         }
     });
 }
+
+async function clearAdminPasswordResetResults() {
+    showConfirmModal('Clear Password Reset Results', 'Clear saved reset passwords and email statuses from this device? This does not undo password resets or affect student accounts.', async () => {
+        try {
+            await window.clearAdminPasswordResetResults(supabaseClient);
+            closeConfirmModal();
+            showAlert('success', 'Reset Results Cleared', 'Saved password reset results were removed from this device.');
+        } catch (error) {
+            closeConfirmModal();
+            showAlert('error', 'Could Not Clear Reset Results', error.message || 'Unable to clear saved reset results.');
+        }
+    });
+}
+
 async function renderAdminStructureQueue() {
     const table = document.getElementById('adminStructureQueueTable');
     if (!table || !window.getAdminStructureData) return;
@@ -8447,7 +8561,20 @@ async function renderAdminStructureQueue() {
             lastError: item.lastError,
             createdAt: item.createdAt
         }));
-    const pending = [...structurePending, ...studentEditPending]
+    const accountPending = (accountData.queued || [])
+        .filter(item => (item.action || 'admin-create') === 'admin-create' || item.action === 'admin-reset')
+        .map(item => ({
+            type: item.action === 'admin-reset'
+                ? 'student_password_reset'
+                : item.role === 'teacher' ? 'teacher_account_create' : 'student_account_create',
+            operationId: item.operationId,
+            role: item.role,
+            payload: item.payload,
+            processing: item.processing,
+            lastError: item.lastError,
+            createdAt: item.createdAt
+        }));
+    const pending = [...structurePending, ...studentEditPending, ...accountPending]
         .sort((first, second) => Date.parse(first.createdAt || 0) - Date.parse(second.createdAt || 0));
     table.replaceChildren();
     if (!pending.length) {
@@ -8469,10 +8596,14 @@ async function renderAdminStructureQueue() {
         major_delete: 'Delete major',
         section_delete: 'Delete section',
         section_transition: 'Promote/demote section',
+        section_unassign_all: 'Unassign all students from section',
         subject_delete: 'Delete subject',
+        teacher_account_create: 'Create teacher account',
         teacher_subject_unassign: 'Remove teacher assignment',
         student_section_assign: 'Assign students to section',
-        student_edit: 'Edit student'
+        student_edit: 'Edit student',
+        student_account_create: 'Create student account',
+        student_password_reset: 'Reset student password'
     };
     const studentEditDetails = payload => {
         const original = roster?.students?.find(student => String(student.student_id) === String(payload.student_id));
@@ -8518,10 +8649,20 @@ async function renderAdminStructureQueue() {
             : null;
         const details = item.type === 'student_edit'
             ? studentEditDetails(item.payload)
+            : item.type === 'subject_add'
+                ? `${item.payload.subject_code} - ${item.payload.subject_name}, ${item.payload.year_level}`
+            : item.type === 'student_account_create'
+                ? `${item.payload.student_number} - ${[item.payload.first_name, item.payload.middle_initial, item.payload.last_name].filter(Boolean).join(' ')}`
+            : item.type === 'teacher_account_create'
+                ? `${item.payload.teacher_number} - ${[item.payload.first_name, item.payload.middle_initial, item.payload.last_name].filter(Boolean).join(' ')}`
+            : item.type === 'student_password_reset'
+                ? `Student ID ${item.payload.student_id}`
             : item.type === 'student_section_assign'
                 ? `Section ${(lookups?.sections || []).find(section => String(section.section_id) === String(item.payload.section_id))?.section_name || item.payload.section_id}; ${item.payload.student_ids?.length || 0} student(s)`
             : item.type === 'section_transition'
                 ? `Section ${item.payload.section_id}: ${item.payload.direction}`
+            : item.type === 'section_unassign_all'
+                ? `Section ${item.payload.section_id}`
             : item.type === 'semester_set'
             ? (semester?.semester_name || `Unknown semester (${item.payload.semester_id})`)
             : item.type === 'department_add'
@@ -8536,13 +8677,47 @@ async function renderAdminStructureQueue() {
                                 ? `Assignment ${item.payload.assignment_id}`
                             : `${item.type.replace('_delete', '')} ID ${item.payload[`${item.type.replace('_delete', '')}_id`]}`;
         const row = document.createElement('tr');
-        [labels[item.type] || 'Admin change', details, item.lastError ? 'Waiting to retry' : 'Waiting for connection']
-            .forEach(value => {
+        const status = item.processing ? 'Processing' : item.lastError ? `Waiting to retry: ${item.lastError}` : 'Waiting for connection';
+        [labels[item.type] || 'Admin change', details, status]
+            .forEach((value, index) => {
                 const cell = document.createElement('td');
                 cell.textContent = value;
+                if (index === 2 && item.operationId && ['student_account_create', 'student_password_reset'].includes(item.type)) {
+                    const cancelButton = document.createElement('button');
+                    cancelButton.type = 'button';
+                    cancelButton.className = 'btn reject-btn';
+                    cancelButton.textContent = 'Discard';
+                    cancelButton.disabled = Boolean(item.processing);
+                    cancelButton.style.marginLeft = '8px';
+                    cancelButton.addEventListener('click', () => discardPendingAdminOperation(item.operationId));
+                    cell.appendChild(cancelButton);
+                }
+                if (index === 2 && item.type === 'subject_add' && item.localRef) {
+                    const cancelButton = document.createElement('button');
+                    cancelButton.type = 'button';
+                    cancelButton.className = 'btn reject-btn';
+                    cancelButton.textContent = 'Cancel';
+                    cancelButton.style.marginLeft = '8px';
+                    cancelButton.addEventListener('click', () => cancelUnsyncedSubject(encodeURIComponent(item.localRef)));
+                    cell.appendChild(cancelButton);
+                }
                 row.appendChild(cell);
             });
         table.appendChild(row);
+    });
+}
+
+async function discardPendingAdminOperation(operationId) {
+    showConfirmModal('Discard Offline Operation', 'Remove this pending operation from this device? It will not be sent to the server.', async () => {
+        try {
+            await window.discardQueuedAdminAccountOperation(supabaseClient, operationId);
+            closeConfirmModal();
+            showAlert('success', 'Operation Discarded', 'The pending operation was removed from this device.');
+            await renderAdminStructureQueue();
+        } catch (error) {
+            closeConfirmModal();
+            showAlert('error', 'Could Not Discard Operation', error.message || 'Unable to remove the pending operation.');
+        }
     });
 }
 

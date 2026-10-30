@@ -267,7 +267,7 @@
         if (!currentUserId || !main) return false;
         const snapshotMain = main.cloneNode(true);
         snapshotMain.querySelectorAll('.modal,.modal-overlay,.confirm-modal-overlay,.ams-alert').forEach(element => {
-            if (!['createStudentModal', 'createTeacherModal', 'editStudentModal', 'addStudentsToSectionModal', 'departmentModal', 'majorModal', 'sectionModal', 'subjectModal', 'deleteDepartmentModal', 'deleteMajorModal', 'deleteSectionModal', 'deleteSubjectModal', 'teacherAssignModal', 'teacherSectionModal'].includes(element.id)) {
+                if (!['confirmModal', 'createStudentModal', 'createTeacherModal', 'editStudentModal', 'addStudentsToSectionModal', 'departmentModal', 'majorModal', 'sectionModal', 'subjectModal', 'deleteDepartmentModal', 'deleteMajorModal', 'deleteSectionModal', 'deleteSubjectModal', 'teacherAssignModal', 'teacherSectionModal'].includes(element.id)) {
                 element.remove();
                 return;
             }
@@ -330,11 +330,13 @@
                     && /openCreateStudentModal|openCreateTeacherModal|openEditStudentModal|openEditQueuedStudentAccount|openAddStudentsToSectionModal|transitionAdminSection|openDepartmentModal|openMajorModal|openSectionModal|openSubjectModal|openDeleteDepartmentModal|openDeleteMajorModal|openDeleteSectionModal|openDeleteSubjectModal|openTeacherAssignModal|openAddSectionModal/.test(control.getAttribute('onclick') || '');
                 const isAllowedOfflineAction = control.matches('button')
                     && /createStudentAccount|createTeacherAccount|saveStudentEdits|resetStudentPassword|clearAdminCreatedAccounts|loadUnassignedStudents|loadGraduatedStudents|transitionSelectedManageSection|unassignAllStudentsFromSelectedSection|assignSelectedUnassignedStudents|createTeacherAccount|addDepartment|addMajor|addSection|addSubject|setActiveSemester|deleteDepartment|deleteMajor|deleteSectionModalAction|deleteSubject|assignTeacherToSubject|removeTeacherAssignment|saveTeacherSection|closeCreateStudentModal|closeEditStudentModal|closeModal|closeDepartmentModal|closeMajorModal|closeSectionModal|closeSubjectModal|closeDeleteDepartmentModal|closeDeleteMajorModal|closeDeleteSectionModal|closeDeleteSubjectModal|closeTeacherAssignModal|closeTeacherSectionModal|loadEditStudentMajors|loadEditStudentSections|loadDepartmentDeleteOptions|loadMajorsForDelete|loadMajorsForDeleteSection|loadSectionsForDelete|loadMajorsForDeleteSubject|loadSubjectsForDelete/.test(control.getAttribute('onclick') || '');
+                const isAllowedOfflineStandaloneAction = control.matches('button')
+                    && /clearAdminCreatedAccounts/.test(control.getAttribute('onclick') || '');
                 const isSemesterPicker = control.id === 'activeSemesterSelect';
                 const isExplorerBack = control.id === 'backButton';
                 const isStudentFilter = ['manageStudentYear', 'manageStudentDepartment', 'manageStudentMajor', 'manageStudentSection'].includes(control.id);
                 control.disabled = !(opensAllowedModal || isSemesterPicker || (control.matches('button') && /setActiveSemester/.test(control.getAttribute('onclick') || ''))
-                    || isExplorerBack || isStudentFilter || control.id === 'confirmActionBtn' || control.matches('.cancel-btn')
+                    || isExplorerBack || isStudentFilter || isAllowedOfflineStandaloneAction || control.id === 'confirmActionBtn' || control.matches('.cancel-btn')
                     || (inAllowedModal && (!control.matches('button') || isAllowedOfflineAction)));
             });
             window.adminOfflineView = true;
@@ -626,6 +628,50 @@
         const idField = idFields[type];
         if (!idField) throw new Error('This delete action is not supported offline.');
         return queueAdminStructureOperation(client, type, { [idField]: String(recordId) });
+    }
+
+    async function cancelQueuedAdminSubject(client, localSubjectRef) {
+        const userId = await getUserId(client);
+        if (!userId || !String(localSubjectRef).startsWith('local:')) {
+            throw new Error('Only a subject that has not synced can be canceled here.');
+        }
+        const { pending } = await getAdminStructureData(client);
+        const subjectOperation = pending.find(item => item.type === 'subject_add' && item.localRef === localSubjectRef);
+        if (!subjectOperation) throw new Error('The unsynced subject could not be found.');
+        const relatedOperations = pending.filter(item =>
+            item.operationId === subjectOperation.operationId
+            || String(item.payload.subject_id || '') === String(localSubjectRef)
+        );
+        await Promise.all(relatedOperations.map(item => adminStoreRequest(
+            adminStructureQueueStoreName,
+            'readwrite',
+            store => store.delete(item.key)
+        )));
+        window.dispatchEvent(new CustomEvent('admin-structure-data-changed'));
+        return true;
+    }
+
+    async function clearAdminPasswordResetResults(client) {
+        const userId = await getUserId(client);
+        if (!userId) return;
+        const allResults = await adminStoreRequest(adminPasswordResetResultsStoreName, 'readonly', store => store.getAll());
+        await Promise.all(allResults.filter(item => item.userId === userId).map(item => adminStoreRequest(
+            adminPasswordResetResultsStoreName,
+            'readwrite',
+            store => store.delete(item.key)
+        )));
+        window.dispatchEvent(new CustomEvent('admin-password-reset-data-changed'));
+    }
+
+    async function discardQueuedAdminAccountOperation(client, operationId) {
+        const userId = await getUserId(client);
+        if (!userId) throw new Error('Sign in again before managing saved offline operations.');
+        const key = `${userId}:${operationId}`;
+        const item = await adminStoreRequest(adminQueueStoreName, 'readonly', store => store.get(key));
+        if (!item || item.userId !== userId) throw new Error('This saved operation was not found.');
+        await adminStoreRequest(adminQueueStoreName, 'readwrite', store => store.delete(key));
+        window.dispatchEvent(new CustomEvent('admin-account-data-changed'));
+        return true;
     }
 
     async function getAdminStructureData(client) {
@@ -929,6 +975,10 @@
         window.updateQueuedAdminStudentCreation = updateQueuedAdminStudentCreation;
     window.queueAdminStructureOperation = queueAdminStructureOperation;
     window.queueAdminStructureDelete = queueAdminStructureDelete;
+    window.cancelQueuedAdminSubject = cancelQueuedAdminSubject;
+    window.clearAdminPasswordResetResults = clearAdminPasswordResetResults;
+    window.discardQueuedAdminAccountOperation = discardQueuedAdminAccountOperation;
+    window.cancelQueuedAdminSubject = cancelQueuedAdminSubject;
     window.getAdminStructureData = getAdminStructureData;
     window.syncAdminStructureQueue = syncAdminStructureQueue;
     window.clearAdminStructureQueue = clearAdminStructureQueue;
