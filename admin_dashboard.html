@@ -2148,6 +2148,7 @@ onchange="loadSubjectsForTeacherAssign()">
             </div>
             <div class="modal-body">
                 <p id="bulkAssignTargetSection"></p>
+                <input id="unassignedStudentSearch" type="search" placeholder="Search student ID or name..." oninput="filterUnassignedStudentChoices()" autocomplete="off">
                 <div class="table-responsive" style="max-height:42vh;overflow:auto;">
                     <table>
                         <thead><tr><th><input type="checkbox" id="selectAllUnassignedStudents" onchange="toggleAllUnassignedStudents(this.checked)"></th><th>Student ID</th><th>Name</th></tr></thead>
@@ -7723,6 +7724,7 @@ async function loadSectionsForManageStudents() {
 }
 async function openAddStudentsToSectionModal() {
     document.getElementById('bulkAssignStudentError').textContent = '';
+    document.getElementById('unassignedStudentSearch').value = '';
     document.getElementById('unassignedStudentChoices').innerHTML = '<tr><td colspan="3">Loading unassigned students...</td></tr>';
     document.getElementById('selectAllUnassignedStudents').checked = false;
     const sectionId = document.getElementById('manageStudentSection').value;
@@ -7785,7 +7787,19 @@ async function loadUnassignedStudentChoices() {
         <td>${student.student_number || ''}</td>
         <td>${formatName(student.first_name, student.middle_initial, student.last_name)}</td>
     </tr>`).join('');
+    table.querySelectorAll('tr').forEach((row, index) => {
+        const student = students[index];
+        row.dataset.studentSearch = `${student.student_number || ''} ${formatName(student.first_name, student.middle_initial, student.last_name)}`.toLowerCase();
+    });
+    filterUnassignedStudentChoices();
     updateBulkAssignStudentCount();
+}
+
+function filterUnassignedStudentChoices() {
+    const query = document.getElementById('unassignedStudentSearch')?.value.trim().toLowerCase() || '';
+    document.querySelectorAll('#unassignedStudentChoices tr[data-student-search]').forEach(row => {
+        row.hidden = !row.dataset.studentSearch.includes(query);
+    });
 }
 
 function toggleAllUnassignedStudents(checked) {
