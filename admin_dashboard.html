@@ -380,13 +380,15 @@ table td{
             flex: 1 1 auto;
             min-height: 0;
             max-height: none !important;
-            overflow: auto;
+            overflow-y: auto;
+            overflow-x: hidden;
             border: 1px solid var(--border);
             border-radius: 6px;
         }
 
         #addStudentsToSectionModal table {
             width: 100%;
+            table-layout: fixed;
             border-collapse: separate;
             border-spacing: 0;
         }
@@ -406,7 +408,15 @@ table td{
 
         #addStudentsToSectionModal th:nth-child(2),
         #addStudentsToSectionModal td:nth-child(2) {
-            width: 180px;
+            width: 140px;
+        }
+
+        #addStudentsToSectionModal th:nth-child(3),
+        #addStudentsToSectionModal td:nth-child(3) {
+            width: auto;
+            white-space: normal;
+            overflow-wrap: anywhere;
+            word-break: break-word;
         }
 
         #addStudentsToSectionModal tbody tr:hover {
