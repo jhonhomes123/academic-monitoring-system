@@ -7755,11 +7755,11 @@ async function loadUnassignedStudentChoices() {
             table.innerHTML = '<tr><td colspan="3">Student roster is not cached on this device. Connect once to prepare it.</td></tr>';
             return;
         }
-        students = roster.students.filter(student => (student.section_id === null || student.section_id === undefined) && !student.graduated_at);
+        students = roster.students.filter(student => student.section_id === null || student.section_id === undefined);
     } else {
         const { data, error } = await supabaseClient.from('students').select(`
             student_id, student_number, first_name, middle_initial, last_name, section_id, graduated_at
-        `).is('section_id', null).is('graduated_at', null).order('last_name');
+        `).is('section_id', null).order('last_name');
         if (error) throw error;
         students = data || [];
     }
@@ -7770,7 +7770,7 @@ async function loadUnassignedStudentChoices() {
     students = students.map(student => editByStudent.has(String(student.student_id))
         ? { ...student, ...editByStudent.get(String(student.student_id)), section_id: editByStudent.get(String(student.student_id)).section_id || null }
         : student)
-        .filter(student => !student.section_id && !student.graduated_at);
+        .filter(student => !student.section_id);
 
     const structure = await window.getAdminStructureData(supabaseClient);
     const pendingAssignments = new Set(structure.pending.filter(item => item.type === 'student_section_assign')
