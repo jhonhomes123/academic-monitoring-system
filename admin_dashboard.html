@@ -2048,7 +2048,7 @@ onchange="loadSubjectsForTeacherAssign()">
                 </select>
                 <select id="createStudentMajor" onchange="loadCreateStudentSections()"><option value="">Select Major</option></select>
                 <select id="createStudentSection"><option value="">Select Section</option></select>
-                <button class="btn" onclick="createStudentAccount()">Create Account</button>
+                <button class="btn" id="createStudentSubmitButton" onclick="createStudentAccount()">Create Account</button>
                 <div id="createdStudentCredentials" style="display:none; padding:14px; background:#f1f5f9; border-radius:8px; overflow-wrap:anywhere;">
                     <strong>Give these credentials to the student now</strong>
                     <p>Student ID: <span id="createdStudentLoginId"></span></p>
@@ -7637,9 +7637,13 @@ async function loadStudentsBySection() {
 
     if (window.getAdminAccountData) {
         const { queued } = await window.getAdminAccountData(supabaseClient);
-        queued.filter(item => item.role === 'student' && String(item.payload.section_id) === String(sectionId))
+        queued.filter(item => item.role === 'student'
+            && (item.action || 'admin-create') === 'admin-create'
+            && String(item.payload.section_id) === String(sectionId))
             .forEach(item => data.push({
                 student_id: `pending:${item.operationId}`,
+                pendingOperationId: item.operationId,
+                pendingProcessing: Boolean(item.processing || item.lastError),
                 student_number: item.payload.student_number,
                 first_name: item.payload.first_name,
                 middle_initial: item.payload.middle_initial,
@@ -7706,7 +7710,7 @@ async function loadStudentsBySection() {
 
             <td>
 
-                ${student.pending ? 'Account creation queued' : student.pendingEdit ? 'Edit queued' : `
+                ${student.pending ? `${student.pendingProcessing ? 'Account sync needs attention' : 'Account creation queued'}<br>${student.pendingProcessing ? '' : `<button class="btn" onclick="openEditQueuedStudentAccount('${student.pendingOperationId}')">Edit</button>`}` : student.pendingEdit ? 'Edit queued' : `
                 <button class="btn" onclick="openEditStudentModal(${student.student_id})">Edit</button>
                 <button class="btn" onclick="resetStudentPassword(${student.student_id})">Reset Password</button>
                 <button class="btn reject-btn" onclick="deleteStudent('${student.student_id}','${student.users?.user_id}')">Delete</button>`}
@@ -7723,6 +7727,7 @@ async function loadStudentsBySection() {
 }
 
 const STUDENT_ACCOUNT_FUNCTION_URL = `${SUPABASE_URL}/functions/v1/manage-student-accounts`;
+let queuedStudentCreateEditOperationId = null;
 
 async function callStudentAccountFunction(action, payload) {
     const { data: { session } } = await supabaseClient.auth.getSession();
@@ -7754,6 +7759,7 @@ async function renderAdminCreatedAccounts() {
                 operationId: item.operationId,
                 processing: Boolean(item.processing),
                 failed: Boolean(item.lastError),
+                canEdit: !item.processing && !item.lastError && item.role === 'student',
                 role: item.role,
                 name: [item.payload.first_name, item.payload.middle_initial, item.payload.last_name].filter(Boolean).join(' '),
                 id: item.role === 'student' ? item.payload.student_number : item.payload.teacher_number,
@@ -7797,8 +7803,16 @@ async function renderAdminCreatedAccounts() {
                 });
             const actionCell = document.createElement('td');
             if (account.operationId) {
+                if (account.canEdit && !navigator.onLine) {
+                    const editButton = document.createElement('button');
+                    editButton.type = 'button';
+                    editButton.className = 'btn';
+                    editButton.textContent = 'Edit';
+                    editButton.addEventListener('click', () => openEditQueuedStudentAccount(account.operationId));
+                    actionCell.appendChild(editButton);
+                }
                 if (account.processing) {
-                    actionCell.textContent = 'Creating';
+                    actionCell.appendChild(document.createTextNode('Creating'));
                 } else {
                     const removeButton = document.createElement('button');
                     removeButton.type = 'button';
@@ -7914,6 +7928,8 @@ window.addEventListener('admin-structure-data-changed', () => {
 });
 
 function openCreateStudentModal() {
+    queuedStudentCreateEditOperationId = null;
+    document.getElementById('createStudentSubmitButton').textContent = 'Create Account';
     document.getElementById('createStudentNumber').value = '';
     document.getElementById('createStudentFirstName').value = '';
     document.getElementById('createStudentMiddleInitial').value = '';
@@ -7932,9 +7948,9 @@ function openCreateStudentModal() {
 async function loadCreateStudentDepartments() {
     const select = document.getElementById('createStudentDepartment');
     if (!navigator.onLine) {
-        const lookups = await window.getAdminAccountLookups(supabaseClient);
-        if (!lookups) throw new Error('Student account options are not saved on this device. Open this form while online first.');
-        lookups.departments.forEach(department => select.add(new Option(department.department_name, department.department_id)));
+        const offlineRecords = await getAdminExplorerRecords();
+        if (!offlineRecords) throw new Error('Student account options are not saved on this device. Open this form while online first.');
+        offlineRecords.departments.forEach(department => select.add(new Option(`${department.department_name}${department.pending ? ' (waiting to sync)' : ''}`, department.department_id)));
         return;
     }
     const { data, error } = await supabaseClient.from('departments').select('department_id, department_name').order('department_name');
@@ -7950,10 +7966,10 @@ async function loadCreateStudentMajors() {
     const departmentId = document.getElementById('createStudentDepartment').value;
     if (!departmentId) return;
     if (!navigator.onLine) {
-        const lookups = await window.getAdminAccountLookups(supabaseClient);
-        if (!lookups) throw new Error('Student account options are not saved on this device.');
-        lookups.majors.filter(major => String(major.department_id) === String(departmentId))
-            .forEach(major => select.add(new Option(major.major_name, major.major_id)));
+        const offlineRecords = await getAdminExplorerRecords();
+        if (!offlineRecords) throw new Error('Student account options are not saved on this device.');
+        offlineRecords.majors.filter(major => String(major.department_id) === String(departmentId))
+            .forEach(major => select.add(new Option(`${major.major_name}${major.pending ? ' (waiting to sync)' : ''}`, major.major_id)));
         return;
     }
     const { data, error } = await supabaseClient.from('majors').select('major_id, major_name').eq('department_id', departmentId).order('major_name');
@@ -7968,10 +7984,10 @@ async function loadCreateStudentSections() {
     const yearLevel = document.getElementById('createStudentYear').value;
     if (!majorId || !yearLevel) return;
     if (!navigator.onLine) {
-        const lookups = await window.getAdminAccountLookups(supabaseClient);
-        if (!lookups) throw new Error('Student account options are not saved on this device.');
-        lookups.sections.filter(section => String(section.major_id) === String(majorId) && section.year_level === yearLevel)
-            .forEach(section => select.add(new Option(section.section_name, section.section_id)));
+        const offlineRecords = await getAdminExplorerRecords();
+        if (!offlineRecords) throw new Error('Student account options are not saved on this device.');
+        offlineRecords.sections.filter(section => String(section.major_id) === String(majorId) && section.year_level === yearLevel)
+            .forEach(section => select.add(new Option(`${section.section_name}${section.pending ? ' (waiting to sync)' : ''}`, section.section_id)));
         return;
     }
     const { data, error } = await supabaseClient.from('sections').select('section_id, section_name').eq('major_id', majorId).eq('year_level', yearLevel).order('section_name');
@@ -7979,7 +7995,43 @@ async function loadCreateStudentSections() {
     (data || []).forEach(section => select.add(new Option(section.section_name, section.section_id)));
 }
 
+async function openEditQueuedStudentAccount(operationId) {
+    const errorBox = document.getElementById('createStudentError');
+    errorBox.textContent = '';
+    try {
+        if (navigator.onLine) throw new Error('Reconnect is active. Wait for this account request to sync before editing it.');
+        const { queued } = await window.getAdminAccountData(supabaseClient);
+        const item = queued.find(candidate => candidate.operationId === operationId);
+        if (!item || item.role !== 'student' || item.processing || item.lastError) {
+            throw new Error('This request has already started syncing and cannot be changed offline.');
+        }
+        queuedStudentCreateEditOperationId = operationId;
+        document.getElementById('createStudentNumber').value = item.payload.student_number || '';
+        document.getElementById('createStudentFirstName').value = item.payload.first_name || '';
+        document.getElementById('createStudentMiddleInitial').value = item.payload.middle_initial || '';
+        document.getElementById('createStudentLastName').value = item.payload.last_name || '';
+        document.getElementById('createStudentGender').value = item.payload.gender || '';
+        document.getElementById('createStudentYear').value = item.payload.year_level || '';
+        document.getElementById('createStudentDepartment').innerHTML = '<option value="">Select Department</option>';
+        document.getElementById('createStudentMajor').innerHTML = '<option value="">Select Major</option>';
+        document.getElementById('createStudentSection').innerHTML = '<option value="">Select Section</option>';
+        await loadCreateStudentDepartments();
+        document.getElementById('createStudentDepartment').value = String(item.payload.department_id || '');
+        await loadCreateStudentMajors();
+        document.getElementById('createStudentMajor').value = String(item.payload.major_id || '');
+        await loadCreateStudentSections();
+        document.getElementById('createStudentSection').value = String(item.payload.section_id || '');
+        document.getElementById('createStudentSubmitButton').textContent = 'Save Changes';
+        openModal('createStudentModal');
+    } catch (error) {
+        queuedStudentCreateEditOperationId = null;
+        showAlert('warning', 'Cannot Edit Queued Account', error.message);
+    }
+}
+
 function closeCreateStudentModal() {
+    queuedStudentCreateEditOperationId = null;
+    document.getElementById('createStudentSubmitButton').textContent = 'Create Account';
     closeModal('createStudentModal');
 }
 
@@ -8009,6 +8061,16 @@ async function createStudentAccount() {
             year_level: document.getElementById('createStudentYear').value,
             section_id: document.getElementById('createStudentSection').value
         };
+        if (queuedStudentCreateEditOperationId) {
+            await window.updateQueuedAdminStudentCreation(supabaseClient, queuedStudentCreateEditOperationId, payload);
+            queuedStudentCreateEditOperationId = null;
+            document.getElementById('createStudentSubmitButton').textContent = 'Create Account';
+            showAlert('success', 'Queued Student Updated', 'The saved student account details were updated on this device.');
+            closeCreateStudentModal();
+            await renderAdminCreatedAccounts();
+            await showManagedStudentsInSection(payload);
+            return;
+        }
         const result = await window.submitAdminAccountCreation(
             supabaseClient,
             'student',
@@ -8018,7 +8080,12 @@ async function createStudentAccount() {
         );
         if (result.queued) {
             showAlert('success', 'Student Account Queued', 'This account will be created automatically when the device reconnects.');
-            closeCreateStudentModal();
+            document.getElementById('createStudentNumber').value = '';
+            document.getElementById('createStudentFirstName').value = '';
+            document.getElementById('createStudentMiddleInitial').value = '';
+            document.getElementById('createStudentLastName').value = '';
+            document.getElementById('createStudentGender').value = '';
+            document.getElementById('createdStudentCredentials').style.display = 'none';
             await renderAdminCreatedAccounts();
             await showManagedStudentsInSection(payload);
             return;

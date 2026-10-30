@@ -323,7 +323,7 @@
             document.querySelectorAll('input,select,textarea,button').forEach(control => {
                 const inAllowedModal = control.closest('#createStudentModal,#createTeacherModal,#editStudentModal,#departmentModal,#majorModal,#sectionModal,#subjectModal,#deleteDepartmentModal,#deleteMajorModal,#deleteSectionModal,#deleteSubjectModal,#teacherAssignModal,#teacherSectionModal');
                 const opensAllowedModal = control.matches('button')
-                    && /openCreateStudentModal|openCreateTeacherModal|openEditStudentModal|openDepartmentModal|openMajorModal|openSectionModal|openSubjectModal|openDeleteDepartmentModal|openDeleteMajorModal|openDeleteSectionModal|openDeleteSubjectModal|openTeacherAssignModal|openAddSectionModal/.test(control.getAttribute('onclick') || '');
+                    && /openCreateStudentModal|openCreateTeacherModal|openEditStudentModal|openEditQueuedStudentAccount|openDepartmentModal|openMajorModal|openSectionModal|openSubjectModal|openDeleteDepartmentModal|openDeleteMajorModal|openDeleteSectionModal|openDeleteSubjectModal|openTeacherAssignModal|openAddSectionModal/.test(control.getAttribute('onclick') || '');
                 const isAllowedOfflineAction = control.matches('button')
                     && /createStudentAccount|createTeacherAccount|saveStudentEdits|createTeacherAccount|addDepartment|addMajor|addSection|addSubject|setActiveSemester|deleteDepartment|deleteMajor|deleteSectionModalAction|deleteSubject|assignTeacherToSubject|removeTeacherAssignment|saveTeacherSection|closeCreateStudentModal|closeEditStudentModal|closeModal|closeDepartmentModal|closeMajorModal|closeSectionModal|closeSubjectModal|closeDeleteDepartmentModal|closeDeleteMajorModal|closeDeleteSectionModal|closeDeleteSubjectModal|closeTeacherAssignModal|closeTeacherSectionModal|loadEditStudentMajors|loadEditStudentSections|loadDepartmentDeleteOptions|loadMajorsForDelete|loadMajorsForDeleteSection|loadSectionsForDelete|loadMajorsForDeleteSubject|loadSubjectsForDelete/.test(control.getAttribute('onclick') || '');
                 const isSemesterPicker = control.id === 'activeSemesterSelect';
@@ -707,6 +707,26 @@
         return { queued: true, operationId };
     }
 
+    async function updateQueuedAdminStudentCreation(client, operationId, payload) {
+        const userId = await getUserId(client);
+        if (!userId || navigator.onLine) throw new Error('Queued student accounts can only be edited while offline.');
+        const key = `${userId}:${operationId}`;
+        const queuedItem = await adminStoreRequest(adminQueueStoreName, 'readonly', store => store.get(key));
+        if (!queuedItem || queuedItem.role !== 'student' || (queuedItem.action || 'admin-create') !== 'admin-create') {
+            throw new Error('This queued student account could not be found.');
+        }
+        if (queuedItem.processing || queuedItem.lastError) {
+            throw new Error('This account request has already started syncing. Reconnect and resolve its sync status before editing it.');
+        }
+        await adminStoreRequest(adminQueueStoreName, 'readwrite', store => store.put({
+            ...queuedItem, payload, updatedAt: new Date().toISOString()
+        }));
+        setNotice('Queued student details updated on this device.', true, 'sync');
+        window.dispatchEvent(new CustomEvent('admin-account-data-changed'));
+        window.dispatchEvent(new CustomEvent('admin-student-data-changed'));
+        return true;
+    }
+
     async function getAdminAccountData(client) {
         const userId = await getUserId(client);
         if (!userId) return { queued: [], completed: [] };
@@ -811,6 +831,7 @@
     window.getAdminStudentSection = getAdminStudentSection;
         window.getAdminStudentRoster = getAdminStudentRoster;
         window.queueAdminStudentEdit = queueAdminStudentEdit;
+        window.updateQueuedAdminStudentCreation = updateQueuedAdminStudentCreation;
     window.queueAdminStructureOperation = queueAdminStructureOperation;
     window.queueAdminStructureDelete = queueAdminStructureDelete;
     window.getAdminStructureData = getAdminStructureData;
