@@ -349,6 +349,70 @@ table td{
             gap: 12px;
         }
 
+        #addStudentsToSectionModal {
+            padding: 18px;
+        }
+
+        #addStudentsToSectionModal .modal-content {
+            width: min(980px, 100%);
+            max-width: 100%;
+            height: min(88vh, 900px);
+            height: min(88dvh, 900px);
+            min-height: 0;
+            overflow: hidden;
+        }
+
+        #addStudentsToSectionModal .modal-header {
+            flex: 0 0 auto;
+            margin-bottom: 10px;
+        }
+
+        #addStudentsToSectionModal .modal-body {
+            display: flex;
+            flex: 1 1 auto;
+            flex-direction: column;
+            min-height: 0;
+            overflow: hidden;
+            gap: 12px;
+        }
+
+        #addStudentsToSectionModal .table-responsive {
+            flex: 1 1 auto;
+            min-height: 0;
+            max-height: none !important;
+            overflow: auto;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+        }
+
+        #addStudentsToSectionModal table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
+        }
+
+        #addStudentsToSectionModal th {
+            position: sticky;
+            top: 0;
+            z-index: 1;
+            background: #f4f7fc;
+        }
+
+        #addStudentsToSectionModal th:first-child,
+        #addStudentsToSectionModal td:first-child {
+            width: 54px;
+            text-align: center;
+        }
+
+        #addStudentsToSectionModal th:nth-child(2),
+        #addStudentsToSectionModal td:nth-child(2) {
+            width: 180px;
+        }
+
+        #addStudentsToSectionModal tbody tr:hover {
+            background: #f7f9fc;
+        }
+
         #createStudentModal,
         #editStudentModal {
             padding: 16px;
@@ -8054,6 +8118,18 @@ async function loadStudentsBySection() {
             student.last_name
         );
 
+        const studentActions = student.pending
+            ? `${student.pendingGraduation ? 'Graduation queued' : student.pendingProcessing ? 'Account sync needs attention' : 'Account creation queued'}<br>${student.pendingProcessing ? '' : `<button class="btn" onclick="openEditQueuedStudentAccount('${student.pendingOperationId}')">Edit</button>`}`
+            : student.pendingAssignment
+                ? 'Section assignment queued'
+                : `<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+                    ${student.graduated_at || student.pendingGraduation ? '<strong>Graduate</strong>' : ''}
+                    ${student.pendingEdit ? '<span>Edit queued</span>' : ''}
+                    <button class="btn" onclick="openEditStudentModal(${student.student_id})">Edit</button>
+                    <button class="btn" onclick="resetStudentPassword(${student.student_id})">Reset Password</button>
+                    <button class="btn reject-btn" onclick="deleteStudent('${student.student_id}','${student.users?.user_id}')">Delete</button>
+                </div>`;
+
         table.innerHTML += `
 
         <tr>
@@ -8070,10 +8146,7 @@ async function loadStudentsBySection() {
 
             <td>
 
-                ${student.pending ? `${student.pendingGraduation ? 'Graduation queued' : student.pendingProcessing ? 'Account sync needs attention' : 'Account creation queued'}<br>${student.pendingProcessing ? '' : `<button class="btn" onclick="openEditQueuedStudentAccount('${student.pendingOperationId}')">Edit</button>`}` : student.pendingGraduation ? 'Graduation queued' : student.graduated_at ? 'Graduate' : student.pendingAssignment ? 'Section assignment queued' : student.pendingEdit ? `<span>Edit queued</span><br><button class="btn" onclick="openEditStudentModal(${student.student_id})">Edit</button>` : `
-                <button class="btn" onclick="openEditStudentModal(${student.student_id})">Edit</button>
-                <button class="btn" onclick="resetStudentPassword(${student.student_id})">Reset Password</button>
-                <button class="btn reject-btn" onclick="deleteStudent('${student.student_id}','${student.users?.user_id}')">Delete</button>`}
+                ${studentActions}
 
             </td>
 
