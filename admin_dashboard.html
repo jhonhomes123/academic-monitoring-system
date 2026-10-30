@@ -5062,7 +5062,7 @@ async function refreshCurrentExplorer() {
                         const isDeleted = pending.some(candidate => candidate.type === 'department_delete'
                             && String(candidate.payload.department_id) === String(item.localRef));
                         if (!isDeleted && !data.some(department => department.department_name.toLowerCase() === item.payload.department_name.toLowerCase())) {
-                            data.push({ department_id: item.localRef, department_name: item.payload.department_name });
+                            data.push({ department_id: item.localRef, department_name: item.payload.department_name, pending: true });
                         }
                     });
                 }
@@ -5162,7 +5162,7 @@ async function refreshCurrentExplorer() {
                 majorSelect.innerHTML += `
         
         <option value="${major.major_id}">
-            ${major.major_name}
+            ${major.major_name}${major.pending ? ' (waiting to sync)' : ''}
         </option>
         
         `;
@@ -6155,7 +6155,7 @@ async function loadDepartmentDeleteOptions() {
                 majorSelect.innerHTML += `
         
         <option value="${major.major_id}">
-            ${major.major_name}
+            ${major.major_name}${major.pending ? ' (waiting to sync)' : ''}
         </option>
         
         `;
@@ -6350,7 +6350,7 @@ async function loadDepartmentDeleteOptions() {
                 majorSelect.innerHTML += `
         
         <option value="${major.major_id}">
-            ${major.major_name}
+            ${major.major_name}${major.pending ? ' (waiting to sync)' : ''}
         </option>
         
         `;
@@ -6413,7 +6413,7 @@ async function loadDepartmentDeleteOptions() {
         sectionSelect.innerHTML += `
 
         <option value="${section.section_id}">
-            ${section.section_name}
+            ${section.section_name}${section.pending ? ' (waiting to sync)' : ''}
         </option>
 
         `;
@@ -6649,7 +6649,7 @@ async function loadDepartmentDeleteOptions() {
                 majorSelect.innerHTML += `
 
         <option value="${major.major_id}">
-            ${major.major_name}
+                    ${major.major_name}${major.pending ? ' (waiting to sync)' : ''}
         </option>
 
         `;
@@ -6686,14 +6686,47 @@ async function loadSubjectsForDelete() {
     if (!majorId || !yearLevel) return;
 
     let data;
+    let pending = [];
+    let lookups = null;
     if (!navigator.onLine) {
         const offlineRecords = await getAdminExplorerRecords();
-        data = offlineRecords.subjects.filter(subject => String(subject.major_id) === String(majorId) && subject.year_level === yearLevel && !subject.pending);
+        data = offlineRecords.subjects.filter(subject => String(subject.major_id) === String(majorId) && subject.year_level === yearLevel);
+        pending = offlineRecords.pending || [];
+        lookups = offlineRecords.lookups;
     } else {
-        const result = await supabaseClient.from('subjects').select('*').eq('major_id', majorId).eq('year_level', yearLevel).order('subject_name');
-        if (result.error) { console.log(result.error); return; }
-        data = result.data || [];
+        if (String(majorId).startsWith('local:')) {
+            data = [];
+        } else {
+            const result = await supabaseClient.from('subjects').select('*').eq('major_id', majorId).eq('year_level', yearLevel).order('subject_name');
+            if (result.error) { console.log(result.error); return; }
+            data = result.data || [];
+        }
+        const structure = await window.getAdminStructureData(supabaseClient);
+        pending = structure.pending || [];
+        lookups = structure.lookups;
+        pending.filter(item => item.type === 'subject_add'
+            && String(item.payload.major_id) === String(majorId)
+            && item.payload.year_level === yearLevel)
+            .forEach(item => {
+                const deleted = pending.some(candidate => candidate.type === 'subject_delete'
+                    && String(candidate.payload.subject_id) === String(item.localRef));
+                if (!deleted && !data.some(subject => String(subject.subject_code).toLowerCase() === String(item.payload.subject_code).toLowerCase())) {
+                    data.push({ ...item.payload, subject_id: item.localRef, pending: true });
+                }
+            });
     }
+    const deletedSubjects = new Set(pending.filter(item => item.type === 'subject_delete')
+        .map(item => String(item.payload.subject_id)));
+    const deletedMajors = new Set(pending.filter(item => item.type === 'major_delete')
+        .map(item => String(item.payload.major_id)));
+    const deletedDepartments = new Set(pending.filter(item => item.type === 'department_delete')
+        .map(item => String(item.payload.department_id)));
+    (lookups?.majors || []).filter(major => deletedDepartments.has(String(major.department_id)))
+        .forEach(major => deletedMajors.add(String(major.major_id)));
+    pending.filter(item => item.type === 'major_add' && deletedDepartments.has(String(item.payload.department_id)))
+        .forEach(item => deletedMajors.add(String(item.localRef)));
+    data = data.filter(subject => !deletedSubjects.has(String(subject.subject_id))
+        && !deletedMajors.has(String(majorId)));
 
     if (!data || data.length === 0) {
 
@@ -6714,7 +6747,7 @@ async function loadSubjectsForDelete() {
         subjectSelect.innerHTML += `
 
         <option value="${subject.subject_id}">
-            ${subject.subject_code} - ${subject.subject_name}
+            ${subject.subject_code} - ${subject.subject_name}${subject.pending ? ' (waiting to sync)' : ''}
         </option>
 
         `;
@@ -6781,6 +6814,18 @@ async function loadSubjectsForDelete() {
         `Are you sure you want to delete "${subjectName}"?`,
 
         async () => {
+
+            if (String(id).startsWith('local:')) {
+                try {
+                    await window.cancelQueuedAdminSubject(supabaseClient, String(id));
+                    closeDeleteSubjectModal();
+                    showAlert('success', 'Queued Subject Removed', 'The subject and its queued assignments were removed from this device.');
+                    await refreshCurrentExplorer();
+                } catch (error) {
+                    showAlert('error', 'Delete Failed', error.message || 'Unable to remove the unsynced subject.');
+                }
+                return;
+            }
 
             if (!navigator.onLine) {
                 try {
@@ -8718,6 +8763,7 @@ async function renderAdminStructureQueue() {
             ? studentEditDetails(item.payload)
             : item.type === 'department_delete'
                 ? (lookups?.departments || []).find(record => String(record.department_id) === String(item.payload.department_id))?.department_name
+                    || structurePending.find(record => record.type === 'department_add' && String(record.localRef) === String(item.payload.department_id))?.payload.department_name
                     || `Department ${item.payload.department_id}`
             : item.type === 'major_delete'
                 ? (lookups?.majors || []).find(record => String(record.major_id) === String(item.payload.major_id))?.major_name
@@ -8727,6 +8773,10 @@ async function renderAdminStructureQueue() {
                 ? (lookups?.sections || []).find(record => String(record.section_id) === String(item.payload.section_id))?.section_name
                     || structurePending.find(record => record.type === 'section_add' && String(record.localRef) === String(item.payload.section_id))?.payload.section_name
                     || `Section ${item.payload.section_id}`
+            : item.type === 'subject_delete'
+                ? (lookups?.subjects || []).find(record => String(record.subject_id) === String(item.payload.subject_id))?.subject_name
+                    || structurePending.find(record => record.type === 'subject_add' && String(record.localRef) === String(item.payload.subject_id))?.payload.subject_name
+                    || `Subject ${item.payload.subject_id}`
             : item.type === 'subject_add'
                 ? `${item.payload.subject_code} - ${item.payload.subject_name}, ${item.payload.year_level}`
             : item.type === 'student_account_create'
@@ -8736,11 +8786,17 @@ async function renderAdminStructureQueue() {
             : item.type === 'student_password_reset'
                 ? `Student ID ${item.payload.student_id}`
             : item.type === 'student_section_assign'
-                ? `Section ${(lookups?.sections || []).find(section => String(section.section_id) === String(item.payload.section_id))?.section_name || item.payload.section_id}; ${item.payload.student_ids?.length || 0} student(s)`
+                ? `Section ${(lookups?.sections || []).find(section => String(section.section_id) === String(item.payload.section_id))?.section_name
+                    || structurePending.find(section => section.type === 'section_add' && String(section.localRef) === String(item.payload.section_id))?.payload.section_name
+                    || item.payload.section_id}; ${item.payload.student_ids?.length || 0} student(s)`
             : item.type === 'section_transition'
-                ? `Section ${item.payload.section_id}: ${item.payload.direction}`
+                ? `Section ${(lookups?.sections || []).find(section => String(section.section_id) === String(item.payload.section_id))?.section_name
+                    || structurePending.find(section => section.type === 'section_add' && String(section.localRef) === String(item.payload.section_id))?.payload.section_name
+                    || item.payload.section_id}: ${item.payload.direction}`
             : item.type === 'section_unassign_all'
-                ? `Section ${item.payload.section_id}`
+                ? `Section ${(lookups?.sections || []).find(section => String(section.section_id) === String(item.payload.section_id))?.section_name
+                    || structurePending.find(section => section.type === 'section_add' && String(section.localRef) === String(item.payload.section_id))?.payload.section_name
+                    || item.payload.section_id}`
             : item.type === 'semester_set'
             ? (semester?.semester_name || `Unknown semester (${item.payload.semester_id})`)
             : item.type === 'department_add'
