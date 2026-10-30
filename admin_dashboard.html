@@ -1951,9 +1951,6 @@ onchange="loadSubjectsForTeacherAssign()">
 
         </div>
 
-        <button class="btn" type="button" onclick="loadUnassignedStudents()">Show Unassigned Students</button>
-        <button class="btn" type="button" onclick="loadGraduatedStudents()">Show Graduates</button>
-
     </div>
 
     <!-- STUDENT TABLE -->
@@ -4357,6 +4354,7 @@ async function transitionAdminSection(encodedSectionId, direction) {
                             ? `${section.section_name} will remain as a Graduate section with its student list when you reconnect.`
                             : `${section.section_name} will move to ${toYear} when you reconnect.`);
                         await refreshCurrentExplorer();
+                        await refreshManageStudentsAfterSectionTransition(sectionId, toYear);
                         return;
                     }
 
@@ -4370,6 +4368,7 @@ async function transitionAdminSection(encodedSectionId, direction) {
                         ? `${data.graduated_count} students were marked as graduates. The section and student list were retained.`
                         : `${section.section_name} is now ${data.to_year}.`);
                     await refreshCurrentExplorer();
+                    await refreshManageStudentsAfterSectionTransition(sectionId, data.to_year);
                 } catch (error) {
                     showAlert('error', 'Section Update Failed', error.message);
                 }
@@ -4378,6 +4377,20 @@ async function transitionAdminSection(encodedSectionId, direction) {
     } catch (error) {
         showAlert('error', 'Section Update Failed', error.message);
     }
+}
+
+async function refreshManageStudentsAfterSectionTransition(sectionId, yearLevel) {
+    const departmentId = document.getElementById('manageStudentDepartment').value;
+    const majorId = document.getElementById('manageStudentMajor').value;
+    document.getElementById('manageStudentYear').value = yearLevel;
+    await loadDepartmentsForManageStudents();
+    document.getElementById('manageStudentDepartment').value = departmentId;
+    await loadMajorsForManageStudents();
+    document.getElementById('manageStudentMajor').value = majorId;
+    await loadSectionsForManageStudents();
+    const sectionSelect = document.getElementById('manageStudentSection');
+    sectionSelect.value = String(sectionId);
+    await loadStudentsBySection();
 }
 
         async function viewSubjectTeachers(subjectId,subjectName) {
@@ -7598,6 +7611,7 @@ async function loadSectionsForManageStudents() {
     `;
 
     select.add(new Option('Unassigned students (all)', 'unassigned'));
+    select.add(new Option('Graduates', 'graduates'));
 
     if (!majorId || !yearLevel) return;
 
