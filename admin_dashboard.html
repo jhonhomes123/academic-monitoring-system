@@ -2186,7 +2186,7 @@ onchange="loadSubjectsForTeacherAssign()">
                 <select id="editStudentDepartment" onchange="loadEditStudentMajors()"><option value="">Select Department</option></select>
                 <select id="editStudentMajor" onchange="loadEditStudentSections()"><option value="">Select Major</option></select>
                 <select id="editStudentYear" onchange="loadEditStudentSections()">
-                    <option value="">Select Year</option><option>1st Year</option><option>2nd Year</option><option>3rd Year</option><option>4th Year</option><option>Graduate</option>
+                    <option value="">Select Year</option><option>1st Year</option><option>2nd Year</option><option>3rd Year</option><option>4th Year</option>
                 </select>
                 <select id="editStudentSection"><option value="">Select Section</option></select>
                 <button class="btn" onclick="saveStudentEdits()">Save Student</button>
@@ -8697,7 +8697,7 @@ async function openEditStudentModal(studentId) {
         } else {
             const { data, error } = await supabaseClient
                 .from('students')
-                .select('student_id, student_number, first_name, middle_initial, last_name, gender, section_id, users!students_user_id_fkey(email), sections(section_id, year_level, major_id, majors(department_id))')
+                .select('student_id, student_number, first_name, middle_initial, last_name, gender, section_id, graduated_at, users!students_user_id_fkey(email), sections(section_id, year_level, major_id, majors(department_id))')
                 .eq('student_id', studentId)
                 .single();
             if (error) throw error;
@@ -8748,6 +8748,12 @@ async function openEditStudentModal(studentId) {
                 section = sectionData;
             }
         }
+
+        const editYearSelect = document.getElementById('editStudentYear');
+        const graduateOption = [...editYearSelect.options].find(option => option.value === 'Graduate');
+        const isGraduate = Boolean(student.graduated_at) || section?.year_level === 'Graduate';
+        if (isGraduate && !graduateOption) editYearSelect.add(new Option('Graduate', 'Graduate'));
+        if (!isGraduate && graduateOption) graduateOption.remove();
 
         if (section?.major_id && section.majors?.department_id) {
             departmentSelect.value = section.majors.department_id;
