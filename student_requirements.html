@@ -355,7 +355,8 @@ async function loadStudentRequirements() {
                 sections(
                     section_name,
                     year_level,
-                    majors(major_name)
+                    major_id,
+                    majors(major_id, major_name)
                 )
             `)
             .eq('user_id', user.id)
@@ -368,7 +369,7 @@ async function loadStudentRequirements() {
                 const lastName = rest.join(' ');
                 const { error: createErr } = await supabaseClient.from('students').insert([{ user_id: user.id, student_number: `S-${Date.now()}`, first_name: firstName || 'Student', last_name: lastName || '', section_id: null }]);
                 if (createErr) console.error('Failed to create minimal student', createErr);
-                const re = await supabaseClient.from('students').select('student_id, first_name, last_name, section_id, sections(section_name, year_level, majors(major_name))').eq('user_id', user.id).maybeSingle();
+                const re = await supabaseClient.from('students').select('student_id, first_name, last_name, section_id, sections(section_name, year_level, major_id, majors(major_id, major_name))').eq('user_id', user.id).maybeSingle();
                 student = re.data; studentError = re.error;
             } catch (err) {
                 console.error('Error creating student record', err);
@@ -398,17 +399,22 @@ async function loadStudentRequirements() {
         if (semesterError) throw semesterError;
 
         const { data: activeSubjects, error: activeSubjectsError } = activeSemester
-            ? await supabaseClient
-                .from('subjects')
-                .select('subject_id')
-                .eq('semester_id', activeSemester.semester_id)
+            ? student.sections?.major_id && student.sections?.year_level
+                ? await supabaseClient
+                    .from('subjects')
+                    .select('subject_id')
+                    .eq('major_id', student.sections.major_id)
+                    .eq('year_level', student.sections.year_level)
+                    .eq('semester_id', activeSemester.semester_id)
+                : { data: [], error: null }
             : { data: [], error: null };
         if (activeSubjectsError) throw activeSubjectsError;
         const activeSubjectIds = new Set((activeSubjects || []).map(subject => String(subject.subject_id)));
 
         // Load requirements for the active semester only
         const studentId = student.student_id ?? student.id;
-        const { data: requirementRows, error: reqError } = await supabaseClient
+        const { data: requirementRows, error: reqError } = activeSubjectIds.size
+            ? await supabaseClient
             .from('student_requirements')
             .select(`
                 requirement_id,
@@ -418,14 +424,16 @@ async function loadStudentRequirements() {
                 subject_id,
                 subjects(subject_name)
             `)
-            .eq('student_id', studentId);
+            .eq('student_id', studentId)
+            .in('subject_id', Array.from(activeSubjectIds))
+            : { data: [], error: null };
 
         if (reqError) {
             console.error('Error loading requirements', reqError);
             if (await restoreStudentOfflineSnapshot(supabaseClient, 'requirements', true)) return;
             return;
         }
-        const requirements = (requirementRows || []).filter(requirement => activeSubjectIds.has(String(requirement.subject_id)));
+        const requirements = requirementRows || [];
 
         // Load all files for this student's requirements (guard empty requirement list)
         let files = [];
