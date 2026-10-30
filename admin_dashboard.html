@@ -7710,7 +7710,7 @@ async function loadStudentsBySection() {
 
             <td>
 
-                ${student.pending ? `${student.pendingProcessing ? 'Account sync needs attention' : 'Account creation queued'}<br>${student.pendingProcessing ? '' : `<button class="btn" onclick="openEditQueuedStudentAccount('${student.pendingOperationId}')">Edit</button>`}` : student.pendingEdit ? 'Edit queued' : `
+                ${student.pending ? `${student.pendingProcessing ? 'Account sync needs attention' : 'Account creation queued'}<br>${student.pendingProcessing ? '' : `<button class="btn" onclick="openEditQueuedStudentAccount('${student.pendingOperationId}')">Edit</button>`}` : student.pendingEdit ? `<span>Edit queued</span><br><button class="btn" onclick="openEditStudentModal(${student.student_id})">Edit</button>` : `
                 <button class="btn" onclick="openEditStudentModal(${student.student_id})">Edit</button>
                 <button class="btn" onclick="resetStudentPassword(${student.student_id})">Reset Password</button>
                 <button class="btn reject-btn" onclick="deleteStudent('${student.student_id}','${student.users?.user_id}')">Delete</button>`}

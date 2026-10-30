@@ -325,7 +325,7 @@
                 const opensAllowedModal = control.matches('button')
                     && /openCreateStudentModal|openCreateTeacherModal|openEditStudentModal|openEditQueuedStudentAccount|openDepartmentModal|openMajorModal|openSectionModal|openSubjectModal|openDeleteDepartmentModal|openDeleteMajorModal|openDeleteSectionModal|openDeleteSubjectModal|openTeacherAssignModal|openAddSectionModal/.test(control.getAttribute('onclick') || '');
                 const isAllowedOfflineAction = control.matches('button')
-                    && /createStudentAccount|createTeacherAccount|saveStudentEdits|createTeacherAccount|addDepartment|addMajor|addSection|addSubject|setActiveSemester|deleteDepartment|deleteMajor|deleteSectionModalAction|deleteSubject|assignTeacherToSubject|removeTeacherAssignment|saveTeacherSection|closeCreateStudentModal|closeEditStudentModal|closeModal|closeDepartmentModal|closeMajorModal|closeSectionModal|closeSubjectModal|closeDeleteDepartmentModal|closeDeleteMajorModal|closeDeleteSectionModal|closeDeleteSubjectModal|closeTeacherAssignModal|closeTeacherSectionModal|loadEditStudentMajors|loadEditStudentSections|loadDepartmentDeleteOptions|loadMajorsForDelete|loadMajorsForDeleteSection|loadSectionsForDelete|loadMajorsForDeleteSubject|loadSubjectsForDelete/.test(control.getAttribute('onclick') || '');
+                    && /createStudentAccount|createTeacherAccount|saveStudentEdits|clearAdminCreatedAccounts|createTeacherAccount|addDepartment|addMajor|addSection|addSubject|setActiveSemester|deleteDepartment|deleteMajor|deleteSectionModalAction|deleteSubject|assignTeacherToSubject|removeTeacherAssignment|saveTeacherSection|closeCreateStudentModal|closeEditStudentModal|closeModal|closeDepartmentModal|closeMajorModal|closeSectionModal|closeSubjectModal|closeDeleteDepartmentModal|closeDeleteMajorModal|closeDeleteSectionModal|closeDeleteSubjectModal|closeTeacherAssignModal|closeTeacherSectionModal|loadEditStudentMajors|loadEditStudentSections|loadDepartmentDeleteOptions|loadMajorsForDelete|loadMajorsForDeleteSection|loadSectionsForDelete|loadMajorsForDeleteSubject|loadSubjectsForDelete/.test(control.getAttribute('onclick') || '');
                 const isSemesterPicker = control.id === 'activeSemesterSelect';
                 const isExplorerBack = control.id === 'backButton';
                 const isStudentFilter = ['manageStudentYear', 'manageStudentDepartment', 'manageStudentMajor', 'manageStudentSection'].includes(control.id);
@@ -696,10 +696,15 @@
     async function queueAdminStudentEdit(client, payload, functionUrl, anonKey) {
         const userId = await getUserId(client);
         if (!userId) throw new Error('Sign in while connected before making offline student edits.');
-        const operationId = createOperationId();
+        const allQueued = await adminStoreRequest(adminQueueStoreName, 'readonly', store => store.getAll());
+        const existing = allQueued
+            .filter(item => item.userId === userId && item.action === 'admin-edit' && String(item.payload.student_id) === String(payload.student_id))
+            .sort((first, second) => Date.parse(second.createdAt) - Date.parse(first.createdAt))[0];
+        const operationId = existing?.operationId || createOperationId();
         await adminStoreRequest(adminQueueStoreName, 'readwrite', store => store.put({
+            ...(existing || {}),
             key: `${userId}:${operationId}`, userId, operationId, role: 'student', action: 'admin-edit', payload,
-            functionUrl, anonKey, createdAt: new Date().toISOString(), lastError: null
+            functionUrl, anonKey, createdAt: existing?.createdAt || new Date().toISOString(), updatedAt: new Date().toISOString(), lastError: null
         }));
         setNotice('Student edit saved on this device. It will apply when connected.', true, 'sync');
         window.dispatchEvent(new CustomEvent('admin-account-data-changed'));
