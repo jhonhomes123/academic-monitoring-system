@@ -244,8 +244,7 @@
             .maybeSingle();
         if (error || !admin) return false;
         await saveAdminAccountLookups(client, userId);
-        void syncAdminAccountQueue(client);
-        void syncAdminStructureQueue(client);
+        void syncAdminQueues(client);
 
         const main = document.querySelector('.main');
         if (main && !adminSnapshotObserver) {
@@ -423,6 +422,17 @@
         }));
     }
 
+    async function nextAdminQueueTimestamp(userId) {
+        const [accountOperations, structureOperations] = await Promise.all([
+            adminStoreRequest(adminQueueStoreName, 'readonly', store => store.getAll()),
+            adminStoreRequest(adminStructureQueueStoreName, 'readonly', store => store.getAll())
+        ]);
+        const latestTimestamp = [...accountOperations, ...structureOperations]
+            .filter(item => item.userId === userId)
+            .reduce((latest, item) => Math.max(latest, Date.parse(item.createdAt) || 0), 0);
+        return new Date(Math.max(Date.now(), latestTimestamp + 1)).toISOString();
+    }
+
     async function saveAdminAccountResult(userId, operationId, role, payload, result) {
         const lookups = role === 'student' ? await getAdminAccountLookups(null, userId) : null;
         const section = lookups?.sections.find(item => String(item.section_id) === String(payload.section_id || result.section_id));
@@ -470,9 +480,10 @@
         const operationId = createOperationId();
         const payload = { student_id: Number(studentId) };
         if (!navigator.onLine) {
+            const createdAt = await nextAdminQueueTimestamp(userId);
             await adminStoreRequest(adminQueueStoreName, 'readwrite', store => store.put({
                 key: `${userId}:${operationId}`, userId, operationId, role: 'student', action: 'admin-reset', payload,
-                functionUrl, anonKey, createdAt: new Date().toISOString(), lastError: null
+                functionUrl, anonKey, createdAt, lastError: null
             }));
             setNotice('Student password reset saved on this device. It will run when connected.', true, 'sync');
             window.dispatchEvent(new CustomEvent('admin-account-data-changed'));
@@ -602,10 +613,7 @@
     async function queueAdminStructureOperation(client, type, payload) {
         const userId = await getUserId(client);
         if (!userId) throw new Error('Sign in while connected before making offline admin changes.');
-        const queuedOperations = await adminStoreRequest(adminStructureQueueStoreName, 'readonly', store => store.getAll());
-        const latestTimestamp = queuedOperations.filter(item => item.userId === userId)
-            .reduce((latest, item) => Math.max(latest, Date.parse(item.createdAt) || 0), 0);
-        const createdAt = new Date(Math.max(Date.now(), latestTimestamp + 1)).toISOString();
+        const createdAt = await nextAdminQueueTimestamp(userId);
         const operationId = createOperationId();
         const localRef = ['department_add', 'major_add', 'section_add', 'subject_add', 'teacher_subject_assign'].includes(type)
             ? `local:${operationId}`
@@ -705,14 +713,15 @@
         return new Map(mappings.filter(item => item.userId === userId).map(item => [item.localRef, item.realId]));
     }
 
-    async function syncAdminStructureQueue(client) {
+    async function syncAdminStructureQueue(client, operationId = null) {
         if (!navigator.onLine || window.adminStructureSyncInProgress) return;
         window.adminStructureSyncInProgress = true;
         let currentOperation = null;
         try {
             const userId = await getUserId(client);
             if (!userId) return;
-            const { pending } = await getAdminStructureData(client);
+            const { pending: allPending } = await getAdminStructureData(client);
+            const pending = operationId ? allPending.filter(item => item.operationId === operationId) : allPending;
             const idMap = await getAdminStructureIdMap(userId);
             for (const operation of pending) {
                 if (!navigator.onLine) break;
@@ -739,7 +748,7 @@
                     setNotice(`An admin change is still waiting to apply. ${error.message || 'It remains saved and will retry.'}`, true, 'sync');
                     window.setTimeout(() => {
                         if (navigator.onLine && window.currentOfflineRole === 'admin') {
-                            void syncAdminStructureQueue(client);
+                            void syncAdminQueues(client);
                         }
                     }, 15000);
                     break;
@@ -776,7 +785,7 @@
             setNotice(`An admin change is still waiting to apply: ${reason}`, true, 'sync');
             window.setTimeout(() => {
                 if (navigator.onLine && window.currentOfflineRole === 'admin') {
-                    void syncAdminStructureQueue(client);
+                    void syncAdminQueues(client);
                 }
             }, 15000);
         } finally {
@@ -789,9 +798,10 @@
         if (!userId) throw new Error('Sign in while connected before creating an account offline.');
         const operationId = createOperationId();
         if (!navigator.onLine) {
+            const createdAt = await nextAdminQueueTimestamp(userId);
             await adminStoreRequest(adminQueueStoreName, 'readwrite', store => store.put({
                 key: `${userId}:${operationId}`, userId, operationId, role, payload,
-                functionUrl, anonKey, createdAt: new Date().toISOString(), lastError: null
+                functionUrl, anonKey, createdAt, lastError: null
             }));
             setNotice(`${role === 'student' ? 'Student' : 'Teacher'} account saved on this device. It will be created when you are online.`, true, 'sync');
             window.dispatchEvent(new CustomEvent('admin-account-data-changed'));
@@ -819,10 +829,11 @@
             .filter(item => item.userId === userId && item.action === 'admin-edit' && String(item.payload.student_id) === String(payload.student_id))
             .sort((first, second) => Date.parse(second.createdAt) - Date.parse(first.createdAt))[0];
         const operationId = existing?.operationId || createOperationId();
+        const createdAt = existing?.createdAt || await nextAdminQueueTimestamp(userId);
         await adminStoreRequest(adminQueueStoreName, 'readwrite', store => store.put({
             ...(existing || {}),
             key: `${userId}:${operationId}`, userId, operationId, role: 'student', action: 'admin-edit', payload,
-            functionUrl, anonKey, createdAt: existing?.createdAt || new Date().toISOString(), updatedAt: new Date().toISOString(), lastError: null
+            functionUrl, anonKey, createdAt, updatedAt: new Date().toISOString(), lastError: null
         }));
         setNotice('Student edit saved on this device. It will apply when connected.', true, 'sync');
         window.dispatchEvent(new CustomEvent('admin-account-data-changed'));
@@ -889,23 +900,28 @@
         window.dispatchEvent(new CustomEvent('admin-password-reset-data-changed'));
     }
 
-    async function syncAdminAccountQueue(client) {
+    async function syncAdminAccountQueue(client, operationId = null) {
         if (!navigator.onLine || window.adminAccountSyncInProgress) return;
         window.adminAccountSyncInProgress = true;
         try {
             const userId = await getUserId(client);
             if (!userId) return;
-            const { queued } = await getAdminAccountData(client);
+            const { queued: allQueued } = await getAdminAccountData(client);
+            const queued = operationId ? allQueued.filter(item => item.operationId === operationId) : allQueued;
             for (const item of queued) {
                 if (!navigator.onLine) break;
                 const { data: { session } } = await client.auth.getSession();
                 if (!session) return;
                 try {
                     const payload = { ...item.payload };
-                    if (item.action === 'admin-edit' && typeof payload.section_id === 'string' && payload.section_id.startsWith('local:')) {
+                    if ((item.action || 'admin-create') === 'admin-create' || item.action === 'admin-edit') {
                         const idMap = await getAdminStructureIdMap(userId);
-                        if (!idMap.has(payload.section_id)) throw new Error('The selected section is still waiting to sync. This edit will retry automatically.');
-                        payload.section_id = idMap.get(payload.section_id);
+                        for (const field of ['department_id', 'major_id', 'section_id']) {
+                            const value = payload[field];
+                            if (typeof value !== 'string' || !value.startsWith('local:')) continue;
+                            if (!idMap.has(value)) throw new Error(`The selected ${field.replace('_id', '')} is still waiting to sync. This account request will retry automatically.`);
+                            payload[field] = idMap.get(value);
+                        }
                     }
                     const response = await fetch(item.functionUrl, {
                         method: 'POST',
@@ -915,7 +931,7 @@
                     const result = await response.json().catch(() => ({}));
                     if (!response.ok) throw new Error(result.error || 'Account creation failed.');
                     if ((item.action || 'admin-create') === 'admin-create') {
-                        await saveAdminAccountResult(userId, item.operationId, item.role, item.payload, result);
+                        await saveAdminAccountResult(userId, item.operationId, item.role, payload, result);
                     } else if (item.action === 'admin-reset') {
                         await saveAdminPasswordResetResult(userId, item.operationId, item.payload, result);
                     }
@@ -941,7 +957,7 @@
                             : `A saved ${item.role} account could not be created yet: ${failureReason}`), true, 'sync');
                     window.setTimeout(() => {
                         if (navigator.onLine && window.currentOfflineRole === 'admin') {
-                            void syncAdminAccountQueue(client);
+                            void syncAdminQueues(client);
                         }
                     }, stillProcessing ? 35000 : 15000);
                     break;
@@ -960,6 +976,43 @@
         }
     }
 
+    async function syncAdminQueues(client) {
+        if (!navigator.onLine || window.adminQueueSyncInProgress) return;
+        window.adminQueueSyncInProgress = true;
+        try {
+            const userId = await getUserId(client);
+            if (!userId) return;
+            while (navigator.onLine) {
+                const [{ pending: structurePending }, { queued: accountPending }] = await Promise.all([
+                    getAdminStructureData(client),
+                    getAdminAccountData(client)
+                ]);
+                const next = [
+                    ...structurePending.map(item => ({ ...item, queue: 'structure' })),
+                    ...accountPending.map(item => ({ ...item, queue: 'account' }))
+                ].sort((first, second) => Date.parse(first.createdAt || 0) - Date.parse(second.createdAt || 0)
+                    || first.operationId.localeCompare(second.operationId))[0];
+                if (!next) break;
+
+                if (next.queue === 'structure') await syncAdminStructureQueue(client, next.operationId);
+                else await syncAdminAccountQueue(client, next.operationId);
+
+                const [{ pending: remainingStructure }, { queued: remainingAccounts }] = await Promise.all([
+                    getAdminStructureData(client),
+                    getAdminAccountData(client)
+                ]);
+                const stillQueued = next.queue === 'structure'
+                    ? remainingStructure.some(item => item.operationId === next.operationId)
+                    : remainingAccounts.some(item => item.operationId === next.operationId);
+                if (stillQueued) break;
+            }
+        } catch (error) {
+            console.warn('Unable to sync queued admin changes in order.', error);
+        } finally {
+            window.adminQueueSyncInProgress = false;
+        }
+    }
+
     window.submitAdminAccountCreation = submitAdminAccountCreation;
     window.submitAdminPasswordReset = submitAdminPasswordReset;
     window.getAdminAccountData = getAdminAccountData;
@@ -967,7 +1020,7 @@
     window.discardQueuedAdminAccountRequest = discardQueuedAdminAccountRequest;
     window.clearPortalOfflineNotice = () => setNotice('', false);
     window.clearAdminAccountResults = clearAdminAccountResults;
-    window.syncAdminAccountQueue = syncAdminAccountQueue;
+    window.syncAdminAccountQueue = syncAdminQueues;
     window.getAdminAccountLookups = getAdminAccountLookups;
     window.saveAdminAccountLookups = saveAdminAccountLookups;
     window.saveAdminStudentSection = saveAdminStudentSection;
@@ -982,7 +1035,7 @@
     window.discardQueuedAdminAccountOperation = discardQueuedAdminAccountOperation;
     window.cancelQueuedAdminSubject = cancelQueuedAdminSubject;
     window.getAdminStructureData = getAdminStructureData;
-    window.syncAdminStructureQueue = syncAdminStructureQueue;
+    window.syncAdminStructureQueue = syncAdminQueues;
     window.clearAdminStructureQueue = clearAdminStructureQueue;
 
     async function removeQueuedTeacherOperation(key) {
@@ -1726,8 +1779,7 @@
             const { data: admin, error } = await client.from('admins').select('id').eq('auth_user_id', userId).maybeSingle();
             if (error || !admin) return;
             await saveAdminAccountLookups(client, userId);
-            await syncAdminAccountQueue(client);
-            await syncAdminStructureQueue(client);
+            await syncAdminQueues(client);
             if (window.adminOfflineView) window.location.reload();
         } catch (error) {
             console.warn('Unable to resume admin data after reconnect.', error);

@@ -4455,30 +4455,12 @@ data.forEach(major => {
 
 </button>
 
-${sub.pending ? `<button class="btn reject-btn" onclick="cancelUnsyncedSubject('${encodeURIComponent(String(sub.subject_id))}')">Cancel Unsynced Subject</button>` : ''}
-
 </div>
 
 `).join('')}
 </section>
 `).join('');
         }
-
-async function cancelUnsyncedSubject(encodedSubjectId) {
-    const subjectId = decodeURIComponent(String(encodedSubjectId));
-    const subject = (await getAdminExplorerRecords())?.subjects.find(item => String(item.subject_id) === subjectId);
-    showConfirmModal('Cancel Unsynced Subject', `Remove ${subject?.subject_code || 'this subject'} from the offline queue? It has not been added to the server yet.`, async () => {
-        try {
-            await window.cancelQueuedAdminSubject(supabaseClient, subjectId);
-            closeConfirmModal();
-            showAlert('success', 'Queued Subject Removed', 'The unsynced subject and dependent queued assignments were removed from this device.');
-            await refreshCurrentExplorer();
-        } catch (error) {
-            closeConfirmModal();
-            showAlert('error', 'Could Not Remove Subject', error.message || 'Unable to remove the unsynced subject.');
-        }
-    });
-}
 
 async function transitionAdminSection(encodedSectionId, direction) {
     const sectionId = decodeURIComponent(String(encodedSectionId));
@@ -4554,22 +4536,6 @@ async function refreshManageStudentsAfterSectionTransition(sectionId, yearLevel)
     const sectionSelect = document.getElementById('manageStudentSection');
     sectionSelect.value = String(sectionId);
     await loadStudentsBySection();
-}
-
-async function cancelUnsyncedSubject(encodedSubjectId) {
-    const subjectId = decodeURIComponent(String(encodedSubjectId));
-    const subject = (await getAdminExplorerRecords())?.subjects.find(item => String(item.subject_id) === subjectId);
-    showConfirmModal('Cancel Unsynced Subject', `Remove ${subject?.subject_code || 'this subject'} from the offline queue? It has not been added to the server yet.`, async () => {
-        try {
-            await window.cancelQueuedAdminSubject(supabaseClient, subjectId);
-            closeConfirmModal();
-            showAlert('success', 'Queued Subject Removed', 'The unsynced subject and any queued assignments to it were removed from this device.');
-            await refreshCurrentExplorer();
-        } catch (error) {
-            closeConfirmModal();
-            showAlert('error', 'Could Not Remove Subject', error.message || 'Unable to remove the unsynced subject.');
-        }
-    });
 }
 
         async function viewSubjectTeachers(subjectId,subjectName) {
@@ -8824,15 +8790,6 @@ async function renderAdminStructureQueue() {
                     cancelButton.disabled = Boolean(item.processing);
                     cancelButton.style.marginLeft = '8px';
                     cancelButton.addEventListener('click', () => discardPendingAdminOperation(item.operationId));
-                    cell.appendChild(cancelButton);
-                }
-                if (index === 2 && item.type === 'subject_add' && item.localRef) {
-                    const cancelButton = document.createElement('button');
-                    cancelButton.type = 'button';
-                    cancelButton.className = 'btn reject-btn';
-                    cancelButton.textContent = 'Cancel';
-                    cancelButton.style.marginLeft = '8px';
-                    cancelButton.addEventListener('click', () => cancelUnsyncedSubject(encodeURIComponent(item.localRef)));
                     cell.appendChild(cancelButton);
                 }
                 row.appendChild(cell);
