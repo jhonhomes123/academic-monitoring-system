@@ -7866,10 +7866,11 @@ async function clearAdminCreatedAccounts() {
 async function renderAdminStructureQueue() {
     const table = document.getElementById('adminStructureQueueTable');
     if (!table || !window.getAdminStructureData) return;
-    const [{ pending: structurePending }, accountData, lookups] = await Promise.all([
+    const [{ pending: structurePending }, accountData, lookups, roster] = await Promise.all([
         window.getAdminStructureData(supabaseClient),
         window.getAdminAccountData?.(supabaseClient) || Promise.resolve({ queued: [] }),
-        window.getAdminAccountLookups?.(supabaseClient) || Promise.resolve(null)
+        window.getAdminAccountLookups?.(supabaseClient) || Promise.resolve(null),
+        window.getAdminStudentRoster?.(supabaseClient) || Promise.resolve(null)
     ]);
     const studentEditPending = (accountData.queued || [])
         .filter(item => item.action === 'admin-edit' && item.role === 'student')
@@ -7905,11 +7906,52 @@ async function renderAdminStructureQueue() {
         teacher_subject_unassign: 'Remove teacher assignment',
         student_edit: 'Edit student'
     };
+    const studentEditDetails = payload => {
+        const original = roster?.students?.find(student => String(student.student_id) === String(payload.student_id));
+        const formatName = person => {
+            const lastName = person?.last_name || '';
+            const firstName = person?.first_name || '';
+            const middleInitial = person?.middle_initial ? ` ${String(person.middle_initial).replace(/\.$/, '')}.` : '';
+            return `${lastName}${lastName && firstName ? ', ' : ''}${firstName}${middleInitial}`.trim();
+        };
+        const oldName = formatName(original);
+        const newName = formatName(payload);
+        const oldId = original?.student_number || '';
+        const newId = payload.student_number || oldId;
+        const changes = [];
+        if (oldName && oldId) changes.push(`${oldName} (${oldId})`);
+        if ((oldName && oldName !== newName) || oldId !== newId) {
+            changes.push(`to ${newName} (${newId})`);
+        }
+        const fields = [];
+        const compareField = (label, before, after) => {
+            const oldValue = String(before ?? '').trim();
+            const newValue = String(after ?? '').trim();
+            if (oldValue !== newValue) fields.push(`${label}: ${oldValue || '—'} → ${newValue || '—'}`);
+        };
+        compareField('Name', original ? `${original.first_name || ''} ${original.middle_initial || ''} ${original.last_name || ''}`.replace(/\s+/g, ' ').trim() : '', `${payload.first_name || ''} ${payload.middle_initial || ''} ${payload.last_name || ''}`.replace(/\s+/g, ' ').trim());
+        compareField('Student ID', oldId, newId);
+        compareField('Gender', original?.gender, payload.gender);
+        if (String(payload.email || '').trim()) {
+            compareField('Email', original?.users?.email?.endsWith('@accounts.tcc.invalid') ? '' : original?.users?.email, payload.email);
+        }
+        const oldSection = (lookups?.sections || []).find(section => String(section.section_id) === String(original?.section_id));
+        const newSection = (lookups?.sections || []).find(section => String(section.section_id) === String(payload.section_id));
+        compareField('Section', oldSection?.section_name || (original?.section_id ? String(original.section_id) : ''), newSection?.section_name || (payload.section_id ? String(payload.section_id) : ''));
+        const identity = oldName && oldId
+            ? `${oldName} (${oldId})${(oldName !== newName || oldId !== newId) ? ` → ${newName} (${newId})` : ''}`
+            : `${newName} (${newId})`;
+        return fields.length ? `${identity}; ${fields.join('; ')}` : identity;
+    };
+
     pending.forEach(item => {
+        const semester = item.type === 'semester_set'
+            ? (lookups?.semesters || []).find(record => String(record.semester_id) === String(item.payload.semester_id))
+            : null;
         const details = item.type === 'student_edit'
-            ? `${item.payload.student_number} - ${[item.payload.first_name, item.payload.middle_initial, item.payload.last_name].filter(Boolean).join(' ')}${item.payload.section_id ? `, section ${(lookups?.sections || []).find(section => String(section.section_id) === String(item.payload.section_id))?.section_name || item.payload.section_id}` : ', unassigned'}`
+            ? studentEditDetails(item.payload)
             : item.type === 'semester_set'
-            ? `Semester ${item.payload.semester_id}`
+            ? (semester?.semester_name || `Unknown semester (${item.payload.semester_id})`)
             : item.type === 'department_add'
                 ? item.payload.department_name
                 : item.type === 'major_add'
