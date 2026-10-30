@@ -1884,6 +1884,10 @@ onchange="loadSubjectsForTeacherAssign()">
                         4th Year
                     </option>
 
+                    <option value="Graduate">
+                        Graduate
+                    </option>
+
                 </select>
 
             </div>
@@ -1966,6 +1970,11 @@ onchange="loadSubjectsForTeacherAssign()">
                 Students under selected section
             </p>
 
+        </div>
+        <div id="manageSectionActions" style="display:none;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
+            <button class="btn" id="managePromoteSectionButton" onclick="transitionSelectedManageSection('promote')">Promote</button>
+            <button class="btn reject-btn" id="manageDemoteSectionButton" onclick="transitionSelectedManageSection('demote')">Demote</button>
+            <button class="btn" id="manageAddStudentsSectionButton" onclick="openAddStudentsToSectionModal()">Add Unassigned Students</button>
         </div>
         <!-- SEARCH BAR -->
 
@@ -2073,6 +2082,31 @@ onchange="loadSubjectsForTeacherAssign()">
                     <p>The student must complete setup and choose a new password at first login.</p>
                 </div>
                 <p id="createStudentError" class="danger-text"></p>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal" id="addStudentsToSectionModal">
+        <div class="modal-content" style="width:760px;max-width:96vw;">
+            <div class="modal-header">
+                <h3>Add Unassigned Students to Section</h3>
+                <button class="close-btn" onclick="closeModal('addStudentsToSectionModal')">X</button>
+            </div>
+            <div class="modal-body">
+                <select id="bulkAssignDepartment" onchange="loadBulkAssignMajors()"><option value="">Select Department</option></select>
+                <select id="bulkAssignMajor" onchange="loadBulkAssignSections()"><option value="">Select Major</option></select>
+                <select id="bulkAssignYear" onchange="loadBulkAssignSections()">
+                    <option value="">Select Year</option><option>1st Year</option><option>2nd Year</option><option>3rd Year</option><option>4th Year</option>
+                </select>
+                <select id="bulkAssignSection" onchange="loadUnassignedStudentChoices()"><option value="">Select Section</option></select>
+                <div class="table-responsive" style="max-height:42vh;overflow:auto;">
+                    <table>
+                        <thead><tr><th><input type="checkbox" id="selectAllUnassignedStudents" onchange="toggleAllUnassignedStudents(this.checked)"></th><th>Student ID</th><th>Name</th><th>Email</th></tr></thead>
+                        <tbody id="unassignedStudentChoices"><tr><td colspan="4">Choose a target section first</td></tr></tbody>
+                    </table>
+                </div>
+                <p id="bulkAssignStudentError" class="danger-text"></p>
+                <button class="btn" id="assignSelectedStudentsButton" onclick="assignSelectedUnassignedStudents()">Add Selected Students</button>
             </div>
         </div>
     </div>
@@ -3486,12 +3520,13 @@ async function approveAccount(id) {
                 if (sectionIndex < 0) return;
                 const section = sections[sectionIndex];
                 if (item.payload.direction === 'promote' && section.year_level === '4th Year') {
-                    sections.splice(sectionIndex, 1);
+                    section.year_level = 'Graduate';
+                    section.pending = true;
                     return;
                 }
                 const yearTransitions = item.payload.direction === 'promote'
                     ? { '1st Year': '2nd Year', '2nd Year': '3rd Year', '3rd Year': '4th Year' }
-                    : { '4th Year': '3rd Year', '3rd Year': '2nd Year', '2nd Year': '1st Year' };
+                    : { 'Graduate': '4th Year', '4th Year': '3rd Year', '3rd Year': '2nd Year', '2nd Year': '1st Year' };
                 if (yearTransitions[section.year_level]) {
                     section.year_level = yearTransitions[section.year_level];
                     section.pending = true;
@@ -3886,7 +3921,8 @@ let currentManageTeacherId = null;
         '1st Year',
         '2nd Year',
         '3rd Year',
-        '4th Year'
+        '4th Year',
+        'Graduate'
 
     ];
 
@@ -4187,12 +4223,8 @@ data.forEach(major => {
                     sectionColumn.innerHTML =
                         sections.map(section => `
 
-                <div style="padding:10px;margin-bottom:8px;background:#f5f5f5;border-radius:8px;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
-                    <span>${section.section_name}${section.pending ? ' (waiting to sync)' : ''}</span>
-                    <span style="display:flex;gap:6px;">
-                        ${section.year_level !== '4th Year' ? `<button class="btn" onclick="transitionAdminSection('${encodeURIComponent(String(section.section_id))}','promote')">Promote</button>` : `<button class="btn" onclick="transitionAdminSection('${encodeURIComponent(String(section.section_id))}','promote')">Graduate</button>`}
-                        ${section.year_level !== '1st Year' ? `<button class="btn reject-btn" onclick="transitionAdminSection('${encodeURIComponent(String(section.section_id))}','demote')">Demote</button>` : ''}
-                    </span>
+                <div style="padding:10px;margin-bottom:8px;background:#f5f5f5;border-radius:8px;">
+                    ${section.section_name}${section.pending ? ' (waiting to sync)' : ''}
                 </div>
 
             `).join('');
@@ -4304,7 +4336,7 @@ async function transitionAdminSection(encodedSectionId, direction) {
 
         const fromYear = section.year_level;
         const toYear = direction === 'demote'
-            ? ({ '4th Year': '3rd Year', '3rd Year': '2nd Year', '2nd Year': '1st Year' })[fromYear]
+            ? ({ 'Graduate': '4th Year', '4th Year': '3rd Year', '3rd Year': '2nd Year', '2nd Year': '1st Year' })[fromYear]
             : ({ '1st Year': '2nd Year', '2nd Year': '3rd Year', '3rd Year': '4th Year', '4th Year': 'Graduate' })[fromYear];
         if (!toYear) throw new Error(`This section cannot be ${direction === 'promote' ? 'promoted' : 'demoted'} from ${fromYear}.`);
 
@@ -4312,7 +4344,7 @@ async function transitionAdminSection(encodedSectionId, direction) {
         showConfirmModal(
             graduate ? 'Graduate Section' : `${direction === 'promote' ? 'Promote' : 'Demote'} Section`,
             graduate
-                ? `Graduate all students in ${section.section_name}? Their accounts will remain, their section assignment will be cleared, and this section will be removed.`
+                ? `Mark students in ${section.section_name} as graduates? Their accounts and this section roster will be retained.`
                 : `${direction === 'promote' ? 'Move' : 'Move'} section ${section.section_name} from ${fromYear} to ${toYear}? Students remain assigned and inherit the new year level.`,
             async () => {
                 try {
@@ -4320,9 +4352,9 @@ async function transitionAdminSection(encodedSectionId, direction) {
                         await window.queueAdminStructureOperation(supabaseClient, 'section_transition', {
                             section_id: String(sectionId), direction
                         });
-                        if (!graduate) currentExplorerYear = toYear;
+                        currentExplorerYear = toYear;
                         showAlert('success', graduate ? 'Graduation Queued' : `Section ${direction === 'promote' ? 'Promotion' : 'Demotion'} Queued`, graduate
-                            ? `${section.section_name} students will be marked as graduates when you reconnect. Their accounts will remain.`
+                            ? `${section.section_name} will remain as a Graduate section with its student list when you reconnect.`
                             : `${section.section_name} will move to ${toYear} when you reconnect.`);
                         await refreshCurrentExplorer();
                         return;
@@ -4333,9 +4365,9 @@ async function transitionAdminSection(encodedSectionId, direction) {
                     });
                     if (error) throw error;
                     await window.saveAdminAccountLookups?.(supabaseClient);
-                    if (!graduate) currentExplorerYear = data.to_year;
+                    currentExplorerYear = data.to_year;
                     showAlert('success', graduate ? 'Students Graduated' : `Section ${direction === 'promote' ? 'Promoted' : 'Demoted'}`, graduate
-                        ? `${data.graduated_count} students were marked as graduates. Their accounts remain available in Graduates.`
+                        ? `${data.graduated_count} students were marked as graduates. The section and student list were retained.`
                         : `${section.section_name} is now ${data.to_year}.`);
                     await refreshCurrentExplorer();
                 } catch (error) {
@@ -7615,6 +7647,169 @@ async function loadGraduatedStudents() {
     sectionSelect.value = 'graduates';
     await loadStudentsBySection();
 }
+
+async function openAddStudentsToSectionModal() {
+    document.getElementById('bulkAssignStudentError').textContent = '';
+    document.getElementById('bulkAssignDepartment').innerHTML = '<option value="">Select Department</option>';
+    document.getElementById('bulkAssignMajor').innerHTML = '<option value="">Select Major</option>';
+    document.getElementById('bulkAssignYear').value = '';
+    document.getElementById('bulkAssignSection').innerHTML = '<option value="">Select Section</option>';
+    document.getElementById('unassignedStudentChoices').innerHTML = '<tr><td colspan="4">Choose a target section first</td></tr>';
+    document.getElementById('selectAllUnassignedStudents').checked = false;
+    await loadDepartmentOptions('bulkAssignDepartment');
+    const sectionId = document.getElementById('manageStudentSection').value;
+    const yearLevel = document.getElementById('manageStudentYear').value;
+    const departmentId = document.getElementById('manageStudentDepartment').value;
+    const majorId = document.getElementById('manageStudentMajor').value;
+    if (sectionId && !['unassigned', 'graduates'].includes(sectionId) && yearLevel !== 'Graduate') {
+        document.getElementById('bulkAssignDepartment').value = departmentId;
+        await loadBulkAssignMajors();
+        document.getElementById('bulkAssignMajor').value = majorId;
+        document.getElementById('bulkAssignYear').value = yearLevel;
+        await loadBulkAssignSections();
+        document.getElementById('bulkAssignSection').value = sectionId;
+        await loadUnassignedStudentChoices();
+    }
+    openModal('addStudentsToSectionModal');
+}
+
+async function loadBulkAssignMajors() {
+    const departmentId = document.getElementById('bulkAssignDepartment').value;
+    const majorSelect = document.getElementById('bulkAssignMajor');
+    majorSelect.innerHTML = '<option value="">Select Major</option>';
+    document.getElementById('bulkAssignSection').innerHTML = '<option value="">Select Section</option>';
+    document.getElementById('unassignedStudentChoices').innerHTML = '<tr><td colspan="4">Choose a target section first</td></tr>';
+    if (!departmentId) return;
+    const majors = await getAdminMajorOptions(departmentId);
+    majors.forEach(major => majorSelect.add(new Option(`${major.major_name}${major.pending ? ' (waiting to sync)' : ''}`, major.major_id)));
+}
+
+async function loadBulkAssignSections() {
+    const majorId = document.getElementById('bulkAssignMajor').value;
+    const yearLevel = document.getElementById('bulkAssignYear').value;
+    const sectionSelect = document.getElementById('bulkAssignSection');
+    sectionSelect.innerHTML = '<option value="">Select Section</option>';
+    document.getElementById('unassignedStudentChoices').innerHTML = '<tr><td colspan="4">Choose a target section first</td></tr>';
+    if (!majorId || !yearLevel) return;
+    let sections;
+    if (!navigator.onLine) {
+        const offlineRecords = await getAdminExplorerRecords();
+        sections = (offlineRecords?.sections || []).filter(section => String(section.major_id) === String(majorId)
+            && section.year_level === yearLevel && section.year_level !== 'Graduate');
+    } else {
+        const { data, error } = await supabaseClient.from('sections').select('section_id, section_name, year_level')
+            .eq('major_id', majorId).eq('year_level', yearLevel).order('section_name');
+        if (error) throw error;
+        sections = data || [];
+    }
+    sections.forEach(section => sectionSelect.add(new Option(`${section.section_name}${section.pending ? ' (waiting to sync)' : ''}`, section.section_id)));
+    if (sectionSelect.value) await loadUnassignedStudentChoices();
+}
+
+async function loadUnassignedStudentChoices() {
+    const targetSectionId = document.getElementById('bulkAssignSection').value;
+    const table = document.getElementById('unassignedStudentChoices');
+    const errorBox = document.getElementById('bulkAssignStudentError');
+    errorBox.textContent = '';
+    document.getElementById('selectAllUnassignedStudents').checked = false;
+    if (!targetSectionId) {
+        table.innerHTML = '<tr><td colspan="4">Choose a target section first</td></tr>';
+        return;
+    }
+    let students;
+    if (!navigator.onLine) {
+        const roster = await window.getAdminStudentRoster?.(supabaseClient);
+        if (!roster?.students) {
+            table.innerHTML = '<tr><td colspan="4">Student roster is not cached on this device. Connect once to prepare it.</td></tr>';
+            return;
+        }
+        students = roster.students.filter(student => (student.section_id === null || student.section_id === undefined) && !student.graduated_at);
+    } else {
+        const { data, error } = await supabaseClient.from('students').select(`
+            student_id, student_number, first_name, middle_initial, last_name, gender, section_id, graduated_at,
+            users!students_user_id_fkey(email)
+        `).is('section_id', null).is('graduated_at', null).order('last_name');
+        if (error) throw error;
+        students = data || [];
+    }
+
+    const accountData = await window.getAdminAccountData(supabaseClient);
+    const queuedEdits = accountData.queued.filter(item => item.action === 'admin-edit' && item.role === 'student');
+    const editByStudent = new Map(queuedEdits.map(item => [String(item.payload.student_id), item.payload]));
+    students = students.map(student => editByStudent.has(String(student.student_id))
+        ? { ...student, ...editByStudent.get(String(student.student_id)), section_id: editByStudent.get(String(student.student_id)).section_id || null }
+        : student)
+        .filter(student => !student.section_id && !student.graduated_at);
+
+    const structure = await window.getAdminStructureData(supabaseClient);
+    const pendingAssignments = new Set(structure.pending.filter(item => item.type === 'student_section_assign')
+        .flatMap(item => item.payload.student_ids || []).map(String));
+    students = students.filter(student => !pendingAssignments.has(String(student.student_id)));
+    if (!students.length) {
+        table.innerHTML = '<tr><td colspan="4">No unassigned students available</td></tr>';
+        return;
+    }
+    table.innerHTML = students.map(student => `<tr>
+        <td><input class="bulk-unassigned-student" type="checkbox" value="${student.student_id}" onchange="updateBulkAssignStudentCount()"></td>
+        <td>${student.student_number || ''}</td>
+        <td>${formatName(student.first_name, student.middle_initial, student.last_name)}</td>
+        <td>${student.users?.email?.endsWith('@accounts.tcc.invalid') ? 'Email not added yet' : (student.users?.email || 'N/A')}</td>
+    </tr>`).join('');
+    updateBulkAssignStudentCount();
+}
+
+function toggleAllUnassignedStudents(checked) {
+    document.querySelectorAll('#unassignedStudentChoices .bulk-unassigned-student').forEach(input => { input.checked = checked; });
+    updateBulkAssignStudentCount();
+}
+
+function updateBulkAssignStudentCount() {
+    const count = document.querySelectorAll('#unassignedStudentChoices .bulk-unassigned-student:checked').length;
+    const button = document.getElementById('assignSelectedStudentsButton');
+    if (button) button.textContent = count ? `Add ${count} Selected Student${count === 1 ? '' : 's'}` : 'Add Selected Students';
+}
+
+async function assignSelectedUnassignedStudents() {
+    const studentIds = [...document.querySelectorAll('#unassignedStudentChoices .bulk-unassigned-student:checked')]
+        .map(input => Number(input.value)).filter(Number.isInteger);
+    const sectionId = document.getElementById('bulkAssignSection').value;
+    const errorBox = document.getElementById('bulkAssignStudentError');
+    errorBox.textContent = '';
+    if (!sectionId || !studentIds.length) {
+        errorBox.textContent = 'Choose a section and select at least one student.';
+        return;
+    }
+    const payload = { section_id: String(sectionId), student_ids: studentIds };
+    try {
+        const queuedOperation = !navigator.onLine || String(sectionId).startsWith('local:');
+        if (queuedOperation) {
+            await window.queueAdminStructureOperation(supabaseClient, 'student_section_assign', payload);
+            if (navigator.onLine) await window.syncAdminStructureQueue(supabaseClient);
+        } else {
+            const operationId = crypto.randomUUID();
+            const { error } = await supabaseClient.rpc('sync_admin_offline_operation', {
+                p_operation_id: operationId,
+                p_payload: { ...payload, type: 'student_section_assign' }
+            });
+            if (error) throw error;
+            await window.saveAdminAccountLookups?.(supabaseClient);
+        }
+        const section = !navigator.onLine
+            ? (await getAdminExplorerRecords())?.sections.find(item => String(item.section_id) === String(sectionId))
+            : (await supabaseClient.from('sections').select('section_id, section_name, year_level, major_id').eq('section_id', sectionId).single()).data;
+        const majorId = document.getElementById('bulkAssignMajor').value;
+        const departmentId = document.getElementById('bulkAssignDepartment').value;
+        const yearLevel = document.getElementById('bulkAssignYear').value;
+        closeModal('addStudentsToSectionModal');
+        showAlert('success', !queuedOperation ? 'Students Added' : 'Student Assignment Queued', !queuedOperation
+            ? `${studentIds.length} students were added to ${section?.section_name || 'the section'}.`
+            : `${studentIds.length} student assignments ${navigator.onLine ? 'will apply when earlier queued sections finish syncing.' : 'will apply when you reconnect.'}`);
+        await showManagedStudentsInSection({ department_id: departmentId, major_id: majorId, year_level: yearLevel, section_id: sectionId });
+    } catch (error) {
+        errorBox.textContent = error.message || 'Unable to assign selected students.';
+    }
+}
+
 async function loadStudentsBySection() {
 
     const sectionId =
@@ -7626,6 +7821,18 @@ async function loadStudentsBySection() {
         document.getElementById(
             'manageStudentsTable'
         );
+
+    const sectionActions = document.getElementById('manageSectionActions');
+    const hasConcreteSection = Boolean(sectionId && !['unassigned', 'graduates'].includes(sectionId));
+    const selectedYearLevel = document.getElementById('manageStudentYear').value;
+    sectionActions.style.display = hasConcreteSection ? 'flex' : 'none';
+    if (hasConcreteSection) {
+        const promoteButton = document.getElementById('managePromoteSectionButton');
+        promoteButton.style.display = selectedYearLevel === 'Graduate' ? 'none' : '';
+        promoteButton.textContent = selectedYearLevel === '4th Year' ? 'Graduate Section' : 'Promote Section';
+        document.getElementById('manageDemoteSectionButton').style.display = selectedYearLevel === '1st Year' ? 'none' : '';
+        document.getElementById('manageAddStudentsSectionButton').style.display = selectedYearLevel === 'Graduate' ? 'none' : '';
+    }
 
     if (!sectionId) {
 
@@ -7668,9 +7875,18 @@ async function loadStudentsBySection() {
         if (roster?.students) {
             if (sectionId === 'graduates') {
                 const { lookups, pending } = await window.getAdminStructureData(supabaseClient);
-                pendingGraduationSectionIds = new Set(pending.filter(item => item.type === 'section_transition' && item.payload.direction === 'promote')
-                    .filter(item => (lookups?.sections || []).some(section => String(section.section_id) === String(item.payload.section_id) && section.year_level === '4th Year'))
-                    .map(item => String(item.payload.section_id)));
+                const yearBySection = new Map((lookups?.sections || []).map(section => [String(section.section_id), section.year_level]));
+                pending.filter(item => item.type === 'section_add').forEach(item => yearBySection.set(String(item.localRef), item.payload.year_level));
+                pending.filter(item => item.type === 'section_transition').forEach(item => {
+                    const id = String(item.payload.section_id);
+                    const year = yearBySection.get(id);
+                    const nextYear = item.payload.direction === 'promote'
+                        ? ({ '1st Year': '2nd Year', '2nd Year': '3rd Year', '3rd Year': '4th Year', '4th Year': 'Graduate' })[year]
+                        : ({ 'Graduate': '4th Year', '4th Year': '3rd Year', '3rd Year': '2nd Year', '2nd Year': '1st Year' })[year];
+                    if (nextYear) yearBySection.set(id, nextYear);
+                });
+                pendingGraduationSectionIds = new Set([...yearBySection]
+                    .filter(([, year]) => year === 'Graduate').map(([id]) => id));
                 data = roster.students
                     .filter(student => student.graduated_at || pendingGraduationSectionIds.has(String(student.section_id)))
                     .map(student => pendingGraduationSectionIds.has(String(student.section_id))
@@ -7786,6 +8002,28 @@ async function loadStudentsBySection() {
         }
     }
 
+    if (!navigator.onLine) {
+        const { pending } = await window.getAdminStructureData(supabaseClient);
+        const roster = await window.getAdminStudentRoster?.(supabaseClient);
+        if (roster?.students) {
+            const queuedAssignments = pending.filter(item => item.type === 'student_section_assign');
+            queuedAssignments.forEach(operation => {
+                (operation.payload.student_ids || []).forEach(studentId => {
+                    const original = roster.students.find(student => String(student.student_id) === String(studentId));
+                    if (!original) return;
+                    if (String(operation.payload.section_id) === String(sectionId)) {
+                        const assignedStudent = { ...original, section_id: operation.payload.section_id, pendingAssignment: true };
+                        const existingIndex = data.findIndex(student => String(student.student_id) === String(studentId));
+                        if (existingIndex >= 0) data[existingIndex] = assignedStudent;
+                        else data.push(assignedStudent);
+                    } else {
+                        data = data.filter(student => String(student.student_id) !== String(studentId));
+                    }
+                });
+            });
+        }
+    }
+
     if (window.getAdminAccountData) {
         const { queued } = await window.getAdminAccountData(supabaseClient);
         const { pending: structurePending, lookups } = !navigator.onLine && sectionId === 'unassigned'
@@ -7879,11 +8117,11 @@ async function loadStudentsBySection() {
                 ${fullName}
             </td>
 
-            <td>${student.pending || student.pendingEdit ? 'Waiting to sync' : (student.users?.email?.endsWith('@accounts.tcc.invalid') ? 'Email not added yet' : (student.users?.email || 'N/A'))}</td>
+            <td>${student.pending || student.pendingEdit || student.pendingAssignment ? 'Waiting to sync' : (student.users?.email?.endsWith('@accounts.tcc.invalid') ? 'Email not added yet' : (student.users?.email || 'N/A'))}</td>
 
             <td>
 
-                ${student.pending ? `${student.pendingGraduation ? 'Graduation queued' : student.pendingProcessing ? 'Account sync needs attention' : 'Account creation queued'}<br>${student.pendingProcessing ? '' : `<button class="btn" onclick="openEditQueuedStudentAccount('${student.pendingOperationId}')">Edit</button>`}` : student.pendingGraduation ? 'Graduation queued' : student.graduated_at ? 'Graduate' : student.pendingEdit ? `<span>Edit queued</span><br><button class="btn" onclick="openEditStudentModal(${student.student_id})">Edit</button>` : `
+                ${student.pending ? `${student.pendingGraduation ? 'Graduation queued' : student.pendingProcessing ? 'Account sync needs attention' : 'Account creation queued'}<br>${student.pendingProcessing ? '' : `<button class="btn" onclick="openEditQueuedStudentAccount('${student.pendingOperationId}')">Edit</button>`}` : student.pendingGraduation ? 'Graduation queued' : student.graduated_at ? 'Graduate' : student.pendingAssignment ? 'Section assignment queued' : student.pendingEdit ? `<span>Edit queued</span><br><button class="btn" onclick="openEditStudentModal(${student.student_id})">Edit</button>` : `
                 <button class="btn" onclick="openEditStudentModal(${student.student_id})">Edit</button>
                 <button class="btn" onclick="resetStudentPassword(${student.student_id})">Reset Password</button>
                 <button class="btn reject-btn" onclick="deleteStudent('${student.student_id}','${student.users?.user_id}')">Delete</button>`}
@@ -7897,6 +8135,12 @@ async function loadStudentsBySection() {
         });
     });
 
+}
+
+function transitionSelectedManageSection(direction) {
+    const sectionId = document.getElementById('manageStudentSection').value;
+    if (!sectionId || ['unassigned', 'graduates'].includes(sectionId)) return;
+    return transitionAdminSection(encodeURIComponent(String(sectionId)), direction);
 }
 
 const STUDENT_ACCOUNT_FUNCTION_URL = `${SUPABASE_URL}/functions/v1/manage-student-accounts`;
@@ -8132,6 +8376,7 @@ async function renderAdminStructureQueue() {
         section_transition: 'Promote/demote section',
         subject_delete: 'Delete subject',
         teacher_subject_unassign: 'Remove teacher assignment',
+        student_section_assign: 'Assign students to section',
         student_edit: 'Edit student'
     };
     const studentEditDetails = payload => {
@@ -8178,6 +8423,8 @@ async function renderAdminStructureQueue() {
             : null;
         const details = item.type === 'student_edit'
             ? studentEditDetails(item.payload)
+            : item.type === 'student_section_assign'
+                ? `Section ${(lookups?.sections || []).find(section => String(section.section_id) === String(item.payload.section_id))?.section_name || item.payload.section_id}; ${item.payload.student_ids?.length || 0} student(s)`
             : item.type === 'section_transition'
                 ? `Section ${item.payload.section_id}: ${item.payload.direction}`
             : item.type === 'semester_set'
