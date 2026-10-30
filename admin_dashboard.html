@@ -5047,21 +5047,28 @@ async function refreshCurrentExplorer() {
                 document.getElementById(selectId);
 
             let data;
+            let pending = [];
             if (!navigator.onLine && window.getAdminStructureData) {
                 const offlineRecords = await getAdminExplorerRecords();
                 data = [...offlineRecords.departments];
+                pending = offlineRecords.pending || [];
             } else {
                 const result = await supabaseClient.from('departments').select('*').order('department_name');
                 data = result.data || [];
                 if (window.getAdminStructureData) {
                     const offlineData = await window.getAdminStructureData(supabaseClient);
-                    offlineData.pending.filter(item => item.type === 'department_add').forEach(item => {
-                        if (!data.some(department => department.department_name.toLowerCase() === item.payload.department_name.toLowerCase())) {
+                    pending = offlineData.pending || [];
+                    pending.filter(item => item.type === 'department_add').forEach(item => {
+                        const isDeleted = pending.some(candidate => candidate.type === 'department_delete'
+                            && String(candidate.payload.department_id) === String(item.localRef));
+                        if (!isDeleted && !data.some(department => department.department_name.toLowerCase() === item.payload.department_name.toLowerCase())) {
                             data.push({ department_id: item.localRef, department_name: item.payload.department_name });
                         }
                     });
                 }
             }
+            data = data.filter(department => !pending.some(item => item.type === 'department_delete'
+                && String(item.payload.department_id) === String(department.department_id)));
 
             // PLACEHOLDER
             select.innerHTML = `
@@ -5165,26 +5172,91 @@ async function refreshCurrentExplorer() {
         }
 
         async function getAdminMajorOptions(departmentId) {
+            let majors;
+            let pending = [];
             if (!navigator.onLine && window.getAdminStructureData) {
-                const { lookups, pending } = await window.getAdminStructureData(supabaseClient);
-                const majors = (lookups?.majors || []).filter(major => String(major.department_id) === String(departmentId));
-                pending.filter(item => item.type === 'major_add' && String(item.payload.department_id) === String(departmentId))
-                    .forEach(item => majors.push({ major_id: item.localRef, major_name: item.payload.major_name }));
-                return majors;
+                const offlineRecords = await getAdminExplorerRecords();
+                majors = offlineRecords.majors.filter(major => String(major.department_id) === String(departmentId));
+                pending = offlineRecords.pending || [];
+            } else {
+                if (String(departmentId).startsWith('local:')) {
+                    majors = [];
+                } else {
+                    const { data, error } = await supabaseClient.from('majors').select('*').eq('department_id', departmentId);
+                    if (error) throw error;
+                    majors = data || [];
+                }
+                if (window.getAdminStructureData) {
+                    const structure = await window.getAdminStructureData(supabaseClient);
+                    pending = structure.pending || [];
+                    pending.filter(item => item.type === 'major_add' && String(item.payload.department_id) === String(departmentId))
+                        .forEach(item => {
+                            const deleted = pending.some(candidate => candidate.type === 'major_delete'
+                                && String(candidate.payload.major_id) === String(item.localRef));
+                            if (!deleted && !majors.some(major => major.major_name.toLowerCase() === item.payload.major_name.toLowerCase())) {
+                                majors.push({ major_id: item.localRef, major_name: item.payload.major_name, pending: true });
+                            }
+                        });
+                }
             }
-            const { data, error } = await supabaseClient.from('majors').select('*').eq('department_id', departmentId);
-            if (error) throw error;
-            const majors = data || [];
-            if (window.getAdminStructureData) {
-                const { pending } = await window.getAdminStructureData(supabaseClient);
-                pending.filter(item => item.type === 'major_add' && String(item.payload.department_id) === String(departmentId))
-                    .forEach(item => {
-                        if (!majors.some(major => major.major_name.toLowerCase() === item.payload.major_name.toLowerCase())) {
-                            majors.push({ major_id: item.localRef, major_name: item.payload.major_name });
-                        }
-                    });
+            const deletedDepartments = new Set(pending.filter(item => item.type === 'department_delete')
+                .map(item => String(item.payload.department_id)));
+            const deletedMajorIds = new Set(pending.filter(item => item.type === 'major_delete')
+                .map(item => String(item.payload.major_id)));
+            pending.filter(item => item.type === 'major_add' && deletedDepartments.has(String(item.payload.department_id)))
+                .forEach(item => deletedMajorIds.add(String(item.localRef)));
+            return majors.filter(major => !deletedMajorIds.has(String(major.major_id))
+                && !deletedDepartments.has(String(departmentId)));
+        }
+
+        async function getAdminSectionOptions(majorId, yearLevel) {
+            let sections;
+            let pending = [];
+            let lookups = null;
+            if (!navigator.onLine && window.getAdminStructureData) {
+                const offlineRecords = await getAdminExplorerRecords();
+                sections = offlineRecords.sections.filter(section => String(section.major_id) === String(majorId)
+                    && (!yearLevel || section.year_level === yearLevel));
+                pending = offlineRecords.pending || [];
+                lookups = offlineRecords.lookups;
+            } else {
+                if (String(majorId).startsWith('local:')) {
+                    sections = [];
+                } else {
+                    let query = supabaseClient.from('sections').select('*').eq('major_id', majorId);
+                    if (yearLevel) query = query.eq('year_level', yearLevel);
+                    const { data, error } = await query.order('section_name');
+                    if (error) throw error;
+                    sections = data || [];
+                }
+                if (window.getAdminStructureData) {
+                    const structure = await window.getAdminStructureData(supabaseClient);
+                    pending = structure.pending || [];
+                    lookups = structure.lookups;
+                    pending.filter(item => item.type === 'section_add'
+                        && String(item.payload.major_id) === String(majorId)
+                        && (!yearLevel || item.payload.year_level === yearLevel))
+                        .forEach(item => {
+                            const deleted = pending.some(candidate => candidate.type === 'section_delete'
+                                && String(candidate.payload.section_id) === String(item.localRef));
+                            if (!deleted && !sections.some(section => section.section_name.toLowerCase() === item.payload.section_name.toLowerCase())) {
+                                sections.push({ section_id: item.localRef, major_id: majorId, year_level: item.payload.year_level, section_name: item.payload.section_name, pending: true });
+                            }
+                        });
+                }
             }
-            return majors;
+            const deletedSectionIds = new Set(pending.filter(item => item.type === 'section_delete')
+                .map(item => String(item.payload.section_id)));
+            const deletedMajorIds = new Set(pending.filter(item => item.type === 'major_delete')
+                .map(item => String(item.payload.major_id)));
+            const deletedDepartmentIds = new Set(pending.filter(item => item.type === 'department_delete')
+                .map(item => String(item.payload.department_id)));
+            (lookups?.majors || []).filter(major => deletedDepartmentIds.has(String(major.department_id)))
+                .forEach(major => deletedMajorIds.add(String(major.major_id)));
+            pending.filter(item => item.type === 'major_add' && deletedDepartmentIds.has(String(item.payload.department_id)))
+                .forEach(item => deletedMajorIds.add(String(item.localRef)));
+            return sections.filter(section => !deletedSectionIds.has(String(section.section_id))
+                && !deletedMajorIds.has(String(majorId)));
         }
         /* =========================================================
            LOAD SECTIONS
@@ -5212,11 +5284,7 @@ async function refreshCurrentExplorer() {
 
             if (!majorId) return;
 
-            const { data } =
-                await supabaseClient
-                    .from('sections')
-                    .select('*')
-                    .eq('major_id', majorId);
+            const data = await getAdminSectionOptions(majorId);
 
             data.forEach(section => {
 
@@ -6061,13 +6129,11 @@ async function loadDepartmentDeleteOptions() {
             if (!departmentId) return;
 
             let data;
-            if (!navigator.onLine) {
-                const offlineRecords = await getAdminExplorerRecords();
-                data = offlineRecords.majors.filter(major => String(major.department_id) === String(departmentId));
-            } else {
-                const result = await supabaseClient.from('majors').select('*').eq('department_id', departmentId).order('major_name');
-                if (result.error) { console.log(result.error); return; }
-                data = result.data || [];
+            try {
+                data = await getAdminMajorOptions(departmentId);
+            } catch (error) {
+                console.log(error);
+                return;
             }
 
             if (!data.length) {
@@ -6258,13 +6324,11 @@ async function loadDepartmentDeleteOptions() {
             if (!departmentId) return;
 
             let data;
-            if (!navigator.onLine) {
-                const offlineRecords = await getAdminExplorerRecords();
-                data = offlineRecords.majors.filter(major => String(major.department_id) === String(departmentId));
-            } else {
-                const result = await supabaseClient.from('majors').select('*').eq('department_id', departmentId).order('major_name');
-                if (result.error) { console.log(result.error); return; }
-                data = result.data || [];
+            try {
+                data = await getAdminMajorOptions(departmentId);
+            } catch (error) {
+                console.log(error);
+                return;
             }
 
             if (!data.length) {
@@ -6323,13 +6387,11 @@ async function loadDepartmentDeleteOptions() {
     if (!majorId || !yearLevel) return;
 
     let data;
-    if (!navigator.onLine) {
-        const offlineRecords = await getAdminExplorerRecords();
-        data = offlineRecords.sections.filter(section => String(section.major_id) === String(majorId) && section.year_level === yearLevel);
-    } else {
-        const result = await supabaseClient.from('sections').select('*').eq('major_id', majorId).eq('year_level', yearLevel).order('section_name');
-        if (result.error) { console.log(result.error); return; }
-        data = result.data || [];
+    try {
+        data = await getAdminSectionOptions(majorId, yearLevel);
+    } catch (error) {
+        console.log(error);
+        return;
     }
 
     if (!data.length) {
@@ -6561,13 +6623,11 @@ async function loadDepartmentDeleteOptions() {
             if (!departmentId) return;
 
             let data;
-            if (!navigator.onLine) {
-                const offlineRecords = await getAdminExplorerRecords();
-                data = offlineRecords.majors.filter(major => String(major.department_id) === String(departmentId) && !major.pending);
-            } else {
-                const result = await supabaseClient.from('majors').select('*').eq('department_id', departmentId).order('major_name');
-                if (result.error) { console.log(result.error); return; }
-                data = result.data || [];
+            try {
+                data = await getAdminMajorOptions(departmentId);
+            } catch (error) {
+                console.log(error);
+                return;
             }
 
             if (!data || data.length === 0) {
@@ -8541,6 +8601,7 @@ async function clearAdminPasswordResetResults() {
         try {
             await window.clearAdminPasswordResetResults(supabaseClient);
             closeConfirmModal();
+            await renderAdminPasswordResets();
             showAlert('success', 'Reset Results Cleared', 'Saved password reset results were removed from this device.');
         } catch (error) {
             closeConfirmModal();
@@ -8655,6 +8716,17 @@ async function renderAdminStructureQueue() {
             : null;
         const details = item.type === 'student_edit'
             ? studentEditDetails(item.payload)
+            : item.type === 'department_delete'
+                ? (lookups?.departments || []).find(record => String(record.department_id) === String(item.payload.department_id))?.department_name
+                    || `Department ${item.payload.department_id}`
+            : item.type === 'major_delete'
+                ? (lookups?.majors || []).find(record => String(record.major_id) === String(item.payload.major_id))?.major_name
+                    || structurePending.find(record => record.type === 'major_add' && String(record.localRef) === String(item.payload.major_id))?.payload.major_name
+                    || `Major ${item.payload.major_id}`
+            : item.type === 'section_delete'
+                ? (lookups?.sections || []).find(record => String(record.section_id) === String(item.payload.section_id))?.section_name
+                    || structurePending.find(record => record.type === 'section_add' && String(record.localRef) === String(item.payload.section_id))?.payload.section_name
+                    || `Section ${item.payload.section_id}`
             : item.type === 'subject_add'
                 ? `${item.payload.subject_code} - ${item.payload.subject_name}, ${item.payload.year_level}`
             : item.type === 'student_account_create'
@@ -8782,16 +8854,8 @@ async function loadCreateStudentMajors() {
     sectionSelect.innerHTML = '<option value="">Select Section</option>';
     const departmentId = document.getElementById('createStudentDepartment').value;
     if (!departmentId) return;
-    if (!navigator.onLine) {
-        const offlineRecords = await getAdminExplorerRecords();
-        if (!offlineRecords) throw new Error('Student account options are not saved on this device.');
-        offlineRecords.majors.filter(major => String(major.department_id) === String(departmentId))
-            .forEach(major => select.add(new Option(`${major.major_name}${major.pending ? ' (waiting to sync)' : ''}`, major.major_id)));
-        return;
-    }
-    const { data, error } = await supabaseClient.from('majors').select('major_id, major_name').eq('department_id', departmentId).order('major_name');
-    if (error) throw error;
-    (data || []).forEach(major => select.add(new Option(major.major_name, major.major_id)));
+    const majors = await getAdminMajorOptions(departmentId);
+    majors.forEach(major => select.add(new Option(`${major.major_name}${major.pending ? ' (waiting to sync)' : ''}`, major.major_id)));
 }
 
 async function loadCreateStudentSections() {
@@ -8800,16 +8864,8 @@ async function loadCreateStudentSections() {
     const majorId = document.getElementById('createStudentMajor').value;
     const yearLevel = document.getElementById('createStudentYear').value;
     if (!majorId || !yearLevel) return;
-    if (!navigator.onLine) {
-        const offlineRecords = await getAdminExplorerRecords();
-        if (!offlineRecords) throw new Error('Student account options are not saved on this device.');
-        offlineRecords.sections.filter(section => String(section.major_id) === String(majorId) && section.year_level === yearLevel)
-            .forEach(section => select.add(new Option(`${section.section_name}${section.pending ? ' (waiting to sync)' : ''}`, section.section_id)));
-        return;
-    }
-    const { data, error } = await supabaseClient.from('sections').select('section_id, section_name').eq('major_id', majorId).eq('year_level', yearLevel).order('section_name');
-    if (error) throw error;
-    (data || []).forEach(section => select.add(new Option(section.section_name, section.section_id)));
+    const sections = await getAdminSectionOptions(majorId, yearLevel);
+    sections.forEach(section => select.add(new Option(`${section.section_name}${section.pending ? ' (waiting to sync)' : ''}`, section.section_id)));
 }
 
 async function openEditQueuedStudentAccount(operationId) {
@@ -8978,14 +9034,7 @@ async function openEditStudentModal(studentId) {
         document.getElementById('editStudentEmail').value = student.users?.email?.endsWith('@accounts.tcc.invalid') ? '' : (student.users?.email || '');
 
         const departmentSelect = document.getElementById('editStudentDepartment');
-        departmentSelect.innerHTML = '<option value="">Select Department</option>';
-        if (!navigator.onLine) {
-            (offlineRecords?.departments || lookups?.departments || []).forEach(department => departmentSelect.add(new Option(department.department_name, department.department_id)));
-        } else {
-            const { data: departments, error: departmentError } = await supabaseClient.from('departments').select('department_id, department_name').order('department_name');
-            if (departmentError) throw departmentError;
-            (departments || []).forEach(department => departmentSelect.add(new Option(department.department_name, department.department_id)));
-        }
+        await loadDepartmentOptions('editStudentDepartment');
 
         let section = null;
         if (student.section_id !== null && student.section_id !== undefined) {
@@ -9033,15 +9082,7 @@ async function loadEditStudentMajors(selectedMajorId = null) {
     select.innerHTML = '<option value="">Select Major</option>';
     document.getElementById('editStudentSection').innerHTML = '<option value="">Select Section</option>';
     if (!departmentId) return;
-    let data;
-    if (!navigator.onLine) {
-        const offlineRecords = await getAdminExplorerRecords();
-        data = (offlineRecords?.majors || []).filter(major => String(major.department_id) === String(departmentId));
-    } else {
-        const result = await supabaseClient.from('majors').select('major_id, major_name').eq('department_id', departmentId).order('major_name');
-        if (result.error) throw result.error;
-        data = result.data || [];
-    }
+    const data = await getAdminMajorOptions(departmentId);
     data.forEach(major => select.add(new Option(`${major.major_name}${major.pending ? ' (waiting to sync)' : ''}`, major.major_id)));
     if (selectedMajorId) select.value = selectedMajorId;
 }
@@ -9052,15 +9093,7 @@ async function loadEditStudentSections(selectedSectionId = null) {
     const yearLevel = document.getElementById('editStudentYear').value;
     select.innerHTML = '<option value="">Unassigned</option>';
     if (!majorId || !yearLevel) return;
-    let data;
-    if (!navigator.onLine) {
-        const offlineRecords = await getAdminExplorerRecords();
-        data = (offlineRecords?.sections || []).filter(section => String(section.major_id) === String(majorId) && section.year_level === yearLevel);
-    } else {
-        const result = await supabaseClient.from('sections').select('section_id, section_name').eq('major_id', majorId).eq('year_level', yearLevel).order('section_name');
-        if (result.error) throw result.error;
-        data = result.data || [];
-    }
+    const data = await getAdminSectionOptions(majorId, yearLevel);
     data.forEach(section => select.add(new Option(`${section.section_name}${section.pending ? ' (waiting to sync)' : ''}`, section.section_id)));
     if (selectedSectionId) select.value = selectedSectionId;
 }

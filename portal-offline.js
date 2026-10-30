@@ -331,7 +331,7 @@
                 const isAllowedOfflineAction = control.matches('button')
                     && /createStudentAccount|createTeacherAccount|saveStudentEdits|resetStudentPassword|clearAdminCreatedAccounts|loadUnassignedStudents|loadGraduatedStudents|transitionSelectedManageSection|unassignAllStudentsFromSelectedSection|assignSelectedUnassignedStudents|createTeacherAccount|addDepartment|addMajor|addSection|addSubject|setActiveSemester|deleteDepartment|deleteMajor|deleteSectionModalAction|deleteSubject|assignTeacherToSubject|removeTeacherAssignment|saveTeacherSection|closeCreateStudentModal|closeEditStudentModal|closeModal|closeDepartmentModal|closeMajorModal|closeSectionModal|closeSubjectModal|closeDeleteDepartmentModal|closeDeleteMajorModal|closeDeleteSectionModal|closeDeleteSubjectModal|closeTeacherAssignModal|closeTeacherSectionModal|loadEditStudentMajors|loadEditStudentSections|loadDepartmentDeleteOptions|loadMajorsForDelete|loadMajorsForDeleteSection|loadSectionsForDelete|loadMajorsForDeleteSubject|loadSubjectsForDelete/.test(control.getAttribute('onclick') || '');
                 const isAllowedOfflineStandaloneAction = control.matches('button')
-                    && /clearAdminCreatedAccounts/.test(control.getAttribute('onclick') || '');
+                    && /clearAdminCreatedAccounts|clearAdminPasswordResetResults/.test(control.getAttribute('onclick') || '');
                 const isSemesterPicker = control.id === 'activeSemesterSelect';
                 const isExplorerBack = control.id === 'backButton';
                 const isStudentFilter = ['manageStudentYear', 'manageStudentDepartment', 'manageStudentMajor', 'manageStudentSection'].includes(control.id);
@@ -655,7 +655,7 @@
 
     async function clearAdminPasswordResetResults(client) {
         const userId = await getUserId(client);
-        if (!userId) return;
+        if (!userId) throw new Error('Sign in again before clearing saved reset results.');
         const allResults = await adminStoreRequest(adminPasswordResetResultsStoreName, 'readonly', store => store.getAll());
         await Promise.all(allResults.filter(item => item.userId === userId).map(item => adminStoreRequest(
             adminPasswordResetResultsStoreName,
