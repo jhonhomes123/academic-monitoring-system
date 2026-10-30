@@ -263,7 +263,7 @@
         if (!currentUserId || !main) return false;
         const snapshotMain = main.cloneNode(true);
         snapshotMain.querySelectorAll('.modal,.modal-overlay,.confirm-modal-overlay,.ams-alert').forEach(element => {
-            if (!['createStudentModal', 'createTeacherModal', 'departmentModal', 'majorModal', 'sectionModal', 'subjectModal', 'deleteDepartmentModal', 'deleteMajorModal', 'deleteSectionModal', 'deleteSubjectModal', 'teacherAssignModal', 'teacherSectionModal'].includes(element.id)) {
+            if (!['createStudentModal', 'createTeacherModal', 'editStudentModal', 'departmentModal', 'majorModal', 'sectionModal', 'subjectModal', 'deleteDepartmentModal', 'deleteMajorModal', 'deleteSectionModal', 'deleteSubjectModal', 'teacherAssignModal', 'teacherSectionModal'].includes(element.id)) {
                 element.remove();
                 return;
             }
@@ -321,11 +321,11 @@
                 modal.classList.remove('show');
             });
             document.querySelectorAll('input,select,textarea,button').forEach(control => {
-                const inAllowedModal = control.closest('#createStudentModal,#createTeacherModal,#departmentModal,#majorModal,#sectionModal,#subjectModal,#deleteDepartmentModal,#deleteMajorModal,#deleteSectionModal,#deleteSubjectModal,#teacherAssignModal,#teacherSectionModal');
+                const inAllowedModal = control.closest('#createStudentModal,#createTeacherModal,#editStudentModal,#departmentModal,#majorModal,#sectionModal,#subjectModal,#deleteDepartmentModal,#deleteMajorModal,#deleteSectionModal,#deleteSubjectModal,#teacherAssignModal,#teacherSectionModal');
                 const opensAllowedModal = control.matches('button')
-                    && /openCreateStudentModal|openCreateTeacherModal|openDepartmentModal|openMajorModal|openSectionModal|openSubjectModal|openDeleteDepartmentModal|openDeleteMajorModal|openDeleteSectionModal|openDeleteSubjectModal|openTeacherAssignModal|openAddSectionModal/.test(control.getAttribute('onclick') || '');
+                    && /openCreateStudentModal|openCreateTeacherModal|openEditStudentModal|openDepartmentModal|openMajorModal|openSectionModal|openSubjectModal|openDeleteDepartmentModal|openDeleteMajorModal|openDeleteSectionModal|openDeleteSubjectModal|openTeacherAssignModal|openAddSectionModal/.test(control.getAttribute('onclick') || '');
                 const isAllowedOfflineAction = control.matches('button')
-                    && /createStudentAccount|createTeacherAccount|addDepartment|addMajor|addSection|addSubject|setActiveSemester|deleteDepartment|deleteMajor|deleteSectionModalAction|deleteSubject|assignTeacherToSubject|removeTeacherAssignment|saveTeacherSection|closeCreateStudentModal|closeModal|closeDepartmentModal|closeMajorModal|closeSectionModal|closeSubjectModal|closeDeleteDepartmentModal|closeDeleteMajorModal|closeDeleteSectionModal|closeDeleteSubjectModal|closeTeacherAssignModal|closeTeacherSectionModal|loadDepartmentDeleteOptions|loadMajorsForDelete|loadMajorsForDeleteSection|loadSectionsForDelete|loadMajorsForDeleteSubject|loadSubjectsForDelete/.test(control.getAttribute('onclick') || '');
+                    && /createStudentAccount|createTeacherAccount|saveStudentEdits|createTeacherAccount|addDepartment|addMajor|addSection|addSubject|setActiveSemester|deleteDepartment|deleteMajor|deleteSectionModalAction|deleteSubject|assignTeacherToSubject|removeTeacherAssignment|saveTeacherSection|closeCreateStudentModal|closeEditStudentModal|closeModal|closeDepartmentModal|closeMajorModal|closeSectionModal|closeSubjectModal|closeDeleteDepartmentModal|closeDeleteMajorModal|closeDeleteSectionModal|closeDeleteSubjectModal|closeTeacherAssignModal|closeTeacherSectionModal|loadEditStudentMajors|loadEditStudentSections|loadDepartmentDeleteOptions|loadMajorsForDelete|loadMajorsForDeleteSection|loadSectionsForDelete|loadMajorsForDeleteSubject|loadSubjectsForDelete/.test(control.getAttribute('onclick') || '');
                 const isSemesterPicker = control.id === 'activeSemesterSelect';
                 const isExplorerBack = control.id === 'backButton';
                 const isStudentFilter = ['manageStudentYear', 'manageStudentDepartment', 'manageStudentMajor', 'manageStudentSection'].includes(control.id);
@@ -521,6 +521,12 @@
         return await adminStoreRequest(adminLookupStoreName, 'readonly', store => store.get(`${userId}:students:${sectionId}`)) || null;
     }
 
+    async function getAdminStudentRoster(client) {
+        const userId = await getUserId(client);
+        if (!userId) return null;
+        return await adminStoreRequest(adminLookupStoreName, 'readonly', store => store.get(`${userId}:all-students`)) || null;
+    }
+
     async function queueAdminStructureOperation(client, type, payload) {
         const userId = await getUserId(client);
         if (!userId) throw new Error('Sign in while connected before making offline admin changes.');
@@ -687,6 +693,20 @@
         return result;
     }
 
+    async function queueAdminStudentEdit(client, payload, functionUrl, anonKey) {
+        const userId = await getUserId(client);
+        if (!userId) throw new Error('Sign in while connected before making offline student edits.');
+        const operationId = createOperationId();
+        await adminStoreRequest(adminQueueStoreName, 'readwrite', store => store.put({
+            key: `${userId}:${operationId}`, userId, operationId, role: 'student', action: 'admin-edit', payload,
+            functionUrl, anonKey, createdAt: new Date().toISOString(), lastError: null
+        }));
+        setNotice('Student edit saved on this device. It will apply when connected.', true, 'sync');
+        window.dispatchEvent(new CustomEvent('admin-account-data-changed'));
+        window.dispatchEvent(new CustomEvent('admin-student-data-changed'));
+        return { queued: true, operationId };
+    }
+
     async function getAdminAccountData(client) {
         const userId = await getUserId(client);
         if (!userId) return { queued: [], completed: [] };
@@ -695,7 +715,7 @@
             adminStoreRequest(adminResultsStoreName, 'readonly', store => store.getAll())
         ]);
         return {
-            queued: allQueued.filter(item => item.userId === userId).sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt)),
+                queued: allQueued.filter(item => item.userId === userId).sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt)),
             completed: allCompleted.filter(item => item.userId === userId).sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
         };
     }
@@ -732,14 +752,22 @@
                 const { data: { session } } = await client.auth.getSession();
                 if (!session) return;
                 try {
+                    const payload = { ...item.payload };
+                    if (item.action === 'admin-edit' && typeof payload.section_id === 'string' && payload.section_id.startsWith('local:')) {
+                        const idMap = await getAdminStructureIdMap(userId);
+                        if (!idMap.has(payload.section_id)) throw new Error('The selected section is still waiting to sync. This edit will retry automatically.');
+                        payload.section_id = idMap.get(payload.section_id);
+                    }
                     const response = await fetch(item.functionUrl, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json', apikey: item.anonKey, Authorization: `Bearer ${session.access_token}` },
-                        body: JSON.stringify({ action: 'admin-create', operation_id: item.operationId, ...item.payload })
+                        body: JSON.stringify({ action: item.action || 'admin-create', operation_id: item.operationId, ...payload })
                     });
                     const result = await response.json().catch(() => ({}));
                     if (!response.ok) throw new Error(result.error || 'Account creation failed.');
-                    await saveAdminAccountResult(userId, item.operationId, item.role, item.payload, result);
+                    if ((item.action || 'admin-create') === 'admin-create') {
+                        await saveAdminAccountResult(userId, item.operationId, item.role, item.payload, result);
+                    }
                     await adminStoreRequest(adminQueueStoreName, 'readwrite', store => store.delete(item.key));
                 } catch (error) {
                     const failureReason = error?.message || 'Account creation is waiting to retry.';
@@ -760,6 +788,10 @@
                     break;
                 }
             }
+            if (queued.some(item => item.action === 'admin-edit') && navigator.onLine) {
+                await saveAdminAccountLookups(client, userId);
+                window.dispatchEvent(new CustomEvent('admin-student-data-changed'));
+            }
             window.dispatchEvent(new CustomEvent('admin-account-data-changed'));
         } catch (error) {
             console.warn('Unable to sync queued admin account creations.', error);
@@ -777,6 +809,8 @@
     window.getAdminAccountLookups = getAdminAccountLookups;
     window.saveAdminStudentSection = saveAdminStudentSection;
     window.getAdminStudentSection = getAdminStudentSection;
+        window.getAdminStudentRoster = getAdminStudentRoster;
+        window.queueAdminStudentEdit = queueAdminStudentEdit;
     window.queueAdminStructureOperation = queueAdminStructureOperation;
     window.queueAdminStructureDelete = queueAdminStructureDelete;
     window.getAdminStructureData = getAdminStructureData;

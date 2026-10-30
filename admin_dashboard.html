@@ -7560,8 +7560,13 @@ async function loadStudentsBySection() {
 
     let data;
     if (!navigator.onLine) {
-        const cachedSection = await window.getAdminStudentSection?.(supabaseClient, sectionId);
-        data = cachedSection?.students || [];
+        const roster = await window.getAdminStudentRoster?.(supabaseClient);
+        if (roster?.students) {
+            data = roster.students.filter(student => String(student.section_id) === String(sectionId));
+        } else {
+            const cachedSection = await window.getAdminStudentSection?.(supabaseClient, sectionId);
+            data = cachedSection?.students || [];
+        }
     } else {
         let studentQuery = supabaseClient
                 .from('students')
@@ -7601,6 +7606,33 @@ async function loadStudentsBySection() {
         }
         data = result.data || [];
         await window.saveAdminStudentSection?.(supabaseClient, sectionId, data);
+    }
+
+    if (window.getAdminAccountData) {
+        const { queued } = await window.getAdminAccountData(supabaseClient);
+        const studentEdits = queued.filter(item => item.action === 'admin-edit' && item.role === 'student');
+        if (!navigator.onLine) {
+            const roster = await window.getAdminStudentRoster?.(supabaseClient);
+            if (roster?.students) {
+                studentEdits.forEach(item => {
+                    const original = roster.students.find(student => String(student.student_id) === String(item.payload.student_id));
+                    if (String(item.payload.section_id || '') === String(sectionId)) {
+                        const updatedStudent = {
+                            ...original,
+                            ...item.payload,
+                            section_id: item.payload.section_id || null,
+                            users: { ...(original?.users || {}), email: item.payload.email || original?.users?.email || '' },
+                            pendingEdit: true
+                        };
+                        const existingIndex = data.findIndex(student => String(student.student_id) === String(item.payload.student_id));
+                        if (existingIndex >= 0) data[existingIndex] = updatedStudent;
+                        else if (original) data.push(updatedStudent);
+                    } else {
+                        data = data.filter(student => String(student.student_id) !== String(item.payload.student_id));
+                    }
+                });
+            }
+        }
     }
 
     if (window.getAdminAccountData) {
@@ -7670,11 +7702,11 @@ async function loadStudentsBySection() {
                 ${fullName}
             </td>
 
-            <td>${student.pending ? 'Waiting to sync' : (student.users?.email?.endsWith('@accounts.tcc.invalid') ? 'Email not added yet' : (student.users?.email || 'N/A'))}</td>
+            <td>${student.pending || student.pendingEdit ? 'Waiting to sync' : (student.users?.email?.endsWith('@accounts.tcc.invalid') ? 'Email not added yet' : (student.users?.email || 'N/A'))}</td>
 
             <td>
 
-                ${student.pending ? 'Account creation queued' : `
+                ${student.pending ? 'Account creation queued' : student.pendingEdit ? 'Edit queued' : `
                 <button class="btn" onclick="openEditStudentModal(${student.student_id})">Edit</button>
                 <button class="btn" onclick="resetStudentPassword(${student.student_id})">Reset Password</button>
                 <button class="btn reject-btn" onclick="deleteStudent('${student.student_id}','${student.users?.user_id}')">Delete</button>`}
@@ -7718,7 +7750,7 @@ async function renderAdminCreatedAccounts() {
         const lookups = await window.getAdminAccountLookups(supabaseClient);
         table.replaceChildren();
         const rows = [
-            ...queued.map(item => ({
+            ...queued.filter(item => (item.action || 'admin-create') === 'admin-create').map(item => ({
                 operationId: item.operationId,
                 processing: Boolean(item.processing),
                 failed: Boolean(item.lastError),
@@ -8021,12 +8053,37 @@ async function openEditStudentModal(studentId) {
     const errorBox = document.getElementById('editStudentError');
     errorBox.textContent = '';
     try {
-        const { data: student, error } = await supabaseClient
-            .from('students')
-            .select('student_id, student_number, first_name, middle_initial, last_name, gender, section_id, users!students_user_id_fkey(email), sections(section_id, year_level, major_id, majors(department_id))')
-            .eq('student_id', studentId)
-            .single();
-        if (error) throw error;
+        let student;
+        let lookups;
+        let offlineRecords;
+        let pending = [];
+        if (!navigator.onLine) {
+            const roster = await window.getAdminStudentRoster?.(supabaseClient);
+            student = roster?.students?.find(item => String(item.student_id) === String(studentId));
+            lookups = await window.getAdminAccountLookups(supabaseClient);
+            offlineRecords = await getAdminExplorerRecords();
+            const accountData = await window.getAdminAccountData(supabaseClient);
+            pending = accountData.queued || [];
+            if (!student) throw new Error('This student is not in the cached roster. Open Manage Students while online first.');
+        } else {
+            const { data, error } = await supabaseClient
+                .from('students')
+                .select('student_id, student_number, first_name, middle_initial, last_name, gender, section_id, users!students_user_id_fkey(email), sections(section_id, year_level, major_id, majors(department_id))')
+                .eq('student_id', studentId)
+                .single();
+            if (error) throw error;
+            student = data;
+        }
+
+        const queuedEdit = pending.filter(item => item.action === 'admin-edit' && String(item.payload.student_id) === String(studentId)).at(-1);
+        if (queuedEdit) {
+            student = {
+                ...student,
+                ...queuedEdit.payload,
+                section_id: queuedEdit.payload.section_id || null,
+                users: { ...(student.users || {}), email: queuedEdit.payload.email || student.users?.email || '' }
+            };
+        }
 
         document.getElementById('editStudentId').value = student.student_id;
         document.getElementById('editStudentNumber').value = student.student_number || '';
@@ -8037,20 +8094,30 @@ async function openEditStudentModal(studentId) {
         document.getElementById('editStudentEmail').value = student.users?.email?.endsWith('@accounts.tcc.invalid') ? '' : (student.users?.email || '');
 
         const departmentSelect = document.getElementById('editStudentDepartment');
-        const { data: departments, error: departmentError } = await supabaseClient.from('departments').select('department_id, department_name').order('department_name');
-        if (departmentError) throw departmentError;
         departmentSelect.innerHTML = '<option value="">Select Department</option>';
-        (departments || []).forEach(department => departmentSelect.add(new Option(department.department_name, department.department_id)));
+        if (!navigator.onLine) {
+            (offlineRecords?.departments || lookups?.departments || []).forEach(department => departmentSelect.add(new Option(department.department_name, department.department_id)));
+        } else {
+            const { data: departments, error: departmentError } = await supabaseClient.from('departments').select('department_id, department_name').order('department_name');
+            if (departmentError) throw departmentError;
+            (departments || []).forEach(department => departmentSelect.add(new Option(department.department_name, department.department_id)));
+        }
 
         let section = null;
         if (student.section_id !== null && student.section_id !== undefined) {
-            const { data: sectionData, error: sectionError } = await supabaseClient
-                .from('sections')
-                .select('section_id, section_name, year_level, major_id, majors(department_id)')
-                .eq('section_id', student.section_id)
-                .maybeSingle();
-            if (sectionError) throw sectionError;
-            section = sectionData;
+            if (!navigator.onLine) {
+                const cachedSection = (offlineRecords?.sections || lookups?.sections || []).find(item => String(item.section_id) === String(student.section_id));
+                const cachedMajor = (offlineRecords?.majors || lookups?.majors || []).find(item => String(item.major_id) === String(cachedSection?.major_id));
+                if (cachedSection) section = { ...cachedSection, majors: { department_id: cachedMajor?.department_id } };
+            } else {
+                const { data: sectionData, error: sectionError } = await supabaseClient
+                    .from('sections')
+                    .select('section_id, section_name, year_level, major_id, majors(department_id)')
+                    .eq('section_id', student.section_id)
+                    .maybeSingle();
+                if (sectionError) throw sectionError;
+                section = sectionData;
+            }
         }
 
         if (section?.major_id && section.majors?.department_id) {
@@ -8076,9 +8143,16 @@ async function loadEditStudentMajors(selectedMajorId = null) {
     select.innerHTML = '<option value="">Select Major</option>';
     document.getElementById('editStudentSection').innerHTML = '<option value="">Select Section</option>';
     if (!departmentId) return;
-    const { data, error } = await supabaseClient.from('majors').select('major_id, major_name').eq('department_id', departmentId).order('major_name');
-    if (error) throw error;
-    (data || []).forEach(major => select.add(new Option(major.major_name, major.major_id)));
+    let data;
+    if (!navigator.onLine) {
+        const offlineRecords = await getAdminExplorerRecords();
+        data = (offlineRecords?.majors || []).filter(major => String(major.department_id) === String(departmentId));
+    } else {
+        const result = await supabaseClient.from('majors').select('major_id, major_name').eq('department_id', departmentId).order('major_name');
+        if (result.error) throw result.error;
+        data = result.data || [];
+    }
+    data.forEach(major => select.add(new Option(`${major.major_name}${major.pending ? ' (waiting to sync)' : ''}`, major.major_id)));
     if (selectedMajorId) select.value = selectedMajorId;
 }
 
@@ -8088,9 +8162,16 @@ async function loadEditStudentSections(selectedSectionId = null) {
     const yearLevel = document.getElementById('editStudentYear').value;
     select.innerHTML = '<option value="">Unassigned</option>';
     if (!majorId || !yearLevel) return;
-    const { data, error } = await supabaseClient.from('sections').select('section_id, section_name').eq('major_id', majorId).eq('year_level', yearLevel).order('section_name');
-    if (error) throw error;
-    (data || []).forEach(section => select.add(new Option(section.section_name, section.section_id)));
+    let data;
+    if (!navigator.onLine) {
+        const offlineRecords = await getAdminExplorerRecords();
+        data = (offlineRecords?.sections || []).filter(section => String(section.major_id) === String(majorId) && section.year_level === yearLevel);
+    } else {
+        const result = await supabaseClient.from('sections').select('section_id, section_name').eq('major_id', majorId).eq('year_level', yearLevel).order('section_name');
+        if (result.error) throw result.error;
+        data = result.data || [];
+    }
+    data.forEach(section => select.add(new Option(`${section.section_name}${section.pending ? ' (waiting to sync)' : ''}`, section.section_id)));
     if (selectedSectionId) select.value = selectedSectionId;
 }
 
@@ -8113,7 +8194,7 @@ async function saveStudentEdits() {
             && !selectedSectionId) {
             throw new Error('Choose a section, or clear the department, major, and year to leave the student unassigned.');
         }
-        const result = await callStudentAccountFunction('admin-edit', {
+        const payload = {
             student_id: Number(document.getElementById('editStudentId').value),
             student_number: document.getElementById('editStudentNumber').value.trim(),
             first_name: document.getElementById('editStudentFirstName').value.trim(),
@@ -8125,13 +8206,33 @@ async function saveStudentEdits() {
             major_id: document.getElementById('editStudentMajor').value || null,
             year_level: document.getElementById('editStudentYear').value || null,
             section_id: selectedSectionId || null
-        });
+        };
+        if (!navigator.onLine) {
+            await window.queueAdminStudentEdit(supabaseClient, payload, STUDENT_ACCOUNT_FUNCTION_URL, SUPABASE_ANON_KEY);
+            showAlert('success', 'Student Edit Queued', 'The student details will be updated when you are online.');
+            closeEditStudentModal();
+            if (selectedSectionId) {
+                await showManagedStudentsInSection(payload);
+            } else {
+                await loadStudentsBySection();
+            }
+            return;
+        }
+        const result = await callStudentAccountFunction('admin-edit', payload);
         if (selectedSectionId && String(result.section_id) !== String(selectedSectionId)) {
             throw new Error('The saved section does not match the selected section. Please reopen Edit Student and verify the enrollment selections.');
         }
         showAlert('success', 'Student Updated', result.message || 'Student details and enrollment were updated.');
         closeEditStudentModal();
-        await loadStudentsBySection();
+        if (result.section_id) {
+            await showManagedStudentsInSection({
+                ...payload,
+                section_id: result.section_id,
+                year_level: document.getElementById('editStudentYear').value
+            });
+        } else {
+            await loadStudentsBySection();
+        }
     } catch (error) {
         errorBox.textContent = error.message;
     }
