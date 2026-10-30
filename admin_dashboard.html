@@ -4299,6 +4299,11 @@ data.forEach(major => {
             if (!navigator.onLine) {
                 const offlineRecords = await getAdminExplorerRecords();
                 data = (offlineRecords.lookups?.teacherAssignments || []).filter(item => String(item.subject_id) === String(subjectId));
+                (offlineRecords.pending || []).filter(item => item.type === 'teacher_subject_assign' && String(item.payload.subject_id) === String(subjectId))
+                    .forEach(item => {
+                        const teacher = (offlineRecords.lookups?.teachers || []).find(candidate => String(candidate.teacher_id) === String(item.payload.teacher_id));
+                        data.push({ assignment_id: item.localRef, teacher_id: item.payload.teacher_id, teachers: teacher, pending: true });
+                    });
             } else {
                 const result = await supabaseClient
                     .from('teacher_subject_assignments')
@@ -4313,6 +4318,22 @@ data.forEach(major => {
                     .eq('subject_id', subjectId);
                 data = result.data || [];
                 error = result.error;
+                if (!error && window.getAdminStructureData) {
+                    const { lookups, pending } = await window.getAdminStructureData(supabaseClient);
+                    pending.filter(item => item.type === 'teacher_subject_assign' && String(item.payload.subject_id) === String(subjectId))
+                        .forEach(item => {
+                            const teacher = (lookups?.teachers || []).find(candidate => String(candidate.teacher_id) === String(item.payload.teacher_id));
+                            data.push({ assignment_id: item.localRef, teacher_id: item.payload.teacher_id, teachers: teacher, pending: true });
+                        });
+                }
+            }
+
+            if (window.getAdminStructureData) {
+                const { pending } = await window.getAdminStructureData(supabaseClient);
+                const removedAssignments = new Set(pending
+                    .filter(item => item.type === 'teacher_subject_unassign')
+                    .map(item => String(item.payload.assignment_id)));
+                data = data.filter(assign => !removedAssignments.has(String(assign.assignment_id)));
             }
 
             if (error) {
@@ -4369,22 +4390,22 @@ data.forEach(major => {
 
             <td>
 
-                ${assign.teachers ? formatName(assign.teachers.first_name, assign.teachers.middle_initial, assign.teachers.last_name) : ''}
+                ${assign.teachers ? formatName(assign.teachers.first_name, assign.teachers.middle_initial, assign.teachers.last_name) : `Teacher ${assign.teacher_id || ''}`}${assign.pending ? ' (waiting to sync)' : ''}
 
             </td>
 
             <td>
 
 
-                ${navigator.onLine ? `<button
+                <button
                     class="btn reject-btn"
                     onclick="removeTeacherAssignment(
-                        ${assign.assignment_id}
+                        decodeURIComponent('${encodeURIComponent(String(assign.assignment_id))}')
                     )">
 
                     Remove
 
-                </button>` : 'Offline view'}
+                </button>
 
             </td>
 
@@ -7173,6 +7194,25 @@ async function removeTeacherAssignment(id) {
 
     }
 
+    if (!navigator.onLine || String(id).startsWith('local:')) {
+        showConfirmModal(
+            'Remove Assignment',
+            'Remove this teacher assignment? It will be removed when you are online.',
+            async () => {
+                try {
+                    await window.queueAdminStructureOperation(supabaseClient, 'teacher_subject_unassign', {
+                        assignment_id: String(id)
+                    });
+                    showAlert('success', 'Removal Queued', 'The teacher assignment will be removed when you are online.');
+                    await viewSubjectTeachers(currentSubjectId, currentSubjectName);
+                } catch (error) {
+                    showAlert('error', 'Removal Failed', error.message);
+                }
+            }
+        );
+        return;
+    }
+
     /* ======================
        CUSTOM CONFIRM MODAL
     ====================== */
@@ -7790,7 +7830,8 @@ async function renderAdminStructureQueue() {
         department_delete: 'Delete department',
         major_delete: 'Delete major',
         section_delete: 'Delete section',
-        subject_delete: 'Delete subject'
+        subject_delete: 'Delete subject',
+        teacher_subject_unassign: 'Remove teacher assignment'
     };
     pending.forEach(item => {
         const details = item.type === 'semester_set'
@@ -7803,6 +7844,8 @@ async function renderAdminStructureQueue() {
                         ? `${item.payload.section_name}, ${item.payload.year_level}`
                         : item.type === 'subject_add'
                             ? `${item.payload.subject_code} - ${item.payload.subject_name}, ${item.payload.year_level}`
+                            : item.type === 'teacher_subject_unassign'
+                                ? `Assignment ${item.payload.assignment_id}`
                             : `${item.type.replace('_delete', '')} ID ${item.payload[`${item.type.replace('_delete', '')}_id`]}`;
         const row = document.createElement('tr');
         [labels[item.type] || 'Admin change', details, item.lastError ? 'Waiting to retry' : 'Waiting for connection']
