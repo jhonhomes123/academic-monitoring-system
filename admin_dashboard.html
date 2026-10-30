@@ -7866,7 +7866,22 @@ async function clearAdminCreatedAccounts() {
 async function renderAdminStructureQueue() {
     const table = document.getElementById('adminStructureQueueTable');
     if (!table || !window.getAdminStructureData) return;
-    const { pending } = await window.getAdminStructureData(supabaseClient);
+    const [{ pending: structurePending }, accountData, lookups] = await Promise.all([
+        window.getAdminStructureData(supabaseClient),
+        window.getAdminAccountData?.(supabaseClient) || Promise.resolve({ queued: [] }),
+        window.getAdminAccountLookups?.(supabaseClient) || Promise.resolve(null)
+    ]);
+    const studentEditPending = (accountData.queued || [])
+        .filter(item => item.action === 'admin-edit' && item.role === 'student')
+        .map(item => ({
+            type: 'student_edit',
+            operationId: item.operationId,
+            payload: item.payload,
+            lastError: item.lastError,
+            createdAt: item.createdAt
+        }));
+    const pending = [...structurePending, ...studentEditPending]
+        .sort((first, second) => Date.parse(first.createdAt || 0) - Date.parse(second.createdAt || 0));
     table.replaceChildren();
     if (!pending.length) {
         const row = document.createElement('tr');
@@ -7887,10 +7902,13 @@ async function renderAdminStructureQueue() {
         major_delete: 'Delete major',
         section_delete: 'Delete section',
         subject_delete: 'Delete subject',
-        teacher_subject_unassign: 'Remove teacher assignment'
+        teacher_subject_unassign: 'Remove teacher assignment',
+        student_edit: 'Edit student'
     };
     pending.forEach(item => {
-        const details = item.type === 'semester_set'
+        const details = item.type === 'student_edit'
+            ? `${item.payload.student_number} - ${[item.payload.first_name, item.payload.middle_initial, item.payload.last_name].filter(Boolean).join(' ')}${item.payload.section_id ? `, section ${(lookups?.sections || []).find(section => String(section.section_id) === String(item.payload.section_id))?.section_name || item.payload.section_id}` : ', unassigned'}`
+            : item.type === 'semester_set'
             ? `Semester ${item.payload.semester_id}`
             : item.type === 'department_add'
                 ? item.payload.department_name
@@ -7916,6 +7934,7 @@ async function renderAdminStructureQueue() {
 
 window.addEventListener('admin-account-data-changed', () => {
     void renderAdminCreatedAccounts();
+    void renderAdminStructureQueue();
     if (navigator.onLine && document.getElementById('manageStudentSection')?.value) {
         void loadStudentsBySection();
     }
