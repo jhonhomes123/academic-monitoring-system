@@ -7959,7 +7959,7 @@ async function loadStudentsBySection() {
                 `);
 
         studentQuery = sectionId === 'unassigned'
-                ? studentQuery.is('section_id', null).is('graduated_at', null)
+            ? studentQuery.is('section_id', null)
                 : studentQuery.eq('section_id', sectionId);
         const result = await studentQuery.order('last_name');
         if (result.error) {
