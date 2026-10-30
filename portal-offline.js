@@ -328,8 +328,9 @@
                     && /createStudentAccount|createTeacherAccount|addDepartment|addMajor|addSection|addSubject|setActiveSemester|deleteDepartment|deleteMajor|deleteSectionModalAction|deleteSubject|assignTeacherToSubject|removeTeacherAssignment|saveTeacherSection|closeCreateStudentModal|closeModal|closeDepartmentModal|closeMajorModal|closeSectionModal|closeSubjectModal|closeDeleteDepartmentModal|closeDeleteMajorModal|closeDeleteSectionModal|closeDeleteSubjectModal|closeTeacherAssignModal|closeTeacherSectionModal|loadDepartmentDeleteOptions|loadMajorsForDelete|loadMajorsForDeleteSection|loadSectionsForDelete|loadMajorsForDeleteSubject|loadSubjectsForDelete/.test(control.getAttribute('onclick') || '');
                 const isSemesterPicker = control.id === 'activeSemesterSelect';
                 const isExplorerBack = control.id === 'backButton';
+                const isStudentFilter = ['manageStudentYear', 'manageStudentDepartment', 'manageStudentMajor', 'manageStudentSection'].includes(control.id);
                 control.disabled = !(opensAllowedModal || isSemesterPicker || (control.matches('button') && /setActiveSemester/.test(control.getAttribute('onclick') || ''))
-                    || isExplorerBack || control.id === 'confirmActionBtn' || control.matches('.cancel-btn')
+                    || isExplorerBack || isStudentFilter || control.id === 'confirmActionBtn' || control.matches('.cancel-btn')
                     || (inAllowedModal && (!control.matches('button') || isAllowedOfflineAction)));
             });
             window.adminOfflineView = true;
@@ -452,6 +453,29 @@
             ]);
             const lookupError = departmentsResult.error || majorsResult.error || sectionsResult.error || semestersResult.error || subjectsResult.error || teacherAssignmentsResult.error || teachersResult.error || teacherSectionsResult.error;
             if (lookupError) throw lookupError;
+
+            const students = [];
+            const pageSize = 1000;
+            for (let offset = 0; ; offset += pageSize) {
+                const { data, error } = await client.from('students').select(`
+                    student_id,
+                    student_number,
+                    first_name,
+                    middle_initial,
+                    last_name,
+                    gender,
+                    section_id,
+                    users!students_user_id_fkey (
+                        user_id,
+                        email,
+                        onboarding_required
+                    )
+                `).order('student_id').range(offset, offset + pageSize - 1);
+                if (error) throw error;
+                students.push(...(data || []));
+                if (!data || data.length < pageSize) break;
+            }
+
             await adminStoreRequest(adminLookupStoreName, 'readwrite', store => store.put({
                 key: `${userId}:lookups`, userId,
                 departments: departmentsResult.data || [], majors: majorsResult.data || [], sections: sectionsResult.data || [],
@@ -459,6 +483,9 @@
                 teacherAssignments: teacherAssignmentsResult.data || [],
                 teachers: teachersResult.data || [], teacherSections: teacherSectionsResult.data || [],
                 savedAt: new Date().toISOString()
+            }));
+            await adminStoreRequest(adminLookupStoreName, 'readwrite', store => store.put({
+                key: `${userId}:all-students`, userId, students, savedAt: new Date().toISOString()
             }));
         } catch (error) {
             console.warn('Could not cache admin account dropdown data.', error);
@@ -469,6 +496,29 @@
         const userId = suppliedUserId || await getUserId(client);
         if (!userId) return null;
         return await adminStoreRequest(adminLookupStoreName, 'readonly', store => store.get(`${userId}:lookups`)) || null;
+    }
+
+    async function saveAdminStudentSection(client, sectionId, students) {
+        const userId = await getUserId(client);
+        if (!userId || !sectionId) return;
+        await adminStoreRequest(adminLookupStoreName, 'readwrite', store => store.put({
+            key: `${userId}:students:${sectionId}`, userId, sectionId: String(sectionId), students,
+            savedAt: new Date().toISOString()
+        }));
+    }
+
+    async function getAdminStudentSection(client, sectionId) {
+        const userId = await getUserId(client);
+        if (!userId || !sectionId) return null;
+        const allStudents = await adminStoreRequest(adminLookupStoreName, 'readonly', store => store.get(`${userId}:all-students`));
+        if (allStudents?.students) {
+            return {
+                sectionId: String(sectionId),
+                students: allStudents.students.filter(student => String(student.section_id) === String(sectionId)),
+                savedAt: allStudents.savedAt
+            };
+        }
+        return await adminStoreRequest(adminLookupStoreName, 'readonly', store => store.get(`${userId}:students:${sectionId}`)) || null;
     }
 
     async function queueAdminStructureOperation(client, type, payload) {
@@ -725,6 +775,8 @@
     window.clearAdminAccountResults = clearAdminAccountResults;
     window.syncAdminAccountQueue = syncAdminAccountQueue;
     window.getAdminAccountLookups = getAdminAccountLookups;
+    window.saveAdminStudentSection = saveAdminStudentSection;
+    window.getAdminStudentSection = getAdminStudentSection;
     window.queueAdminStructureOperation = queueAdminStructureOperation;
     window.queueAdminStructureDelete = queueAdminStructureDelete;
     window.getAdminStructureData = getAdminStructureData;
