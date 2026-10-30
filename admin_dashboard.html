@@ -2186,7 +2186,7 @@ onchange="loadSubjectsForTeacherAssign()">
                 <select id="editStudentDepartment" onchange="loadEditStudentMajors()"><option value="">Select Department</option></select>
                 <select id="editStudentMajor" onchange="loadEditStudentSections()"><option value="">Select Major</option></select>
                 <select id="editStudentYear" onchange="loadEditStudentSections()">
-                    <option value="">Select Year</option><option>1st Year</option><option>2nd Year</option><option>3rd Year</option><option>4th Year</option>
+                    <option value="">Select Year</option><option>1st Year</option><option>2nd Year</option><option>3rd Year</option><option>4th Year</option><option>Graduate</option>
                 </select>
                 <select id="editStudentSection"><option value="">Select Section</option></select>
                 <button class="btn" onclick="saveStudentEdits()">Save Student</button>
@@ -8123,7 +8123,6 @@ async function loadStudentsBySection() {
             : student.pendingAssignment
                 ? 'Section assignment queued'
                 : `<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
-                    ${student.graduated_at || student.pendingGraduation ? '<strong>Graduate</strong>' : ''}
                     ${student.pendingEdit ? '<span>Edit queued</span>' : ''}
                     <button class="btn" onclick="openEditStudentModal(${student.student_id})">Edit</button>
                     <button class="btn" onclick="resetStudentPassword(${student.student_id})">Reset Password</button>
