@@ -8410,17 +8410,24 @@ async function removeQueuedAdminAccount(operationId, failed = false) {
 }
 
 async function clearAdminCreatedAccounts() {
-    if (!window.confirm('Clear saved temporary passwords from this device? This does not delete the created accounts.')) return;
-    await window.clearAdminAccountResults(supabaseClient);
-    ['createdStudentLoginId', 'createdStudentPassword', 'createdTeacherLoginId', 'createdTeacherPassword'].forEach(id => {
-        const value = document.getElementById(id);
-        if (value) value.textContent = '';
+    showConfirmModal('Clear Saved Credentials', 'Clear saved temporary passwords from this device? This does not delete the created accounts.', async () => {
+        try {
+            await window.clearAdminAccountResults(supabaseClient);
+            ['createdStudentLoginId', 'createdStudentPassword', 'createdTeacherLoginId', 'createdTeacherPassword'].forEach(id => {
+                const value = document.getElementById(id);
+                if (value) value.textContent = '';
+            });
+            ['createdStudentCredentials', 'createdTeacherCredentials'].forEach(id => {
+                const credentials = document.getElementById(id);
+                if (credentials) credentials.style.display = 'none';
+            });
+            closeConfirmModal();
+            showAlert('success', 'Credentials Cleared', 'Saved temporary credentials were removed from this device.');
+        } catch (error) {
+            closeConfirmModal();
+            showAlert('error', 'Could Not Clear Credentials', error.message || 'Unable to clear saved credentials.');
+        }
     });
-    ['createdStudentCredentials', 'createdTeacherCredentials'].forEach(id => {
-        const credentials = document.getElementById(id);
-        if (credentials) credentials.style.display = 'none';
-    });
-    showAlert('success', 'Credentials Cleared', 'Saved temporary credentials were removed from this device.');
 }
 async function renderAdminStructureQueue() {
     const table = document.getElementById('adminStructureQueueTable');
