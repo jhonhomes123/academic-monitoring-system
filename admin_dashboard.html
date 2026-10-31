@@ -8326,18 +8326,22 @@ async function loadStudentsBySection() {
         );
 
         const studentActions = student.pending
-            ? `<div style="display:flex;flex-direction:column;align-items:flex-start;gap:6px;">
-                <span>${student.pendingGraduation ? 'Graduation queued' : student.pendingProcessing ? 'Account sync needs attention' : 'Account creation queued'}</span>
-                ${student.pendingProcessing ? '' : `<button class="btn" onclick="openEditQueuedStudentAccount('${student.pendingOperationId}')">Edit</button>`}
-                <button class="btn" type="button" disabled title="Available after the student account syncs" style="opacity:0.5;cursor:not-allowed;">Reset Password</button>
-                <button class="btn reject-btn" onclick="deleteQueuedStudentAccount('${student.pendingOperationId}')" ${student.pendingProcessing ? 'disabled' : ''}>Delete</button>
+            ? `<div>
+                <div style="margin-bottom:6px;">${student.pendingGraduation ? 'Graduation queued' : student.pendingProcessing ? 'Account sync needs attention' : 'Account creation queued'}</div>
+                <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+                    ${student.pendingProcessing ? '' : `<button class="btn" onclick="openEditQueuedStudentAccount('${student.pendingOperationId}')">Edit</button>`}
+                    <button class="btn" type="button" disabled title="Available after the student account syncs" style="opacity:0.5;cursor:not-allowed;">Reset Password</button>
+                    <button class="btn reject-btn" onclick="deleteQueuedStudentAccount('${student.pendingOperationId}')" ${student.pendingProcessing ? 'disabled' : ''}>Delete</button>
+                </div>
             </div>`
             : student.pendingAssignment
-                ? `<div style="display:flex;flex-direction:column;align-items:flex-start;gap:6px;">
-                    <span>Section assignment queued</span>
-                    <button class="btn" onclick="openEditStudentModal(${student.student_id})">Edit</button>
-                    <button class="btn" onclick="resetStudentPassword(${student.student_id})">Reset Password</button>
-                    <button class="btn reject-btn" onclick="deleteStudent('${student.student_id}','${student.users?.user_id}')" ${!navigator.onLine ? 'disabled title="Available when online" style="opacity:0.5;cursor:not-allowed;"' : ''}>Delete</button>
+                ? `<div>
+                    <div style="margin-bottom:6px;">Section assignment queued</div>
+                    <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+                        <button class="btn" onclick="openEditStudentModal(${student.student_id})">Edit</button>
+                        <button class="btn" onclick="resetStudentPassword(${student.student_id})">Reset Password</button>
+                        <button class="btn reject-btn" onclick="deleteStudent('${student.student_id}','${student.users?.user_id}')" ${!navigator.onLine ? 'disabled title="Available when online" style="opacity:0.5;cursor:not-allowed;"' : ''}>Delete</button>
+                    </div>
                 </div>`
                 : `<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
                     ${student.pendingEdit ? '<span>Edit queued</span>' : ''}
@@ -8451,7 +8455,6 @@ async function renderAdminCreatedAccounts() {
                 operationId: item.operationId,
                 processing: Boolean(item.processing),
                 failed: Boolean(item.lastError),
-                canEdit: !item.processing && !item.lastError && item.role === 'student',
                 role: item.role,
                 name: [item.payload.first_name, item.payload.middle_initial, item.payload.last_name].filter(Boolean).join(' '),
                 id: item.role === 'student' ? item.payload.student_number : item.payload.teacher_number,
@@ -8470,6 +8473,7 @@ async function renderAdminCreatedAccounts() {
                 role: item.role,
                 name: [item.payload.first_name, item.payload.middle_initial, item.payload.last_name].filter(Boolean).join(' '),
                 id: item.accountId,
+                studentNumber: item.role === 'student' ? item.accountId : null,
                 year: item.payload.year_level || '—',
                 section: item.payload.section_name || '—',
                 password: item.temporaryPassword,
@@ -8495,17 +8499,18 @@ async function renderAdminCreatedAccounts() {
                 });
             const actionCell = document.createElement('td');
             if (account.operationId) {
-                if (account.canEdit && !navigator.onLine) {
-                    const editButton = document.createElement('button');
-                    editButton.type = 'button';
-                    editButton.className = 'btn';
-                    editButton.textContent = 'Edit';
-                    editButton.addEventListener('click', () => openEditQueuedStudentAccount(account.operationId));
-                    actionCell.appendChild(editButton);
-                }
                 if (account.processing) {
                     actionCell.appendChild(document.createTextNode('Creating'));
                 }
+            } else if (account.studentNumber) {
+                const deleteButton = document.createElement('button');
+                deleteButton.type = 'button';
+                deleteButton.className = 'btn reject-btn';
+                deleteButton.textContent = 'Delete';
+                deleteButton.disabled = !navigator.onLine;
+                deleteButton.title = navigator.onLine ? 'Delete this created student account' : 'Connect to delete this student account';
+                deleteButton.addEventListener('click', () => deleteCreatedStudentAccount(account.studentNumber));
+                actionCell.appendChild(deleteButton);
             } else {
                 actionCell.textContent = '—';
             }
@@ -8820,33 +8825,9 @@ async function renderAdminStructureQueue() {
             .forEach((value, index) => {
                 const cell = document.createElement('td');
                 cell.textContent = value;
-                if (index === 2 && item.operationId && ['student_account_create', 'student_password_reset'].includes(item.type)) {
-                    const cancelButton = document.createElement('button');
-                    cancelButton.type = 'button';
-                    cancelButton.className = 'btn reject-btn';
-                    cancelButton.textContent = 'Discard';
-                    cancelButton.disabled = Boolean(item.processing);
-                    cancelButton.style.marginLeft = '8px';
-                    cancelButton.addEventListener('click', () => discardPendingAdminOperation(item.operationId));
-                    cell.appendChild(cancelButton);
-                }
                 row.appendChild(cell);
             });
         table.appendChild(row);
-    });
-}
-
-async function discardPendingAdminOperation(operationId) {
-    showConfirmModal('Discard Offline Operation', 'Remove this pending operation from this device? It will not be sent to the server.', async () => {
-        try {
-            await window.discardQueuedAdminAccountOperation(supabaseClient, operationId);
-            closeConfirmModal();
-            showAlert('success', 'Operation Discarded', 'The pending operation was removed from this device.');
-            await renderAdminStructureQueue();
-        } catch (error) {
-            closeConfirmModal();
-            showAlert('error', 'Could Not Discard Operation', error.message || 'Unable to remove the pending operation.');
-        }
     });
 }
 
@@ -9256,13 +9237,32 @@ async function copyResetStudentPassword() {
     }
 }
 
+async function deleteCreatedStudentAccount(studentNumber) {
+    if (!navigator.onLine) {
+        showAlert('warning', 'Connection Required', 'Connect to the internet before deleting a created student account.');
+        return;
+    }
+    try {
+        const { data, error } = await supabaseClient.from('students')
+            .select('student_id, user_id')
+            .eq('student_number', studentNumber)
+            .maybeSingle();
+        if (error) throw error;
+        if (!data) throw new Error('The student account could not be found.');
+                await deleteStudent(data.student_id, data.user_id, () => window.removeAdminAccountResult(supabaseClient, studentNumber));
+    } catch (error) {
+        showAlert('error', 'Could Not Delete Student', error.message || 'Unable to find the created student account.');
+    }
+}
+
 /* =========================================================
    DELETE STUDENT
 ========================================================= */
 
 async function deleteStudent(
     studentId,
-    userId
+    userId,
+    onDeleted = null
 ) {
 
     /* ======================
@@ -9588,6 +9588,8 @@ async function deleteStudent(
                         ? `${studentData.first_name} ${studentData.last_name} deleted successfully`
                         : 'The remaining student records were deleted successfully'
                 );
+
+                    if (typeof onDeleted === 'function') await onDeleted(studentData?.student_number);
 
                 /* ======================
                    REFRESH
