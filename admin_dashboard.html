@@ -8507,7 +8507,12 @@ async function openUnassignSelectedStudentsModal() {
             const cachedStudents = roster?.students || cachedSection?.students;
             if (!cachedStudents) throw new Error('The admin student roster cache is unavailable. Reconnect and reload the dashboard to refresh offline data, then try again.');
             const { pending, lookups } = await window.getAdminStructureData(supabaseClient);
-            const projectedSections = new Map(cachedStudents.map(student => [String(student.student_id), student.section_id == null ? String(sectionId) : String(student.section_id)]));
+            const projectedSections = new Map(cachedStudents.map(student => [
+                String(student.student_id),
+                student.section_id == null
+                    ? (cachedSection ? String(sectionId) : null)
+                    : String(student.section_id)
+            ]));
             pending.forEach(operation => {
                 const operationSectionId = String(operation.payload.section_id || '');
                 if (operation.type === 'student_section_assign') {
@@ -9020,7 +9025,7 @@ async function renderAdminStructureQueue() {
                     || structurePending.find(section => section.type === 'section_add' && String(section.localRef) === String(item.payload.section_id))?.payload.section_name
                     || item.payload.section_id}`
             : item.type === 'student_section_unassign'
-                ? `${item.payload.student_ids?.length || 0} student(s) from ${(lookups?.sections || []).find(section => String(section.section_id) === String(item.payload.section_id))?.section_name
+                ? `${(item.payload.student_ids?.length || 0) + (item.payload.student_numbers?.length || 0)} student(s) from ${(lookups?.sections || []).find(section => String(section.section_id) === String(item.payload.section_id))?.section_name
                     || structurePending.find(section => section.type === 'section_add' && String(section.localRef) === String(item.payload.section_id))?.payload.section_name
                     || item.payload.section_id}`
             : item.type === 'semester_set'
