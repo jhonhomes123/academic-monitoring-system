@@ -8326,7 +8326,12 @@ async function loadStudentsBySection() {
         );
 
         const studentActions = student.pending
-            ? `${student.pendingGraduation ? 'Graduation queued' : student.pendingProcessing ? 'Account sync needs attention' : 'Account creation queued'}<br>${student.pendingProcessing ? '' : `<button class="btn" onclick="openEditQueuedStudentAccount('${student.pendingOperationId}')">Edit</button>`}`
+            ? `<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+                <span>${student.pendingGraduation ? 'Graduation queued' : student.pendingProcessing ? 'Account sync needs attention' : 'Account creation queued'}</span>
+                ${student.pendingProcessing ? '' : `<button class="btn" onclick="openEditQueuedStudentAccount('${student.pendingOperationId}')">Edit</button>`}
+                <button class="btn" type="button" disabled title="Available after the student account syncs" style="opacity:0.5;cursor:not-allowed;">Reset Password</button>
+                <button class="btn reject-btn" onclick="deleteQueuedStudentAccount('${student.pendingOperationId}')" ${student.pendingProcessing ? 'disabled' : ''}>Delete</button>
+            </div>`
             : student.pendingAssignment
                 ? 'Section assignment queued'
                 : `<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
@@ -8586,6 +8591,41 @@ async function removeQueuedAdminAccount(operationId, failed = false) {
     });
 }
 
+async function resetQueuedStudentPassword(operationId, studentNumber) {
+    showConfirmModal('Reset Student Password', `Queue a password reset for student ${studentNumber}? It will run after the account is created and syncs.`, async () => {
+        try {
+            await window.queuePasswordResetForPendingStudent(
+                supabaseClient,
+                studentNumber,
+                STUDENT_ACCOUNT_FUNCTION_URL,
+                SUPABASE_ANON_KEY
+            );
+            closeConfirmModal();
+            showAlert('success', 'Password Reset Queued', 'The reset will run after this student account is created when you reconnect.');
+            await renderAdminPasswordResets();
+            await renderAdminStructureQueue();
+        } catch (error) {
+            closeConfirmModal();
+            showAlert('error', 'Could Not Queue Reset', error.message || 'Unable to queue the password reset.');
+        }
+    });
+}
+
+async function deleteQueuedStudentAccount(operationId) {
+    showConfirmModal('Delete Pending Student', 'Discard this offline student account request? The account has not been created on the server.', async () => {
+        try {
+            await window.discardQueuedAdminAccountRequest(supabaseClient, operationId);
+            closeConfirmModal();
+            showAlert('success', 'Pending Student Deleted', 'The student account request was removed from this device.');
+            await renderAdminCreatedAccounts();
+            await loadStudentsBySection();
+        } catch (error) {
+            closeConfirmModal();
+            showAlert('error', 'Could Not Delete Student', error.message || 'Unable to remove the pending student account.');
+        }
+    });
+}
+
 async function clearAdminCreatedAccounts() {
     showConfirmModal('Clear Saved Credentials', 'Clear saved temporary passwords from this device? This does not delete the created accounts.', async () => {
         try {
@@ -8750,7 +8790,7 @@ async function renderAdminStructureQueue() {
             : item.type === 'teacher_account_create'
                 ? `${item.payload.teacher_number} - ${[item.payload.first_name, item.payload.middle_initial, item.payload.last_name].filter(Boolean).join(' ')}`
             : item.type === 'student_password_reset'
-                ? `Student ID ${item.payload.student_id}`
+                ? `Student ID ${item.payload.student_number || item.payload.student_id}`
             : item.type === 'student_section_assign'
                 ? `Section ${(lookups?.sections || []).find(section => String(section.section_id) === String(item.payload.section_id))?.section_name
                     || structurePending.find(section => section.type === 'section_add' && String(section.localRef) === String(item.payload.section_id))?.payload.section_name

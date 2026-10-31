@@ -457,10 +457,12 @@
 
     async function saveAdminPasswordResetResult(userId, operationId, payload, result) {
         const roster = await getAdminStudentRoster(null, userId);
-        const student = roster?.students?.find(item => String(item.student_id) === String(payload.student_id));
+        const student = roster?.students?.find(item => payload.student_number
+            ? String(item.student_number) === String(payload.student_number)
+            : String(item.student_id) === String(payload.student_id));
         const record = {
             key: `${userId}:${operationId}`, userId, operationId,
-            studentId: String(payload.student_id),
+            studentId: String(payload.student_id || student?.student_id || ''),
             studentNumber: result.student_number || student?.student_number || '',
             name: student ? [student.last_name, student.first_name, student.middle_initial ? `${String(student.middle_initial).replace(/\.$/, '')}.` : ''].filter(Boolean).join(', ') : '',
             temporaryPassword: result.temporary_password,
@@ -502,6 +504,24 @@
         if (!response.ok) throw new Error(result.error || 'Password reset failed.');
         await saveAdminPasswordResetResult(userId, operationId, payload, result);
         return result;
+    }
+
+    async function queuePasswordResetForPendingStudent(client, studentNumber, functionUrl, anonKey) {
+        const userId = await getUserId(client);
+        if (!userId) throw new Error('Sign in while connected before resetting a student password.');
+        if (!studentNumber || navigator.onLine) {
+            throw new Error('This password reset can only be queued for a pending student while offline.');
+        }
+        const operationId = createOperationId();
+        const createdAt = await nextAdminQueueTimestamp(userId);
+        await adminStoreRequest(adminQueueStoreName, 'readwrite', store => store.put({
+            key: `${userId}:${operationId}`, userId, operationId, role: 'student', action: 'admin-reset',
+            payload: { student_number: String(studentNumber) }, functionUrl, anonKey, createdAt, lastError: null
+        }));
+        setNotice('Student password reset saved on this device. It will run after the student account is created.', true, 'sync');
+        window.dispatchEvent(new CustomEvent('admin-account-data-changed'));
+        window.dispatchEvent(new CustomEvent('admin-password-reset-data-changed'));
+        return { queued: true, operationId };
     }
 
     async function getAdminPasswordResetData(client) {
@@ -1015,6 +1035,7 @@
 
     window.submitAdminAccountCreation = submitAdminAccountCreation;
     window.submitAdminPasswordReset = submitAdminPasswordReset;
+    window.queuePasswordResetForPendingStudent = queuePasswordResetForPendingStudent;
     window.getAdminAccountData = getAdminAccountData;
     window.getAdminPasswordResetData = getAdminPasswordResetData;
     window.discardQueuedAdminAccountRequest = discardQueuedAdminAccountRequest;
