@@ -266,7 +266,7 @@
         if (!currentUserId || !main) return false;
         const snapshotMain = main.cloneNode(true);
         snapshotMain.querySelectorAll('.modal,.modal-overlay,.confirm-modal-overlay,.ams-alert').forEach(element => {
-                if (!['confirmModal', 'createStudentModal', 'createTeacherModal', 'editStudentModal', 'addStudentsToSectionModal', 'departmentModal', 'majorModal', 'sectionModal', 'subjectModal', 'deleteDepartmentModal', 'deleteMajorModal', 'deleteSectionModal', 'deleteSubjectModal', 'teacherAssignModal', 'teacherSectionModal'].includes(element.id)) {
+                if (!['confirmModal', 'createStudentModal', 'createTeacherModal', 'editStudentModal', 'addStudentsToSectionModal', 'unassignSelectedStudentsModal', 'departmentModal', 'majorModal', 'sectionModal', 'subjectModal', 'deleteDepartmentModal', 'deleteMajorModal', 'deleteSectionModal', 'deleteSubjectModal', 'teacherAssignModal', 'teacherSectionModal'].includes(element.id)) {
                 element.remove();
                 return;
             }
@@ -305,7 +305,17 @@
                 setNotice('No saved admin data is available on this device yet. Open the dashboard while connected first.', true);
                 return false;
             }
+            const currentMain = main.cloneNode(true);
             main.innerHTML = snapshot.html;
+            if (!main.querySelector('#manageUnassignSelectedSectionButton')) {
+                const currentButton = currentMain.querySelector('#manageUnassignSelectedSectionButton');
+                const actionGroup = main.querySelector('#manageSectionActions');
+                if (currentButton && actionGroup) actionGroup.appendChild(currentButton.cloneNode(true));
+            }
+            if (!main.querySelector('#unassignSelectedStudentsModal')) {
+                const currentModal = currentMain.querySelector('#unassignSelectedStudentsModal');
+                if (currentModal) main.appendChild(currentModal.cloneNode(true));
+            }
             const userLookups = await getAdminAccountLookups(client, userId);
             const semesterSelect = main.querySelector('#activeSemesterSelect');
             if (semesterSelect && userLookups?.semesters?.length) {

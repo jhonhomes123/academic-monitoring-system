@@ -8316,6 +8316,7 @@ async function loadStudentsBySection() {
         const { pending: structurePending, lookups } = !navigator.onLine
             ? await window.getAdminStructureData(supabaseClient)
             : { pending: [], lookups: null };
+        if (!navigator.onLine) queuedDeletedSectionIds = getQueuedDeletedSectionIds(structurePending, lookups);
         const queuedUnassignAllSectionIds = new Set(structurePending
             .filter(item => item.type === 'section_unassign_all')
             .map(item => String(item.payload.section_id)));
@@ -8323,14 +8324,14 @@ async function loadStudentsBySection() {
             .filter(item => item.type === 'student_section_unassign')
             .flatMap(item => item.payload.student_numbers || [])
             .map(String));
-        if (sectionId === 'unassigned') {
-            queuedDeletedSectionIds = getQueuedDeletedSectionIds(structurePending, lookups);
-        }
         queued.filter(item => item.role === 'student'
             && (item.action || 'admin-create') === 'admin-create'
             && (sectionId === 'unassigned'
                 ? (!item.payload.section_id || queuedDeletedSectionIds.has(String(item.payload.section_id)) || queuedUnassignAllSectionIds.has(String(item.payload.section_id)) || queuedUnassignStudentNumbers.has(String(item.payload.student_number)))
-                : String(item.payload.section_id) === String(sectionId) && !queuedUnassignStudentNumbers.has(String(item.payload.student_number))))
+                : String(item.payload.section_id) === String(sectionId)
+                    && !queuedDeletedSectionIds.has(String(item.payload.section_id))
+                    && !queuedUnassignAllSectionIds.has(String(item.payload.section_id))
+                    && !queuedUnassignStudentNumbers.has(String(item.payload.student_number))))
             .forEach(item => data.push({
                 student_id: `pending:${item.operationId}`,
                 pendingOperationId: item.operationId,
