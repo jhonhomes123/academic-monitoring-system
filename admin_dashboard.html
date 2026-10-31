@@ -8496,9 +8496,13 @@ async function openUnassignSelectedStudentsModal() {
         let students;
         if (!navigator.onLine || String(sectionId).startsWith('local:')) {
             const roster = await window.getAdminStudentRoster?.(supabaseClient);
-            if (!roster?.students) throw new Error('Student roster is not cached on this device. Connect once to prepare it.');
+            const cachedSection = roster?.students
+                ? null
+                : await window.getAdminStudentSection?.(supabaseClient, sectionId);
+            const cachedStudents = roster?.students || cachedSection?.students;
+            if (!cachedStudents) throw new Error('The admin student roster cache is unavailable. Reconnect and reload the dashboard to refresh offline data, then try again.');
             const { pending, lookups } = await window.getAdminStructureData(supabaseClient);
-            const projectedSections = new Map(roster.students.map(student => [String(student.student_id), student.section_id == null ? null : String(student.section_id)]));
+            const projectedSections = new Map(cachedStudents.map(student => [String(student.student_id), student.section_id == null ? String(sectionId) : String(student.section_id)]));
             pending.forEach(operation => {
                 const operationSectionId = String(operation.payload.section_id || '');
                 if (operation.type === 'student_section_assign') {
@@ -8519,7 +8523,7 @@ async function openUnassignSelectedStudentsModal() {
             projectedSections.forEach((currentSectionId, studentId) => {
                 if (currentSectionId && deletedSections.has(currentSectionId)) projectedSections.set(studentId, null);
             });
-            students = roster.students.filter(student => projectedSections.get(String(student.student_id)) === String(sectionId));
+            students = cachedStudents.filter(student => projectedSections.get(String(student.student_id)) === String(sectionId));
         } else {
             const { data, error } = await supabaseClient.from('students')
                 .select('student_id, student_number, first_name, middle_initial, last_name, section_id')
