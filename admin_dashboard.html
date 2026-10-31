@@ -8466,7 +8466,9 @@ async function renderAdminCreatedAccounts() {
                 status: item.processing
                     ? 'Being created'
                     : item.lastError
-                        ? `Retrying: ${item.lastError}`
+                        ? (/already has an account|already registered|duplicate key|already exists/i.test(item.lastError)
+                            ? 'Student ID already in use'
+                            : `Needs attention: ${item.lastError}`)
                         : 'Waiting for connection'
             })),
             ...completed.map(item => ({
@@ -8501,16 +8503,15 @@ async function renderAdminCreatedAccounts() {
             if (account.operationId) {
                 if (account.processing) {
                     actionCell.appendChild(document.createTextNode('Creating'));
+                } else {
+                    const removeButton = document.createElement('button');
+                    removeButton.type = 'button';
+                    removeButton.className = 'btn reject-btn';
+                    removeButton.textContent = account.failed ? 'Remove failed request' : 'Remove request';
+                    removeButton.title = 'Remove this queued request from this device only';
+                    removeButton.addEventListener('click', () => removeQueuedAdminAccount(account.operationId, account.failed));
+                    actionCell.appendChild(removeButton);
                 }
-            } else if (account.studentNumber) {
-                const deleteButton = document.createElement('button');
-                deleteButton.type = 'button';
-                deleteButton.className = 'btn reject-btn';
-                deleteButton.textContent = 'Delete';
-                deleteButton.disabled = !navigator.onLine;
-                deleteButton.title = navigator.onLine ? 'Delete this created student account' : 'Connect to delete this student account';
-                deleteButton.addEventListener('click', () => deleteCreatedStudentAccount(account.studentNumber));
-                actionCell.appendChild(deleteButton);
             } else {
                 actionCell.textContent = '—';
             }
@@ -8580,14 +8581,14 @@ async function renderAdminPasswordResets() {
 
 async function removeQueuedAdminAccount(operationId, failed = false) {
     const prompt = failed
-        ? 'Discard this failed offline account request from this device? This does not delete the account that already exists online.'
-        : 'Remove this saved account request from this device? Any account already created online will not be deleted.';
+        ? 'Remove this failed account request from this device? If the student ID belongs to an existing account, that account will not be deleted.'
+        : 'Remove this account request from this device before it syncs? This does not delete any account already created online.';
     showConfirmModal(failed ? 'Discard Failed Request' : 'Remove Saved Request', prompt, async () => {
         try {
             await window.discardQueuedAdminAccountRequest(supabaseClient, operationId);
             const { queued } = await window.getAdminAccountData(supabaseClient);
             if (!queued.some(item => item.lastError || item.processing)) window.clearPortalOfflineNotice();
-            showAlert('success', failed ? 'Failed Request Discarded' : 'Request Removed', 'The queued request was removed from this device. Any existing online account was not changed.');
+            showAlert('success', failed ? 'Failed Request Removed' : 'Request Removed', 'The queued request was removed from this device. Existing online accounts were not changed.');
         } catch (error) {
             showAlert('error', 'Could Not Remove Request', error.message || 'Unable to remove the saved request.');
         }
@@ -8820,7 +8821,15 @@ async function renderAdminStructureQueue() {
                                 ? `Assignment ${item.payload.assignment_id}`
                             : `${item.type.replace('_delete', '')} ID ${item.payload[`${item.type.replace('_delete', '')}_id`]}`;
         const row = document.createElement('tr');
-        const status = item.processing ? 'Processing' : item.lastError ? `Waiting to retry: ${item.lastError}` : 'Waiting for connection';
+        const duplicateStudentId = item.type === 'student_account_create'
+            && /already has an account|already registered|duplicate key|already exists/i.test(item.lastError || '');
+        const status = item.processing
+            ? 'Sync in progress'
+            : duplicateStudentId
+                ? 'Student ID already in use. Remove this request or change the ID.'
+                : item.lastError
+                    ? `Needs attention: ${item.lastError}`
+                    : 'Waiting to sync when online';
         [labels[item.type] || 'Admin change', details, status]
             .forEach((value, index) => {
                 const cell = document.createElement('td');
@@ -9237,32 +9246,13 @@ async function copyResetStudentPassword() {
     }
 }
 
-async function deleteCreatedStudentAccount(studentNumber) {
-    if (!navigator.onLine) {
-        showAlert('warning', 'Connection Required', 'Connect to the internet before deleting a created student account.');
-        return;
-    }
-    try {
-        const { data, error } = await supabaseClient.from('students')
-            .select('student_id, user_id')
-            .eq('student_number', studentNumber)
-            .maybeSingle();
-        if (error) throw error;
-        if (!data) throw new Error('The student account could not be found.');
-                await deleteStudent(data.student_id, data.user_id, () => window.removeAdminAccountResult(supabaseClient, studentNumber));
-    } catch (error) {
-        showAlert('error', 'Could Not Delete Student', error.message || 'Unable to find the created student account.');
-    }
-}
-
 /* =========================================================
    DELETE STUDENT
 ========================================================= */
 
 async function deleteStudent(
     studentId,
-    userId,
-    onDeleted = null
+    userId
 ) {
 
     /* ======================
@@ -9588,8 +9578,6 @@ async function deleteStudent(
                         ? `${studentData.first_name} ${studentData.last_name} deleted successfully`
                         : 'The remaining student records were deleted successfully'
                 );
-
-                    if (typeof onDeleted === 'function') await onDeleted(studentData?.student_number);
 
                 /* ======================
                    REFRESH

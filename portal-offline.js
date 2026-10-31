@@ -920,21 +920,6 @@
         window.dispatchEvent(new CustomEvent('admin-password-reset-data-changed'));
     }
 
-    async function removeAdminAccountResult(client, accountId) {
-        const userId = await getUserId(client);
-        if (!userId) throw new Error('Sign in again before updating saved account results.');
-        const results = await adminStoreRequest(adminResultsStoreName, 'readonly', store => store.getAll());
-        const matchingResults = results.filter(item => item.userId === userId
-            && item.role === 'student'
-            && String(item.accountId) === String(accountId));
-        await Promise.all(matchingResults.map(item => adminStoreRequest(
-            adminResultsStoreName,
-            'readwrite',
-            store => store.delete(item.key)
-        )));
-        window.dispatchEvent(new CustomEvent('admin-account-data-changed'));
-    }
-
     async function syncAdminAccountQueue(client, operationId = null) {
         if (!navigator.onLine || window.adminAccountSyncInProgress) return;
         window.adminAccountSyncInProgress = true;
@@ -1056,7 +1041,6 @@
     window.discardQueuedAdminAccountRequest = discardQueuedAdminAccountRequest;
     window.clearPortalOfflineNotice = () => setNotice('', false);
     window.clearAdminAccountResults = clearAdminAccountResults;
-    window.removeAdminAccountResult = removeAdminAccountResult;
     window.syncAdminAccountQueue = syncAdminQueues;
     window.getAdminAccountLookups = getAdminAccountLookups;
     window.saveAdminAccountLookups = saveAdminAccountLookups;
