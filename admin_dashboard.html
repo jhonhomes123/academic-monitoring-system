@@ -8326,14 +8326,19 @@ async function loadStudentsBySection() {
         );
 
         const studentActions = student.pending
-            ? `<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+            ? `<div style="display:flex;flex-direction:column;align-items:flex-start;gap:6px;">
                 <span>${student.pendingGraduation ? 'Graduation queued' : student.pendingProcessing ? 'Account sync needs attention' : 'Account creation queued'}</span>
                 ${student.pendingProcessing ? '' : `<button class="btn" onclick="openEditQueuedStudentAccount('${student.pendingOperationId}')">Edit</button>`}
                 <button class="btn" type="button" disabled title="Available after the student account syncs" style="opacity:0.5;cursor:not-allowed;">Reset Password</button>
                 <button class="btn reject-btn" onclick="deleteQueuedStudentAccount('${student.pendingOperationId}')" ${student.pendingProcessing ? 'disabled' : ''}>Delete</button>
             </div>`
             : student.pendingAssignment
-                ? 'Section assignment queued'
+                ? `<div style="display:flex;flex-direction:column;align-items:flex-start;gap:6px;">
+                    <span>Section assignment queued</span>
+                    <button class="btn" onclick="openEditStudentModal(${student.student_id})">Edit</button>
+                    <button class="btn" onclick="resetStudentPassword(${student.student_id})">Reset Password</button>
+                    <button class="btn reject-btn" onclick="deleteStudent('${student.student_id}','${student.users?.user_id}')" ${!navigator.onLine ? 'disabled title="Available when online" style="opacity:0.5;cursor:not-allowed;"' : ''}>Delete</button>
+                </div>`
                 : `<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
                     ${student.pendingEdit ? '<span>Edit queued</span>' : ''}
                     <button class="btn" onclick="openEditStudentModal(${student.student_id})">Edit</button>
@@ -8500,13 +8505,6 @@ async function renderAdminCreatedAccounts() {
                 }
                 if (account.processing) {
                     actionCell.appendChild(document.createTextNode('Creating'));
-                } else {
-                    const removeButton = document.createElement('button');
-                    removeButton.type = 'button';
-                    removeButton.className = 'btn reject-btn';
-                    removeButton.textContent = account.failed ? 'Discard failed request' : 'Remove request';
-                    removeButton.addEventListener('click', () => removeQueuedAdminAccount(account.operationId, account.failed));
-                    actionCell.appendChild(removeButton);
                 }
             } else {
                 actionCell.textContent = '—';
