@@ -930,8 +930,36 @@
         const key = `${userId}:${operationId}`;
         const queuedItem = await adminStoreRequest(adminQueueStoreName, 'readonly', store => store.get(key));
         if (!queuedItem || queuedItem.userId !== userId) throw new Error('This saved account request was not found.');
-        await adminStoreRequest(adminQueueStoreName, 'readwrite', store => store.delete(key));
+        const studentNumber = String(queuedItem.payload?.student_number || '');
+        const relatedStudentIds = new Set();
+        if (studentNumber && queuedItem.role === 'student') {
+            const roster = await getAdminStudentRoster(client, userId);
+            (roster?.students || []).filter(student => String(student.student_number) === studentNumber)
+                .forEach(student => relatedStudentIds.add(String(student.student_id)));
+        }
+        const [allAccountOperations, allStructureOperations] = await Promise.all([
+            adminStoreRequest(adminQueueStoreName, 'readonly', store => store.getAll()),
+            adminStoreRequest(adminStructureQueueStoreName, 'readonly', store => store.getAll())
+        ]);
+        const relatedAccountOperations = allAccountOperations.filter(item => item.userId === userId
+            && item.key !== key
+            && item.role === 'student'
+            && item.action === 'admin-reset'
+            && String(item.payload?.student_number || '') === studentNumber);
+        const relatedStructureOperations = allStructureOperations.filter(item => {
+            if (item.userId !== userId || !['student_section_assign', 'student_section_unassign'].includes(item.type)) return false;
+            const numberMatch = (item.payload?.student_numbers || []).map(String).includes(studentNumber);
+            const idMatch = (item.payload?.student_ids || []).some(studentId => relatedStudentIds.has(String(studentId)));
+            return numberMatch || idMatch;
+        });
+        await Promise.all([
+            adminStoreRequest(adminQueueStoreName, 'readwrite', store => store.delete(key)),
+            ...relatedAccountOperations.map(item => adminStoreRequest(adminQueueStoreName, 'readwrite', store => store.delete(item.key))),
+            ...relatedStructureOperations.map(item => adminStoreRequest(adminStructureQueueStoreName, 'readwrite', store => store.delete(item.key)))
+        ]);
         window.dispatchEvent(new CustomEvent('admin-account-data-changed'));
+        if (relatedStructureOperations.length) window.dispatchEvent(new CustomEvent('admin-structure-data-changed'));
+        if (relatedAccountOperations.length) window.dispatchEvent(new CustomEvent('admin-password-reset-data-changed'));
         return true;
     }
 

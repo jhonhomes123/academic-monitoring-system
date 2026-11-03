@@ -8985,6 +8985,9 @@ async function removeQueuedAdminAccount(operationId, failed = false) {
             await window.discardQueuedAdminAccountRequest(supabaseClient, operationId);
             const { queued } = await window.getAdminAccountData(supabaseClient);
             if (!queued.some(item => item.lastError || item.processing)) window.clearPortalOfflineNotice();
+            await renderAdminCreatedAccounts();
+            await renderAdminStructureQueue();
+            await loadStudentsBySection();
             showAlert('success', failed ? 'Failed Request Removed' : 'Request Removed', 'The queued request was removed from this device. Existing online accounts were not changed.');
         } catch (error) {
             showAlert('error', 'Could Not Remove Request', error.message || 'Unable to remove the saved request.');
