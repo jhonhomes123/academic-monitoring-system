@@ -12,7 +12,6 @@
             margin: 0;
             padding: 0;
             box-sizing: border-box;
-            font-family: 'Inter', sans-serif;
         }
 
         :root {
@@ -8719,7 +8718,7 @@ async function loadStudentsBySection() {
                     <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
                         <button class="btn" onclick="openEditStudentModal(${student.student_id})">Edit</button>
                         <button class="btn" onclick="resetStudentPassword(${student.student_id})">Reset Password</button>
-                        <button class="btn reject-btn" onclick="deleteStudent('${student.student_id}','${student.users?.user_id}')" ${!navigator.onLine ? 'disabled title="Available when online" style="opacity:0.5;cursor:not-allowed;"' : ''}>Delete</button>
+                        <button class="btn reject-btn" onclick="deleteStudent('${student.student_id}','${student.users?.user_id}')">Delete</button>
                     </div>
                 </div>`
                 : `<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
@@ -9076,7 +9075,19 @@ async function renderAdminCreatedAccounts() {
                             : `Needs attention: ${item.lastError}`)
                         : 'Waiting for connection'
             })),
-            ...completed.map(item => {
+            ...queued.filter(item => item.action === 'admin-delete' && item.role === 'student').map(item => ({
+                action: 'admin-delete',
+                operationId: item.operationId,
+                role: 'student',
+                name: [item.payload.first_name, item.payload.middle_initial, item.payload.last_name].filter(Boolean).join(' '),
+                id: item.payload.student_number || item.payload.student_id || '',
+                year: '—',
+                section: '—',
+                password: '—',
+                status: item.lastError ? `Deletion needs attention: ${item.lastError}` : 'Deletion waiting for connection'
+            })),
+            ...completed.filter(item => !queued.some(operation => operation.action === 'admin-delete'
+                && String(operation.payload.student_number || '') === String(item.accountId))).map(item => {
                 const student = item.role === 'student' ? liveStudents.get(String(item.accountId)) : null;
                 const cachedStudent = item.role === 'student' ? cachedStudents.get(String(item.accountId)) : null;
                 const sectionId = resolveSectionId(student?.section_id || cachedStudent?.section_id || item.payload.section_id || '');
@@ -9095,6 +9106,7 @@ async function renderAdminCreatedAccounts() {
                     name: [item.payload.first_name, item.payload.middle_initial, item.payload.last_name].filter(Boolean).join(' '),
                     id: item.accountId,
                     studentNumber: item.role === 'student' ? item.accountId : null,
+                    userId: student?.user_id || cachedStudent?.user_id || item.payload.user_id || '',
                     year: item.role !== 'student'
                         ? '—'
                         : (student || cachedStudent) && !sectionId
@@ -9130,7 +9142,9 @@ async function renderAdminCreatedAccounts() {
                     row.appendChild(cell);
                 });
             const actionCell = document.createElement('td');
-            if (account.operationId) {
+            if (account.action === 'admin-delete') {
+                actionCell.textContent = 'Queued for deletion';
+            } else if (account.operationId) {
                 if (account.processing) {
                     actionCell.appendChild(document.createTextNode('Creating'));
                 } else {
@@ -9142,6 +9156,13 @@ async function renderAdminCreatedAccounts() {
                     removeButton.addEventListener('click', () => removeQueuedAdminAccount(account.operationId, account.failed));
                     actionCell.appendChild(removeButton);
                 }
+            } else if (account.role === 'student') {
+                const deleteButton = document.createElement('button');
+                deleteButton.type = 'button';
+                deleteButton.className = 'btn reject-btn';
+                deleteButton.textContent = 'Delete account';
+                deleteButton.addEventListener('click', () => deleteCreatedStudentAccount(account.id, account.name, account.userId));
+                actionCell.appendChild(deleteButton);
             } else {
                 actionCell.textContent = '—';
             }
@@ -9155,6 +9176,30 @@ async function renderAdminCreatedAccounts() {
 }
 
 window.renderAdminCreatedAccounts = renderAdminCreatedAccounts;
+
+function deleteCreatedStudentAccount(studentNumber, studentName = 'this student', userId = '') {
+    showConfirmModal('Delete Student Account', `Delete ${studentName} and remove the student profile, login, and related academic records? This cannot be undone.`, async () => {
+        try {
+            const result = await window.submitAdminAccountDeletion(
+                supabaseClient,
+                { student_number: String(studentNumber), user_id: String(userId || '') },
+                STUDENT_ACCOUNT_FUNCTION_URL,
+                SUPABASE_ANON_KEY
+            );
+            closeConfirmModal();
+            showAlert('success', result.queued ? 'Deletion Queued' : 'Student Deleted', result.queued
+                ? 'The account will be deleted when this device reconnects.'
+                : 'The student account and related records were deleted.');
+            await renderAdminCreatedAccounts();
+            await renderAdminStructureQueue();
+            await loadStudentsBySection();
+            if (!result.queued) await loadDashboardCounts();
+        } catch (error) {
+            closeConfirmModal();
+            showAlert('error', 'Could Not Delete Student', error.message || 'Unable to delete the student account.');
+        }
+    });
+}
 
 function filterAdminDashboardRows(tableId, searchId) {
     const table = document.getElementById(tableId);
@@ -9683,7 +9728,6 @@ async function createStudentAccount() {
             SUPABASE_ANON_KEY
         );
         if (result.queued) {
-            showAlert('success', 'Student Account Queued', 'This account will be created automatically when the device reconnects.');
             document.getElementById('createStudentNumber').value = '';
             document.getElementById('createStudentFirstName').value = '';
             document.getElementById('createStudentMiddleInitial').value = '';
@@ -9958,6 +10002,27 @@ async function deleteStudent(
         async () => {
 
             try {
+
+                const roster = await window.getAdminStudentRoster?.(supabaseClient);
+                const cachedStudent = roster?.students?.find(student => String(student.student_id) === String(studentId));
+                const deletion = await window.submitAdminAccountDeletion(
+                    supabaseClient,
+                    {
+                        student_id: Number(studentId),
+                        user_id: String(userId || ''),
+                        student_number: cachedStudent?.student_number || ''
+                    },
+                    STUDENT_ACCOUNT_FUNCTION_URL,
+                    SUPABASE_ANON_KEY
+                );
+                closeConfirmModal();
+                showAlert('success', deletion.queued ? 'Deletion Queued' : 'Student Deleted', deletion.queued
+                    ? 'The account will be deleted when this device reconnects.'
+                    : 'The student account and related records were deleted.');
+                await renderAdminCreatedAccounts();
+                await loadStudentsBySection();
+                if (!deletion.queued) await loadDashboardCounts();
+                return;
 
                 /* ======================
                    GET STUDENT INFO

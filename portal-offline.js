@@ -339,9 +339,9 @@
                 const opensAllowedModal = control.matches('button')
                     && /openCreateStudentModal|openCreateTeacherModal|openEditStudentModal|openEditQueuedStudentAccount|openAddStudentsToSectionModal|openUnassignSelectedStudentsModal|transitionAdminSection|openDepartmentModal|openMajorModal|openSectionModal|openSubjectModal|openDeleteDepartmentModal|openDeleteMajorModal|openDeleteSectionModal|openDeleteSubjectModal|openTeacherAssignModal|openAddSectionModal/.test(control.getAttribute('onclick') || '');
                 const isAllowedOfflineAction = control.matches('button')
-                    && /createStudentAccount|createTeacherAccount|saveStudentEdits|resetStudentPassword|clearAdminCreatedAccounts|loadUnassignedStudents|loadGraduatedStudents|transitionSelectedManageSection|unassignAllStudentsFromSelectedSection|unassignSelectedStudentsFromSection|assignSelectedUnassignedStudents|createTeacherAccount|addDepartment|addMajor|addSection|addSubject|setActiveSemester|deleteDepartment|deleteMajor|deleteSectionModalAction|deleteSubject|assignTeacherToSubject|removeTeacherAssignment|saveTeacherSection|closeCreateStudentModal|closeEditStudentModal|closeModal|closeDepartmentModal|closeMajorModal|closeSectionModal|closeSubjectModal|closeDeleteDepartmentModal|closeDeleteMajorModal|closeDeleteSectionModal|closeDeleteSubjectModal|closeTeacherAssignModal|closeTeacherSectionModal|loadEditStudentMajors|loadEditStudentSections|loadDepartmentDeleteOptions|loadMajorsForDelete|loadMajorsForDeleteSection|loadSectionsForDelete|loadMajorsForDeleteSubject|loadSubjectsForDelete/.test(control.getAttribute('onclick') || '');
+                    && /createStudentAccount|createTeacherAccount|saveStudentEdits|resetStudentPassword|deleteStudent|deleteCreatedStudentAccount|clearAdminCreatedAccounts|loadUnassignedStudents|loadGraduatedStudents|transitionSelectedManageSection|unassignAllStudentsFromSelectedSection|unassignSelectedStudentsFromSection|assignSelectedUnassignedStudents|createTeacherAccount|addDepartment|addMajor|addSection|addSubject|setActiveSemester|deleteDepartment|deleteMajor|deleteSectionModalAction|deleteSubject|assignTeacherToSubject|removeTeacherAssignment|saveTeacherSection|closeCreateStudentModal|closeEditStudentModal|closeModal|closeDepartmentModal|closeMajorModal|closeSectionModal|closeSubjectModal|closeDeleteDepartmentModal|closeDeleteMajorModal|closeDeleteSectionModal|closeDeleteSubjectModal|closeTeacherAssignModal|closeTeacherSectionModal|loadEditStudentMajors|loadEditStudentSections|loadDepartmentDeleteOptions|loadMajorsForDelete|loadMajorsForDeleteSection|loadSectionsForDelete|loadMajorsForDeleteSubject|loadSubjectsForDelete/.test(control.getAttribute('onclick') || '');
                 const isAllowedOfflineStandaloneAction = control.matches('button')
-                    && /clearAdminCreatedAccounts|clearAdminPasswordResetResults|transitionSelectedManageSection|unassignAllStudentsFromSelectedSection|openUnassignSelectedStudentsModal/.test(control.getAttribute('onclick') || '');
+                    && /deleteStudent|deleteCreatedStudentAccount|clearAdminCreatedAccounts|clearAdminPasswordResetResults|transitionSelectedManageSection|unassignAllStudentsFromSelectedSection|openUnassignSelectedStudentsModal/.test(control.getAttribute('onclick') || '');
                 const isSemesterPicker = control.id === 'activeSemesterSelect';
                 const isExplorerBack = control.id === 'backButton';
                 const isStudentFilter = ['manageStudentYear', 'manageStudentDepartment', 'manageStudentMajor', 'manageStudentSection'].includes(control.id);
@@ -468,6 +468,7 @@
                 first_name: payload.first_name,
                 middle_initial: payload.middle_initial,
                 last_name: payload.last_name,
+                user_id: role === 'student' ? result.student_id : null,
                 section_id: payload.section_id || result.section_id || null,
                 year_level: payload.year_level || section?.year_level || '',
                 section_name: section?.section_name || ''
@@ -477,6 +478,16 @@
         if (typeof window.renderAdminCreatedAccounts === 'function') {
             await window.renderAdminCreatedAccounts();
         }
+    }
+
+    async function removeAdminAccountResult(client, studentNumber) {
+        const userId = await getUserId(client);
+        if (!userId || !studentNumber) return;
+        const allResults = await adminStoreRequest(adminResultsStoreName, 'readonly', store => store.getAll());
+        await Promise.all(allResults.filter(item => item.userId === userId && item.role === 'student'
+            && String(item.accountId) === String(studentNumber)).map(item => adminStoreRequest(
+            adminResultsStoreName, 'readwrite', store => store.delete(item.key)
+        )));
     }
 
     async function saveAdminPasswordResetResult(userId, operationId, payload, result) {
@@ -870,6 +881,35 @@
         return result;
     }
 
+    async function submitAdminAccountDeletion(client, payload, functionUrl, anonKey) {
+        const userId = await getUserId(client);
+        if (!userId) throw new Error('Sign in again before deleting a student account.');
+        const operationId = createOperationId();
+        if (!navigator.onLine) {
+            const createdAt = await nextAdminQueueTimestamp(userId);
+            await adminStoreRequest(adminQueueStoreName, 'readwrite', store => store.put({
+                key: `${userId}:${operationId}`, userId, operationId, role: 'student', action: 'admin-delete', payload,
+                functionUrl, anonKey, createdAt, lastError: null
+            }));
+            setNotice('Student account deletion saved on this device. It will run when connected.', true, 'sync');
+            window.dispatchEvent(new CustomEvent('admin-account-data-changed'));
+            return { queued: true, operationId };
+        }
+
+        const { data: { session } } = await client.auth.getSession();
+        if (!session) throw new Error('Please sign in again as an administrator.');
+        const response = await fetch(functionUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', apikey: anonKey, Authorization: `Bearer ${session.access_token}` },
+            body: JSON.stringify({ action: 'admin-delete', operation_id: operationId, ...payload })
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(result.error || 'Student account deletion failed.');
+        await removeAdminAccountResult(client, payload.student_number || result.student_number);
+        window.dispatchEvent(new CustomEvent('admin-account-data-changed'));
+        return result;
+    }
+
     async function queueAdminStudentEdit(client, payload, functionUrl, anonKey) {
         const userId = await getUserId(client);
         if (!userId) throw new Error('Sign in while connected before making offline student edits.');
@@ -1011,6 +1051,8 @@
                         await saveAdminAccountResult(userId, item.operationId, item.role, payload, result);
                     } else if (item.action === 'admin-reset') {
                         await saveAdminPasswordResetResult(userId, item.operationId, item.payload, result);
+                    } else if (item.action === 'admin-delete') {
+                        await removeAdminAccountResult(client, item.payload.student_number || result.student_number);
                     }
                     await adminStoreRequest(adminQueueStoreName, 'readwrite', store => store.delete(item.key));
                 } catch (error) {
@@ -1031,7 +1073,9 @@
                             : `The saved ${item.role} account is being created. We’ll check again shortly.`)
                         : (item.action === 'admin-reset'
                             ? `A saved student password reset could not be applied yet: ${failureReason}`
-                            : `A saved ${item.role} account could not be created yet: ${failureReason}`), true, 'sync');
+                            : item.action === 'admin-delete'
+                                ? `A saved student deletion could not be applied yet: ${failureReason}`
+                                : `A saved ${item.role} account could not be created yet: ${failureReason}`), true, 'sync');
                     window.setTimeout(() => {
                         if (navigator.onLine && window.currentOfflineRole === 'admin') {
                             void syncAdminQueues(client);
@@ -1091,6 +1135,7 @@
     }
 
     window.submitAdminAccountCreation = submitAdminAccountCreation;
+    window.submitAdminAccountDeletion = submitAdminAccountDeletion;
     window.submitAdminPasswordReset = submitAdminPasswordReset;
     window.queuePasswordResetForPendingStudent = queuePasswordResetForPendingStudent;
     window.getAdminAccountData = getAdminAccountData;
