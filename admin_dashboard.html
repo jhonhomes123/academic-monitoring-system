@@ -8696,6 +8696,17 @@ async function loadStudentsBySection() {
             });
     }
 
+    if (window.getAdminAccountData) {
+        const { queued } = await window.getAdminAccountData(supabaseClient);
+        const pendingDeletions = queued.filter(item => item.action === 'admin-delete' && item.role === 'student');
+        const deletedStudentNumbers = new Set(pendingDeletions
+            .map(item => String(item.payload.student_number || '')).filter(Boolean));
+        const deletedStudentIds = new Set(pendingDeletions
+            .map(item => String(item.payload.student_id || '')).filter(Boolean));
+        data = data.filter(student => !deletedStudentNumbers.has(String(student.student_number || ''))
+            && !deletedStudentIds.has(String(student.student_id || '')));
+    }
+
     if (!data.length) {
 
         table.innerHTML = `
@@ -9090,9 +9101,14 @@ async function renderAdminCreatedAccounts() {
                 year: getProjectedYear(sectionId, item.payload.year_level, section) || item.payload.year_level || '—'
             };
         };
+        const pendingDeletedStudentNumbers = new Set(queued
+            .filter(item => item.action === 'admin-delete')
+            .map(item => String(item.payload.student_number || ''))
+            .filter(Boolean));
         table.replaceChildren();
         const rows = [
-            ...queued.filter(item => (item.action || 'admin-create') === 'admin-create').map(item => ({
+            ...queued.filter(item => (item.action || 'admin-create') === 'admin-create'
+                && !pendingDeletedStudentNumbers.has(String(item.payload.student_number || ''))).map(item => ({
                 operationId: item.operationId,
                 processing: Boolean(item.processing),
                 failed: Boolean(item.lastError),
@@ -9112,20 +9128,6 @@ async function renderAdminCreatedAccounts() {
                             ? 'Student ID already in use'
                             : `Needs attention: ${item.lastError}`)
                         : 'Waiting for connection'
-            })),
-            ...queued.filter(item => item.action === 'admin-delete' && item.role === 'student').map(item => ({
-                action: 'admin-delete',
-                operationId: item.operationId,
-                role: 'student',
-                name: formatName(item.payload.first_name, item.payload.middle_initial, item.payload.last_name),
-                firstName: item.payload.first_name,
-                middleInitial: item.payload.middle_initial,
-                lastName: item.payload.last_name,
-                id: item.payload.student_number || item.payload.student_id || '',
-                year: '—',
-                section: '—',
-                password: '—',
-                status: item.lastError ? `Deletion needs attention: ${item.lastError}` : 'Deletion waiting for connection'
             })),
             ...completed.filter(item => !queued.some(operation => operation.action === 'admin-delete'
                 && String(operation.payload.student_number || '') === String(item.accountId))).map(item => {
@@ -9654,7 +9656,8 @@ window.addEventListener('admin-account-data-changed', () => {
     void renderAdminCreatedAccounts();
     void renderAdminDeletions();
     void renderAdminStructureQueue();
-    if (navigator.onLine && document.getElementById('manageStudentSection')?.value) {
+    if (document.getElementById('studentSection')?.classList.contains('active-section')
+        && document.getElementById('manageStudentYear')?.value) {
         void loadStudentsBySection();
     }
 });
