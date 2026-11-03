@@ -3657,8 +3657,8 @@ async function approveAccount(id) {
 
         async function getAdminExplorerRecords() {
             if (navigator.onLine || !window.getAdminStructureData) return null;
-            const { lookups, pending } = await window.getAdminStructureData(supabaseClient);
-            if (!lookups) return { departments: [], majors: [], sections: [], subjects: [] };
+            const { lookups: savedLookups, pending } = await window.getAdminStructureData(supabaseClient);
+            const lookups = savedLookups || {};
 
             const hasDelete = (type, id) => pending.some(item => item.type === type && String(item.payload[`${type.replace('_delete', '')}_id`]) === String(id));
             const departmentDeleted = id => hasDelete('department_delete', id);
