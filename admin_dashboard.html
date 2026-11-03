@@ -7989,7 +7989,7 @@ async function loadUnassignedStudentChoices() {
         students = roster.students.filter(student => student.section_id === null || student.section_id === undefined);
     } else {
         const { data, error } = await supabaseClient.from('students').select(`
-            student_id, student_number, first_name, middle_initial, last_name, section_id, graduated_at
+            student_id, student_number, first_name, middle_initial, last_name, gender, section_id, graduated_at
         `).is('section_id', null).order('last_name');
         if (error) throw error;
         students = data || [];
@@ -8068,6 +8068,7 @@ async function loadUnassignedStudentChoices() {
                 first_name: item.payload.first_name,
                 middle_initial: item.payload.middle_initial,
                 last_name: item.payload.last_name,
+                gender: item.payload.gender,
                 section_id: null,
                 pendingCreate: true
             });
@@ -8087,10 +8088,11 @@ function filterUnassignedStudentChoices() {
 }
 
 function renderStudentChoiceGroups(students, checkboxClass, changeHandler = '') {
+    const genderOf = student => String(student.gender || '').trim().toLowerCase();
     const groups = [
-        ['Male', students.filter(student => student.gender === 'Male')],
-        ['Female', students.filter(student => student.gender === 'Female')],
-        ['Gender Not Set', students.filter(student => !['Male', 'Female'].includes(student.gender))]
+        ['Male', students.filter(student => genderOf(student) === 'male')],
+        ['Female', students.filter(student => genderOf(student) === 'female')],
+        ['Gender Not Set', students.filter(student => !['male', 'female'].includes(genderOf(student)))]
     ];
     return groups.filter(([, members]) => members.length).map(([label, members]) => `
         <tr class="student-gender-heading"><td colspan="3"><strong>${label}</strong></td></tr>
