@@ -754,6 +754,39 @@ table td{
 
 }
 
+.dashboard-search-field {
+    position: relative;
+    width: min(100%, 420px);
+    margin: 0 0 12px;
+}
+
+.dashboard-search-field i {
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #64748b;
+    pointer-events: none;
+}
+
+.dashboard-search-field input {
+    box-sizing: border-box;
+    width: 100%;
+    height: 42px;
+    padding: 9px 12px 9px 36px;
+    border: 1px solid #d5dbe5;
+    border-radius: 8px;
+    background: #fff;
+    color: #1f2937;
+    font: inherit;
+    outline: none;
+}
+
+.dashboard-search-field input:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, .12);
+}
+
 .danger-zone{
 
     margin-top:25px;
@@ -1187,7 +1220,10 @@ table td{
                     </div>
                     <button class="btn reject-btn" onclick="clearAdminCreatedAccounts()">Clear saved credentials</button>
                 </div>
-                <input id="adminCreatedAccountsSearch" type="search" placeholder="Search student ID, name, or section..." oninput="filterAdminDashboardRows('adminCreatedAccountsTable','adminCreatedAccountsSearch')" style="width:100%;max-width:420px;margin:0 0 12px;">
+                <div class="dashboard-search-field">
+                    <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+                    <input id="adminCreatedAccountsSearch" type="search" placeholder="Search student ID, name, or section..." aria-label="Search created accounts" oninput="filterAdminDashboardRows('adminCreatedAccountsTable','adminCreatedAccountsSearch')">
+                </div>
                 <div class="table-responsive" style="max-height:720px;overflow:auto;">
                     <table>
                         <thead><tr><th style="position:sticky;top:0;background:#fff;z-index:1;">Account</th><th style="position:sticky;top:0;background:#fff;z-index:1;">Name</th><th style="position:sticky;top:0;background:#fff;z-index:1;">ID</th><th style="position:sticky;top:0;background:#fff;z-index:1;">Year</th><th style="position:sticky;top:0;background:#fff;z-index:1;">Section</th><th style="position:sticky;top:0;background:#fff;z-index:1;">Temporary Password</th><th style="position:sticky;top:0;background:#fff;z-index:1;">Status</th><th style="position:sticky;top:0;background:#fff;z-index:1;">Action</th></tr></thead>
@@ -1217,7 +1253,10 @@ table td{
                     </div>
                     <button class="btn reject-btn" onclick="clearAdminPasswordResetResults()">Clear reset results</button>
                 </div>
-                <input id="adminPasswordResetSearch" type="search" placeholder="Search student ID or name..." oninput="filterAdminDashboardRows('adminPasswordResetTable','adminPasswordResetSearch')" style="width:100%;max-width:420px;margin:0 0 12px;">
+                <div class="dashboard-search-field">
+                    <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+                    <input id="adminPasswordResetSearch" type="search" placeholder="Search student ID or name..." aria-label="Search password reset results" oninput="filterAdminDashboardRows('adminPasswordResetTable','adminPasswordResetSearch')">
+                </div>
                 <div class="table-responsive" style="max-height:720px;overflow:auto;">
                     <table>
                         <thead><tr><th style="position:sticky;top:0;background:#fff;z-index:1;">Student ID</th><th style="position:sticky;top:0;background:#fff;z-index:1;">Student</th><th style="position:sticky;top:0;background:#fff;z-index:1;">Temporary Password</th><th style="position:sticky;top:0;background:#fff;z-index:1;">Email Status</th><th style="position:sticky;top:0;background:#fff;z-index:1;">Reset Status</th></tr></thead>
@@ -8037,23 +8076,46 @@ async function loadUnassignedStudentChoices() {
         table.innerHTML = '<tr><td colspan="3">No unassigned students available</td></tr>';
         return;
     }
-    table.innerHTML = students.map(student => `<tr>
-        <td><input class="bulk-unassigned-student" type="checkbox" style="width:20px;height:20px;" value="${student.student_id}" data-student-number="${student.pendingCreate ? student.student_number : ''}" onchange="updateBulkAssignStudentCount()"></td>
-        <td>${student.student_number || ''}</td>
-        <td>${formatName(student.first_name, student.middle_initial, student.last_name)}${student.pendingCreate ? ' (account waiting to sync)' : ''}</td>
-    </tr>`).join('');
-    table.querySelectorAll('tr').forEach((row, index) => {
-        const student = students[index];
-        row.dataset.studentSearch = `${student.student_number || ''} ${formatName(student.first_name, student.middle_initial, student.last_name)}`.toLowerCase();
-    });
+    table.innerHTML = renderStudentChoiceGroups(students, 'bulk-unassigned-student', 'updateBulkAssignStudentCount()');
     filterUnassignedStudentChoices();
     updateBulkAssignStudentCount();
 }
 
 function filterUnassignedStudentChoices() {
     const query = document.getElementById('unassignedStudentSearch')?.value.trim().toLowerCase() || '';
-    document.querySelectorAll('#unassignedStudentChoices tr[data-student-search]').forEach(row => {
+    filterStudentChoiceRows('unassignedStudentChoices', query);
+}
+
+function renderStudentChoiceGroups(students, checkboxClass, changeHandler = '') {
+    const groups = [
+        ['Male', students.filter(student => student.gender === 'Male')],
+        ['Female', students.filter(student => student.gender === 'Female')],
+        ['Gender Not Set', students.filter(student => !['Male', 'Female'].includes(student.gender))]
+    ];
+    return groups.filter(([, members]) => members.length).map(([label, members]) => `
+        <tr class="student-gender-heading"><td colspan="3"><strong>${label}</strong></td></tr>
+        ${members.map(student => `<tr data-student-search="${`${student.student_number || ''} ${formatName(student.first_name, student.middle_initial, student.last_name)}`.toLowerCase()}">
+            <td><input class="${checkboxClass}" type="checkbox" style="width:20px;height:20px;" value="${student.student_id}" data-student-number="${student.pendingCreate ? student.student_number : ''}" ${changeHandler ? `onchange="${changeHandler}"` : ''}></td>
+            <td>${student.student_number || ''}</td>
+            <td>${formatName(student.first_name, student.middle_initial, student.last_name)}${student.pendingCreate ? ' (account waiting to sync)' : ''}</td>
+        </tr>`).join('')}
+    `).join('');
+}
+
+function filterStudentChoiceRows(tbodyId, query) {
+    const table = document.getElementById(tbodyId);
+    const rows = [...table.querySelectorAll('tr')];
+    rows.filter(row => row.dataset.studentSearch).forEach(row => {
         row.hidden = !row.dataset.studentSearch.includes(query);
+    });
+    rows.filter(row => row.classList.contains('student-gender-heading')).forEach(header => {
+        let next = header.nextElementSibling;
+        let hasVisibleStudent = false;
+        while (next && !next.classList.contains('student-gender-heading')) {
+            if (next.dataset.studentSearch && !next.hidden) hasVisibleStudent = true;
+            next = next.nextElementSibling;
+        }
+        header.hidden = !hasVisibleStudent;
     });
 }
 
@@ -8599,13 +8661,14 @@ async function openUnassignSelectedStudentsModal() {
                         first_name: item.payload.first_name,
                         middle_initial: item.payload.middle_initial,
                         last_name: item.payload.last_name,
+                        gender: item.payload.gender,
                         section_id: sectionId,
                         pendingCreate: true
                     });
                 });
         } else {
             const { data, error } = await supabaseClient.from('students')
-                .select('student_id, student_number, first_name, middle_initial, last_name, section_id')
+                .select('student_id, student_number, first_name, middle_initial, last_name, gender, section_id')
                 .eq('section_id', sectionId)
                 .order('last_name');
             if (error) throw error;
@@ -8616,11 +8679,7 @@ async function openUnassignSelectedStudentsModal() {
             table.innerHTML = '<tr><td colspan="3">No students are assigned to this section.</td></tr>';
             return;
         }
-        table.innerHTML = students.map(student => `<tr data-section-student-search="${`${student.student_number || ''} ${formatName(student.first_name, student.middle_initial, student.last_name)}`.toLowerCase()}">
-            <td><input class="section-student-choice" type="checkbox" style="width:20px;height:20px;" value="${student.student_id}" data-student-number="${student.pendingCreate ? student.student_number : ''}"></td>
-            <td>${student.student_number || ''}</td>
-            <td>${formatName(student.first_name, student.middle_initial, student.last_name)}${student.pendingCreate ? ' (account waiting to sync)' : ''}</td>
-        </tr>`).join('');
+        table.innerHTML = renderStudentChoiceGroups(students, 'section-student-choice');
     } catch (error) {
         table.innerHTML = `<tr><td colspan="3">${error.message || 'Unable to load students.'}</td></tr>`;
     }
@@ -8628,9 +8687,7 @@ async function openUnassignSelectedStudentsModal() {
 
 function filterSectionStudentChoices() {
     const query = document.getElementById('sectionStudentSearch').value.trim().toLowerCase();
-    document.querySelectorAll('#sectionStudentChoices tr[data-section-student-search]').forEach(row => {
-        row.hidden = !row.dataset.sectionStudentSearch.includes(query);
-    });
+    filterStudentChoiceRows('sectionStudentChoices', query);
 }
 
 function toggleAllSectionStudents(checked) {
