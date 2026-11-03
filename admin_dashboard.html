@@ -5267,24 +5267,27 @@ async function refreshCurrentExplorer() {
         }
 
         async function getAdminMajorOptions(departmentId) {
+            const requestedDepartmentId = String(departmentId);
+            const resolvedDepartmentId = await resolveAdminStructureLocalId(requestedDepartmentId);
+            const departmentIds = new Set([requestedDepartmentId, resolvedDepartmentId]);
             let majors;
             let pending = [];
             if (!navigator.onLine && window.getAdminStructureData) {
                 const offlineRecords = await getAdminExplorerRecords();
-                majors = offlineRecords.majors.filter(major => String(major.department_id) === String(departmentId));
+                majors = offlineRecords.majors.filter(major => departmentIds.has(String(major.department_id)));
                 pending = offlineRecords.pending || [];
             } else {
-                if (String(departmentId).startsWith('local:')) {
+                if (resolvedDepartmentId.startsWith('local:')) {
                     majors = [];
                 } else {
-                    const { data, error } = await supabaseClient.from('majors').select('*').eq('department_id', departmentId);
+                    const { data, error } = await supabaseClient.from('majors').select('*').eq('department_id', resolvedDepartmentId);
                     if (error) throw error;
                     majors = data || [];
                 }
                 if (window.getAdminStructureData) {
                     const structure = await window.getAdminStructureData(supabaseClient);
                     pending = structure.pending || [];
-                    pending.filter(item => item.type === 'major_add' && String(item.payload.department_id) === String(departmentId))
+                    pending.filter(item => item.type === 'major_add' && departmentIds.has(String(item.payload.department_id)))
                         .forEach(item => {
                             const deleted = pending.some(candidate => candidate.type === 'major_delete'
                                 && String(candidate.payload.major_id) === String(item.localRef));
@@ -5301,24 +5304,27 @@ async function refreshCurrentExplorer() {
             pending.filter(item => item.type === 'major_add' && deletedDepartments.has(String(item.payload.department_id)))
                 .forEach(item => deletedMajorIds.add(String(item.localRef)));
             return majors.filter(major => !deletedMajorIds.has(String(major.major_id))
-                && !deletedDepartments.has(String(departmentId)));
+                && ![...departmentIds].some(id => deletedDepartments.has(id)));
         }
 
         async function getAdminSectionOptions(majorId, yearLevel) {
+            const requestedMajorId = String(majorId);
+            const resolvedMajorId = await resolveAdminStructureLocalId(requestedMajorId);
+            const majorIds = new Set([requestedMajorId, resolvedMajorId]);
             let sections;
             let pending = [];
             let lookups = null;
             if (!navigator.onLine && window.getAdminStructureData) {
                 const offlineRecords = await getAdminExplorerRecords();
-                sections = offlineRecords.sections.filter(section => String(section.major_id) === String(majorId)
+                sections = offlineRecords.sections.filter(section => majorIds.has(String(section.major_id))
                     && (!yearLevel || section.year_level === yearLevel));
                 pending = offlineRecords.pending || [];
                 lookups = offlineRecords.lookups;
             } else {
-                if (String(majorId).startsWith('local:')) {
+                if (resolvedMajorId.startsWith('local:')) {
                     sections = [];
                 } else {
-                    let query = supabaseClient.from('sections').select('*').eq('major_id', majorId);
+                    let query = supabaseClient.from('sections').select('*').eq('major_id', resolvedMajorId);
                     if (yearLevel) query = query.eq('year_level', yearLevel);
                     const { data, error } = await query.order('section_name');
                     if (error) throw error;
@@ -5329,7 +5335,7 @@ async function refreshCurrentExplorer() {
                     pending = structure.pending || [];
                     lookups = structure.lookups;
                     pending.filter(item => item.type === 'section_add'
-                        && String(item.payload.major_id) === String(majorId)
+                        && majorIds.has(String(item.payload.major_id))
                         && (!yearLevel || item.payload.year_level === yearLevel))
                         .forEach(item => {
                             const deleted = pending.some(candidate => candidate.type === 'section_delete'
@@ -5351,7 +5357,14 @@ async function refreshCurrentExplorer() {
             pending.filter(item => item.type === 'major_add' && deletedDepartmentIds.has(String(item.payload.department_id)))
                 .forEach(item => deletedMajorIds.add(String(item.localRef)));
             return sections.filter(section => !deletedSectionIds.has(String(section.section_id))
-                && !deletedMajorIds.has(String(majorId)));
+                && ![...majorIds].some(id => deletedMajorIds.has(id)));
+        }
+
+        async function resolveAdminStructureLocalId(value) {
+            const id = String(value ?? '');
+            if (!id.startsWith('local:') || !window.getAdminStructureLocalIdMap) return id;
+            const idMap = await window.getAdminStructureLocalIdMap(supabaseClient);
+            return String(idMap.get(id) ?? id);
         }
         /* =========================================================
            LOAD SECTIONS
@@ -9339,11 +9352,11 @@ window.addEventListener('admin-structure-data-changed', () => {
         const sectionId = document.getElementById('manageStudentSection').value;
         void (async () => {
             await loadDepartmentsForManageStudents();
-            document.getElementById('manageStudentDepartment').value = departmentId;
+            document.getElementById('manageStudentDepartment').value = await resolveAdminStructureLocalId(departmentId);
             await loadMajorsForManageStudents();
-            document.getElementById('manageStudentMajor').value = majorId;
+            document.getElementById('manageStudentMajor').value = await resolveAdminStructureLocalId(majorId);
             await loadSectionsForManageStudents();
-            document.getElementById('manageStudentSection').value = sectionId;
+            document.getElementById('manageStudentSection').value = await resolveAdminStructureLocalId(sectionId);
             await loadStudentsBySection();
         })();
     }
