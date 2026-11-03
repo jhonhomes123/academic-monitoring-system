@@ -490,6 +490,76 @@
         )));
     }
 
+    async function performAdminStudentDeletion(client, payload, anonKey) {
+        const studentId = Number(payload.student_id);
+        const studentNumber = String(payload.student_number || '').trim();
+        const userId = String(payload.user_id || '');
+        let query = client.from('students').select('student_id, user_id, student_number, first_name, last_name');
+        if (Number.isInteger(studentId) && studentId > 0) query = query.eq('student_id', studentId);
+        else if (studentNumber) query = query.eq('student_number', studentNumber);
+        else if (userId) query = query.eq('user_id', userId);
+        else throw new Error('A student ID or account identifier is required.');
+
+        const { data: student, error: studentError } = await query.maybeSingle();
+        if (studentError) throw new Error(studentError.message);
+        const resolvedUserId = String(student?.user_id || userId);
+        if (!resolvedUserId) throw new Error('The student login could not be identified.');
+
+        if (student) {
+            const { error: activityError } = await client.from('activity_logs')
+                .update({ user_id: null }).eq('user_id', resolvedUserId);
+            if (activityError) throw new Error(activityError.message);
+
+            const { data: requirements, error: requirementsError } = await client.from('student_requirements')
+                .select('requirement_id').eq('student_id', student.student_id);
+            if (requirementsError) throw new Error(requirementsError.message);
+            const requirementIds = (requirements || []).map(item => item.requirement_id).filter(Boolean);
+
+            const { error: filesByStudentError } = await client.from('subject_instruction_files')
+                .delete().eq('student_id', student.student_id);
+            if (filesByStudentError) throw new Error(filesByStudentError.message);
+            if (requirementIds.length) {
+                const { error: filesByRequirementError } = await client.from('subject_instruction_files')
+                    .delete().in('requirement_id', requirementIds);
+                if (filesByRequirementError) throw new Error(filesByRequirementError.message);
+                const { error: requirementsDeleteError } = await client.from('student_requirements')
+                    .delete().in('requirement_id', requirementIds);
+                if (requirementsDeleteError) throw new Error(requirementsDeleteError.message);
+            }
+            const { error: gradesError } = await client.from('student_grades')
+                .delete().eq('student_id', student.student_id);
+            if (gradesError) throw new Error(gradesError.message);
+            const { error: studentDeleteError } = await client.from('students')
+                .delete().eq('student_id', student.student_id);
+            if (studentDeleteError) throw new Error(studentDeleteError.message);
+        }
+
+        const { error: appUserError } = await client.from('users').delete().eq('user_id', resolvedUserId);
+        if (appUserError) throw new Error(appUserError.message);
+        const { data: { session } } = await client.auth.getSession();
+        if (!session) throw new Error('Please sign in again as an administrator.');
+        const response = await fetch('https://nrqrsolfowebujogawti.supabase.co/functions/v1/delete-user', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                apikey: anonKey,
+                Authorization: `Bearer ${session.access_token}`
+            },
+            body: JSON.stringify({ user_id: resolvedUserId })
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok && !/not found|does not exist/i.test(result.error || '')) {
+            throw new Error(result.error || 'Unable to delete the authentication account.');
+        }
+
+        if (student) {
+            const activity = `Deleted student ${student.first_name || 'Unknown'} ${student.last_name || 'student'} [${student.student_number || studentId}]`;
+            const { error: logError } = await client.from('activity_logs').insert({ user_id: null, activity });
+            if (logError) console.warn('Student account was deleted, but the activity log could not be saved.', logError);
+        }
+        return { ok: true, student_number: student?.student_number || studentNumber };
+    }
+
     async function saveAdminPasswordResetResult(userId, operationId, payload, result) {
         const roster = await getAdminStudentRoster(null, userId);
         const student = roster?.students?.find(item => payload.student_number
@@ -896,15 +966,7 @@
             return { queued: true, operationId };
         }
 
-        const { data: { session } } = await client.auth.getSession();
-        if (!session) throw new Error('Please sign in again as an administrator.');
-        const response = await fetch(functionUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', apikey: anonKey, Authorization: `Bearer ${session.access_token}` },
-            body: JSON.stringify({ action: 'admin-delete', operation_id: operationId, ...payload })
-        });
-        const result = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(result.error || 'Student account deletion failed.');
+        const result = await performAdminStudentDeletion(client, payload, anonKey);
         await removeAdminAccountResult(client, payload.student_number || result.student_number);
         window.dispatchEvent(new CustomEvent('admin-account-data-changed'));
         return result;
@@ -1040,13 +1102,18 @@
                             payload[field] = idMap.get(value);
                         }
                     }
-                    const response = await fetch(item.functionUrl, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json', apikey: item.anonKey, Authorization: `Bearer ${session.access_token}` },
-                        body: JSON.stringify({ action: item.action || 'admin-create', operation_id: item.operationId, ...payload })
-                    });
-                    const result = await response.json().catch(() => ({}));
-                    if (!response.ok) throw new Error(result.error || 'Account creation failed.');
+                    let result;
+                    if (item.action === 'admin-delete') {
+                        result = await performAdminStudentDeletion(client, payload, item.anonKey);
+                    } else {
+                        const response = await fetch(item.functionUrl, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json', apikey: item.anonKey, Authorization: `Bearer ${session.access_token}` },
+                            body: JSON.stringify({ action: item.action || 'admin-create', operation_id: item.operationId, ...payload })
+                        });
+                        result = await response.json().catch(() => ({}));
+                        if (!response.ok) throw new Error(result.error || 'Account creation failed.');
+                    }
                     if ((item.action || 'admin-create') === 'admin-create') {
                         await saveAdminAccountResult(userId, item.operationId, item.role, payload, result);
                     } else if (item.action === 'admin-reset') {
