@@ -3737,6 +3737,21 @@ async function approveAccount(id) {
             return deletedSections;
         }
 
+        function getProjectedSectionYear(sectionId, fallbackYear, pending, lookups) {
+            const section = (lookups?.sections || []).find(item => String(item.section_id) === String(sectionId))
+                || pending.find(item => item.type === 'section_add' && String(item.localRef) === String(sectionId))?.payload;
+            let yearLevel = section?.year_level || fallbackYear || '';
+            pending.filter(item => item.type === 'section_transition'
+                && String(item.payload.section_id) === String(sectionId))
+                .forEach(item => {
+                    const transitions = item.payload.direction === 'promote'
+                        ? { '1st Year': '2nd Year', '2nd Year': '3rd Year', '3rd Year': '4th Year', '4th Year': 'Graduate' }
+                        : { 'Graduate': '4th Year', '4th Year': '3rd Year', '3rd Year': '2nd Year', '2nd Year': '1st Year' };
+                    yearLevel = transitions[yearLevel] || yearLevel;
+                });
+            return yearLevel;
+        }
+
         async function openQueuedAcademicItem(type, payload, localRef) {
             const records = await getAdminExplorerRecords();
             const pending = records?.pending || [];
@@ -8142,7 +8157,13 @@ function renderStudentChoiceGroups(students, checkboxClass, changeHandler = '') 
     ];
     return groups.filter(([, members]) => members.length).map(([label, members]) => `
         <tr class="student-gender-heading"><td colspan="3"><strong>${label}</strong></td></tr>
-        ${members.map(student => `<tr data-student-search="${`${student.student_number || ''} ${formatName(student.first_name, student.middle_initial, student.last_name)}`.toLowerCase()}">
+        ${members.sort((first, second) =>
+            `${first.last_name || ''}, ${first.first_name || ''}, ${first.middle_initial || ''}`.localeCompare(
+                `${second.last_name || ''}, ${second.first_name || ''}, ${second.middle_initial || ''}`,
+                undefined,
+                { sensitivity: 'base' }
+            )
+        ).map(student => `<tr data-student-search="${`${student.student_number || ''} ${formatName(student.first_name, student.middle_initial, student.last_name)}`.toLowerCase()}">
             <td><input class="${checkboxClass}" type="checkbox" style="width:20px;height:20px;" value="${student.student_id}" data-student-number="${student.pendingCreate ? student.student_number : ''}" ${changeHandler ? `onchange="${changeHandler}"` : ''}></td>
             <td>${student.student_number || ''}</td>
             <td>${formatName(student.first_name, student.middle_initial, student.last_name)}${student.pendingCreate ? ' (account waiting to sync)' : ''}</td>
@@ -9257,6 +9278,22 @@ window.addEventListener('admin-password-reset-data-changed', () => {
 });
 window.addEventListener('admin-structure-data-changed', () => {
     void renderAdminStructureQueue();
+    if (document.getElementById('studentSection')?.classList.contains('active-section')
+        && document.getElementById('manageStudentYear')?.value
+        && document.getElementById('manageStudentYear').value !== 'unassigned') {
+        const departmentId = document.getElementById('manageStudentDepartment').value;
+        const majorId = document.getElementById('manageStudentMajor').value;
+        const sectionId = document.getElementById('manageStudentSection').value;
+        void (async () => {
+            await loadDepartmentsForManageStudents();
+            document.getElementById('manageStudentDepartment').value = departmentId;
+            await loadMajorsForManageStudents();
+            document.getElementById('manageStudentMajor').value = majorId;
+            await loadSectionsForManageStudents();
+            document.getElementById('manageStudentSection').value = sectionId;
+            await loadStudentsBySection();
+        })();
+    }
     if (document.getElementById('departmentSection')?.classList.contains('active-section')) {
         void refreshCurrentExplorer();
     }
@@ -9324,13 +9361,20 @@ async function openEditQueuedStudentAccount(operationId) {
         if (!item || item.role !== 'student' || item.processing || item.lastError) {
             throw new Error('This request has already started syncing and cannot be changed offline.');
         }
+        const { pending: structurePending, lookups } = await window.getAdminStructureData(supabaseClient);
+        const effectiveYear = getProjectedSectionYear(
+            item.payload.section_id,
+            item.payload.year_level,
+            structurePending,
+            lookups
+        );
         queuedStudentCreateEditOperationId = operationId;
         document.getElementById('createStudentNumber').value = item.payload.student_number || '';
         document.getElementById('createStudentFirstName').value = item.payload.first_name || '';
         document.getElementById('createStudentMiddleInitial').value = item.payload.middle_initial || '';
         document.getElementById('createStudentLastName').value = item.payload.last_name || '';
         document.getElementById('createStudentGender').value = item.payload.gender || '';
-        document.getElementById('createStudentYear').value = item.payload.year_level || '';
+        document.getElementById('createStudentYear').value = effectiveYear;
         document.getElementById('createStudentDepartment').innerHTML = '<option value="">Select Department</option>';
         document.getElementById('createStudentMajor').innerHTML = '<option value="">Select Major</option>';
         document.getElementById('createStudentSection').innerHTML = '<option value="">Select Section</option>';
