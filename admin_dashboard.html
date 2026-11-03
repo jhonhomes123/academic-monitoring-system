@@ -8226,18 +8226,40 @@ async function assignSelectedUnassignedStudents() {
             if (error) throw error;
             await window.saveAdminAccountLookups?.(supabaseClient);
         }
-        const section = !navigator.onLine
-            ? (await getAdminExplorerRecords())?.sections.find(item => String(item.section_id) === String(sectionId))
-            : (await supabaseClient.from('sections').select('section_id, section_name, year_level, major_id').eq('section_id', sectionId).single()).data;
-        const majorId = document.getElementById('manageStudentMajor').value;
-        const departmentId = document.getElementById('manageStudentDepartment').value;
-        const yearLevel = document.getElementById('manageStudentYear').value;
+        let displaySectionId = String(sectionId);
+        let displayMajorId = String(document.getElementById('manageStudentMajor').value);
+        let displayDepartmentId = String(document.getElementById('manageStudentDepartment').value);
+        if (navigator.onLine && window.getAdminStructureLocalIdMap) {
+            const idMap = await window.getAdminStructureLocalIdMap(supabaseClient);
+            for (const [field, value] of [['section', displaySectionId], ['major', displayMajorId], ['department', displayDepartmentId]]) {
+                if (!value.startsWith('local:') || !idMap.has(value)) continue;
+                if (field === 'section') displaySectionId = String(idMap.get(value));
+                if (field === 'major') displayMajorId = String(idMap.get(value));
+                if (field === 'department') displayDepartmentId = String(idMap.get(value));
+            }
+        }
+        let section;
+        if (navigator.onLine && !displaySectionId.startsWith('local:')) {
+            const result = await supabaseClient.from('sections')
+                .select('section_id, section_name, year_level, major_id')
+                .eq('section_id', displaySectionId).maybeSingle();
+            if (result.error) throw result.error;
+            section = result.data;
+        } else {
+            section = (await getAdminExplorerRecords())?.sections.find(item => String(item.section_id) === String(displaySectionId));
+        }
+        const yearLevel = section?.year_level || document.getElementById('manageStudentYear').value;
         closeModal('addStudentsToSectionModal');
         const selectedCount = studentIds.length + studentNumbers.length;
         showAlert('success', !queuedOperation ? 'Students Added' : 'Student Assignment Queued', !queuedOperation
             ? `${selectedCount} students were added to ${section?.section_name || 'the section'}.`
             : `${selectedCount} student assignments ${navigator.onLine ? 'will apply when earlier queued sections finish syncing.' : 'will apply when you reconnect.'}`);
-        await showManagedStudentsInSection({ department_id: departmentId, major_id: majorId, year_level: yearLevel, section_id: sectionId });
+        await showManagedStudentsInSection({
+            department_id: displayDepartmentId,
+            major_id: section?.major_id || displayMajorId,
+            year_level: yearLevel,
+            section_id: displaySectionId
+        });
     } catch (error) {
         errorBox.textContent = error.message || 'Unable to assign selected students.';
     }
