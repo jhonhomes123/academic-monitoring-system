@@ -1187,9 +1187,10 @@ table td{
                     </div>
                     <button class="btn reject-btn" onclick="clearAdminCreatedAccounts()">Clear saved credentials</button>
                 </div>
-                <div class="table-responsive">
+                <input id="adminCreatedAccountsSearch" type="search" placeholder="Search student ID, name, or section..." oninput="filterAdminDashboardRows('adminCreatedAccountsTable','adminCreatedAccountsSearch')" style="width:100%;max-width:420px;margin:0 0 12px;">
+                <div class="table-responsive" style="max-height:720px;overflow:auto;">
                     <table>
-                        <thead><tr><th>Account</th><th>Name</th><th>ID</th><th>Year</th><th>Section</th><th>Temporary Password</th><th>Status</th><th>Action</th></tr></thead>
+                        <thead><tr><th style="position:sticky;top:0;background:#fff;z-index:1;">Account</th><th style="position:sticky;top:0;background:#fff;z-index:1;">Name</th><th style="position:sticky;top:0;background:#fff;z-index:1;">ID</th><th style="position:sticky;top:0;background:#fff;z-index:1;">Year</th><th style="position:sticky;top:0;background:#fff;z-index:1;">Section</th><th style="position:sticky;top:0;background:#fff;z-index:1;">Temporary Password</th><th style="position:sticky;top:0;background:#fff;z-index:1;">Status</th><th style="position:sticky;top:0;background:#fff;z-index:1;">Action</th></tr></thead>
                         <tbody id="adminCreatedAccountsTable"><tr><td colspan="8">No account requests yet</td></tr></tbody>
                     </table>
                 </div>
@@ -1216,9 +1217,10 @@ table td{
                     </div>
                     <button class="btn reject-btn" onclick="clearAdminPasswordResetResults()">Clear reset results</button>
                 </div>
-                <div class="table-responsive">
+                <input id="adminPasswordResetSearch" type="search" placeholder="Search student ID or name..." oninput="filterAdminDashboardRows('adminPasswordResetTable','adminPasswordResetSearch')" style="width:100%;max-width:420px;margin:0 0 12px;">
+                <div class="table-responsive" style="max-height:720px;overflow:auto;">
                     <table>
-                        <thead><tr><th>Student ID</th><th>Student</th><th>Temporary Password</th><th>Email Status</th><th>Reset Status</th></tr></thead>
+                        <thead><tr><th style="position:sticky;top:0;background:#fff;z-index:1;">Student ID</th><th style="position:sticky;top:0;background:#fff;z-index:1;">Student</th><th style="position:sticky;top:0;background:#fff;z-index:1;">Temporary Password</th><th style="position:sticky;top:0;background:#fff;z-index:1;">Email Status</th><th style="position:sticky;top:0;background:#fff;z-index:1;">Reset Status</th></tr></thead>
                         <tbody id="adminPasswordResetTable"><tr><td colspan="5">No password resets on this device</td></tr></tbody>
                     </table>
                 </div>
@@ -8749,6 +8751,8 @@ async function renderAdminCreatedAccounts() {
         }
         rows.forEach(account => {
             const row = document.createElement('tr');
+            row.dataset.search = [account.id, account.name, account.section]
+                .filter(Boolean).join(' ').toLowerCase();
             [account.role === 'student' ? 'Student' : 'Teacher', account.name, account.id || '', account.year || '—', account.section || '—', account.password, account.status]
                 .forEach(value => {
                     const cell = document.createElement('td');
@@ -8774,12 +8778,38 @@ async function renderAdminCreatedAccounts() {
             row.appendChild(actionCell);
             table.appendChild(row);
         });
+        filterAdminDashboardRows('adminCreatedAccountsTable', 'adminCreatedAccountsSearch');
     } catch (error) {
         console.warn('Unable to render saved account creation results.', error);
     }
 }
 
 window.renderAdminCreatedAccounts = renderAdminCreatedAccounts;
+
+function filterAdminDashboardRows(tableId, searchId) {
+    const table = document.getElementById(tableId);
+    const query = document.getElementById(searchId)?.value.trim().toLowerCase() || '';
+    if (!table) return;
+    let matchingRows = 0;
+    [...table.rows].filter(row => !row.classList.contains('dashboard-search-empty')).forEach(row => {
+        const matches = !query || (row.dataset.search || '').includes(query);
+        row.hidden = !matches;
+        if (matches) matchingRows += 1;
+    });
+    let emptyRow = table.querySelector('.dashboard-search-empty');
+    if (query && matchingRows === 0) {
+        if (!emptyRow) {
+            emptyRow = table.insertRow();
+            emptyRow.className = 'dashboard-search-empty';
+            const cell = emptyRow.insertCell();
+            cell.colSpan = tableId === 'adminCreatedAccountsTable' ? 8 : 5;
+            cell.textContent = 'No matching records';
+        }
+        emptyRow.hidden = false;
+    } else if (emptyRow) {
+        emptyRow.remove();
+    }
+}
 
 async function renderAdminPasswordResets() {
     const table = document.getElementById('adminPasswordResetTable');
@@ -8829,10 +8859,12 @@ async function renderAdminPasswordResets() {
     }
     rows.forEach(item => {
         const row = table.insertRow();
+        row.dataset.search = `${item.studentNumber || ''} ${item.name || ''}`.toLowerCase();
         [item.studentNumber, item.name, item.password, item.emailStatus, item.status].forEach(value => {
             row.insertCell().textContent = value || '';
         });
     });
+    filterAdminDashboardRows('adminPasswordResetTable', 'adminPasswordResetSearch');
 }
 
 async function removeQueuedAdminAccount(operationId, failed = false) {
