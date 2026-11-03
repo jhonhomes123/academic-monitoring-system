@@ -8577,14 +8577,18 @@ async function openUnassignSelectedStudentsModal() {
                 .forEach(item => {
                     let projectedSectionId = String(item.payload.section_id);
                     pending.forEach(operation => {
-                        if (operation.type === 'student_section_unassign'
-                            && (operation.payload.student_numbers || []).map(String).includes(String(item.payload.student_number))) {
+                        const operationSectionId = String(operation.payload.section_id || '');
+                        const matchesStudent = (operation.payload.student_numbers || []).map(String)
+                            .includes(String(item.payload.student_number));
+                        if (operation.type === 'student_section_assign' && matchesStudent) {
+                            projectedSectionId = operationSectionId;
+                        } else if (operation.type === 'student_section_unassign' && matchesStudent
+                            && projectedSectionId === operationSectionId) {
+                            projectedSectionId = null;
+                        } else if ((operation.type === 'section_unassign_all' || operation.type === 'section_delete')
+                            && operationSectionId === projectedSectionId) {
                             projectedSectionId = null;
                         }
-                        if (operation.type === 'section_unassign_all'
-                            && String(operation.payload.section_id) === projectedSectionId) projectedSectionId = null;
-                        if (operation.type === 'section_delete'
-                            && String(operation.payload.section_id) === projectedSectionId) projectedSectionId = null;
                     });
                     if (projectedSectionId && deletedSections.has(projectedSectionId)) projectedSectionId = null;
                     if (projectedSectionId === String(sectionId)) students.push({
