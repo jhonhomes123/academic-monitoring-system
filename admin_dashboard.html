@@ -8019,7 +8019,7 @@ async function loadUnassignedStudentChoices() {
                     && operationSectionId === projectedSectionId) projectedSectionId = null;
             });
             if (projectedSectionId && deletedSections.has(projectedSectionId)) projectedSectionId = null;
-            if (projectedSectionId !== null || !navigator.onLine && item.processing) return;
+            if (projectedSectionId !== null) return;
             if (!students.some(student => student.pendingOperationId === item.operationId)) students.push({
                 student_id: `pending:${item.operationId}`,
                 pendingOperationId: item.operationId,
