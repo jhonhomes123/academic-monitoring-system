@@ -9200,15 +9200,6 @@ async function renderAdminCreatedAccounts() {
                     removeButton.addEventListener('click', () => removeQueuedAdminAccount(account.operationId, account.failed));
                     actionCell.appendChild(removeButton);
                 }
-            } else if (account.role === 'student') {
-                const deleteButton = document.createElement('button');
-                deleteButton.type = 'button';
-                deleteButton.className = 'btn reject-btn';
-                deleteButton.textContent = 'Delete account';
-                deleteButton.addEventListener('click', () => deleteCreatedStudentAccount(
-                    account.id, account.name, account.userId, account.firstName, account.middleInitial, account.lastName
-                ));
-                actionCell.appendChild(deleteButton);
             } else {
                 actionCell.textContent = '—';
             }
