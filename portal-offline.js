@@ -75,6 +75,7 @@
     }
 
     function setNotice(message, visible, type = 'offline', action = null) {
+        if (!visible && !navigator.onLine && window.currentOfflineRole === 'admin') return;
         let notice = document.getElementById('studentOfflineNotice');
         if (!notice) {
             notice = document.createElement('div');

@@ -2166,7 +2166,7 @@ onchange="loadSubjectsForTeacherAssign()">
                 <div class="table-responsive" style="max-height:42vh;overflow:auto;">
                     <table style="width:100%;table-layout:fixed;word-break:break-word;overflow-wrap:anywhere;">
                         <colgroup><col style="width:38px;"><col style="width:120px;"><col></colgroup>
-                        <thead><tr><th><input type="checkbox" id="selectAllUnassignedStudents" onchange="toggleAllUnassignedStudents(this.checked)"></th><th>Student ID</th><th>Name</th></tr></thead>
+                        <thead><tr><th><input type="checkbox" id="selectAllUnassignedStudents" style="width:20px;height:20px;" onchange="toggleAllUnassignedStudents(this.checked)"></th><th>Student ID</th><th>Name</th></tr></thead>
                         <tbody id="unassignedStudentChoices"><tr><td colspan="3">Choose a section in Manage Students first</td></tr></tbody>
                     </table>
                 </div>
@@ -2188,7 +2188,7 @@ onchange="loadSubjectsForTeacherAssign()">
                 <div class="table-responsive" style="max-height:42vh;overflow:auto;">
                     <table style="width:100%;table-layout:fixed;word-break:break-word;overflow-wrap:anywhere;">
                         <colgroup><col style="width:38px;"><col style="width:120px;"><col></colgroup>
-                        <thead><tr><th><input type="checkbox" id="selectAllSectionStudents" onchange="toggleAllSectionStudents(this.checked)"></th><th>Student ID</th><th>Name</th></tr></thead>
+                        <thead><tr><th><input type="checkbox" id="selectAllSectionStudents" style="width:20px;height:20px;" onchange="toggleAllSectionStudents(this.checked)"></th><th>Student ID</th><th>Name</th></tr></thead>
                         <tbody id="sectionStudentChoices"><tr><td colspan="3">Choose a section in Manage Students first</td></tr></tbody>
                     </table>
                 </div>
@@ -8064,7 +8064,7 @@ async function loadUnassignedStudentChoices() {
                     && operationSectionId === projectedSectionId) projectedSectionId = null;
             });
             if (projectedSectionId && deletedSections.has(projectedSectionId)) projectedSectionId = null;
-            if (projectedSectionId !== null) return;
+            if (projectedSectionId !== null || !navigator.onLine && item.processing) return;
             if (!students.some(student => student.pendingOperationId === item.operationId)) students.push({
                 student_id: `pending:${item.operationId}`,
                 pendingOperationId: item.operationId,
@@ -8081,7 +8081,7 @@ async function loadUnassignedStudentChoices() {
         return;
     }
     table.innerHTML = students.map(student => `<tr>
-        <td><input class="bulk-unassigned-student" type="checkbox" value="${student.student_id}" data-student-number="${student.pendingCreate ? student.student_number : ''}" onchange="updateBulkAssignStudentCount()"></td>
+        <td><input class="bulk-unassigned-student" type="checkbox" style="width:20px;height:20px;" value="${student.student_id}" data-student-number="${student.pendingCreate ? student.student_number : ''}" onchange="updateBulkAssignStudentCount()"></td>
         <td>${student.student_number || ''}</td>
         <td>${formatName(student.first_name, student.middle_initial, student.last_name)}${student.pendingCreate ? ' (account waiting to sync)' : ''}</td>
     </tr>`).join('');
@@ -8387,34 +8387,44 @@ async function loadStudentsBySection() {
             ? await window.getAdminStructureData(supabaseClient)
             : { pending: [], lookups: null };
         if (!navigator.onLine) queuedDeletedSectionIds = getQueuedDeletedSectionIds(structurePending, lookups);
-        const queuedUnassignAllSectionIds = new Set(structurePending
-            .filter(item => item.type === 'section_unassign_all')
-            .map(item => String(item.payload.section_id)));
-        const queuedUnassignStudentNumbers = new Set(structurePending
-            .filter(item => item.type === 'student_section_unassign')
-            .flatMap(item => item.payload.student_numbers || [])
-            .map(String));
-        queued.filter(item => item.role === 'student'
-            && (item.action || 'admin-create') === 'admin-create'
-            && (sectionId === 'unassigned'
-                ? (!item.payload.section_id || queuedDeletedSectionIds.has(String(item.payload.section_id)) || queuedUnassignAllSectionIds.has(String(item.payload.section_id)) || queuedUnassignStudentNumbers.has(String(item.payload.student_number)))
-                : String(item.payload.section_id) === String(sectionId)
-                    && !queuedDeletedSectionIds.has(String(item.payload.section_id))
-                    && !queuedUnassignAllSectionIds.has(String(item.payload.section_id))
-                    && !queuedUnassignStudentNumbers.has(String(item.payload.student_number))))
-            .forEach(item => data.push({
-                student_id: `pending:${item.operationId}`,
-                pendingOperationId: item.operationId,
-                pendingProcessing: Boolean(item.processing || item.lastError),
-                student_number: item.payload.student_number,
-                first_name: item.payload.first_name,
-                middle_initial: item.payload.middle_initial,
-                last_name: item.payload.last_name,
-                gender: item.payload.gender,
-                users: { email: 'Waiting to sync' },
-                pending: true,
-                pendingGraduation: selectedYear === 'Graduate'
-            }));
+        queued.filter(item => item.role === 'student' && (item.action || 'admin-create') === 'admin-create')
+            .forEach(item => {
+                let projectedSectionId = item.payload.section_id ? String(item.payload.section_id) : null;
+                if (!navigator.onLine) {
+                    structurePending.forEach(operation => {
+                        const operationSectionId = String(operation.payload.section_id || '');
+                        const matchesStudent = (operation.payload.student_numbers || []).map(String)
+                            .includes(String(item.payload.student_number));
+                        if (operation.type === 'student_section_assign' && matchesStudent) {
+                            projectedSectionId = operationSectionId;
+                        } else if (operation.type === 'student_section_unassign' && matchesStudent
+                            && projectedSectionId === operationSectionId) {
+                            projectedSectionId = null;
+                        } else if ((operation.type === 'section_unassign_all' || operation.type === 'section_delete')
+                            && projectedSectionId === operationSectionId) {
+                            projectedSectionId = null;
+                        }
+                    });
+                    if (projectedSectionId && queuedDeletedSectionIds.has(projectedSectionId)) projectedSectionId = null;
+                }
+                const belongsInView = sectionId === 'unassigned'
+                    ? projectedSectionId === null
+                    : projectedSectionId === String(sectionId);
+                if (!belongsInView) return;
+                data.push({
+                    student_id: `pending:${item.operationId}`,
+                    pendingOperationId: item.operationId,
+                    pendingProcessing: Boolean(item.processing || item.lastError),
+                    student_number: item.payload.student_number,
+                    first_name: item.payload.first_name,
+                    middle_initial: item.payload.middle_initial,
+                    last_name: item.payload.last_name,
+                    gender: item.payload.gender,
+                    users: { email: 'Waiting to sync' },
+                    pending: true,
+                    pendingGraduation: selectedYear === 'Graduate'
+                });
+            });
     }
 
     if (!data.length) {
@@ -8645,7 +8655,7 @@ async function openUnassignSelectedStudentsModal() {
             return;
         }
         table.innerHTML = students.map(student => `<tr data-section-student-search="${`${student.student_number || ''} ${formatName(student.first_name, student.middle_initial, student.last_name)}`.toLowerCase()}">
-            <td><input class="section-student-choice" type="checkbox" value="${student.student_id}" data-student-number="${student.pendingCreate ? student.student_number : ''}"></td>
+            <td><input class="section-student-choice" type="checkbox" style="width:20px;height:20px;" value="${student.student_id}" data-student-number="${student.pendingCreate ? student.student_number : ''}"></td>
             <td>${student.student_number || ''}</td>
             <td>${formatName(student.first_name, student.middle_initial, student.last_name)}${student.pendingCreate ? ' (account waiting to sync)' : ''}</td>
         </tr>`).join('');
