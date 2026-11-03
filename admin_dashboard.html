@@ -7773,45 +7773,7 @@ async function removeTeacherAssignment(id) {
 MANAGE STUDENTS FUNCTIONS
 =========================*/
 async function loadDepartmentsForManageStudents() {
-
-    const select =
-        document.getElementById(
-            'manageStudentDepartment'
-        );
-
-    select.innerHTML = `
-
-    <option value="">
-        Select Department
-    </option>
-
-    `;
-
-    document.getElementById('manageStudentMajor').innerHTML = '<option value="">Select Major</option>';
-    document.getElementById('manageStudentSection').innerHTML = '<option value="">Select Section</option>';
-
-    let data;
-    if (!navigator.onLine) {
-        const offlineRecords = await getAdminExplorerRecords();
-        data = offlineRecords?.departments || [];
-    } else {
-        const result = await supabaseClient.from('departments').select('*').order('department_name');
-        if (result.error) { console.log(result.error); return; }
-        data = result.data || [];
-    }
-
-    data.forEach(dep => {
-
-        select.innerHTML += `
-
-        <option value="${dep.department_id}">
-            ${dep.department_name}${dep.pending ? ' (waiting to sync)' : ''}
-        </option>
-
-        `;
-
-    });
-
+    await loadDepartmentOptions('manageStudentDepartment');
 }
 async function handleManageStudentsYearChange() {
     const yearLevel = document.getElementById('manageStudentYear').value;
@@ -7860,13 +7822,11 @@ async function loadMajorsForManageStudents() {
     if (!departmentId) return;
 
     let data;
-    if (!navigator.onLine) {
-        const offlineRecords = await getAdminExplorerRecords();
-        data = (offlineRecords?.majors || []).filter(major => String(major.department_id) === String(departmentId));
-    } else {
-        const result = await supabaseClient.from('majors').select('*').eq('department_id', departmentId).order('major_name');
-        if (result.error) { console.log(result.error); return; }
-        data = result.data || [];
+    try {
+        data = await getAdminMajorOptions(departmentId);
+    } catch (error) {
+        console.log(error);
+        return;
     }
 
     /* NO MAJOR FOUND */
@@ -7926,16 +7886,11 @@ async function loadSectionsForManageStudents() {
     if (!majorId || !yearLevel) return;
 
     let data;
-    if (!navigator.onLine) {
-        const offlineRecords = await getAdminExplorerRecords();
-        data = (offlineRecords?.sections || []).filter(section =>
-            String(section.major_id) === String(majorId) && section.year_level === yearLevel
-        );
-    } else {
-        const result = await supabaseClient.from('sections').select('*')
-            .eq('major_id', majorId).eq('year_level', yearLevel).order('section_name');
-        if (result.error) { console.log(result.error); return; }
-        data = result.data || [];
+    try {
+        data = await getAdminSectionOptions(majorId, yearLevel);
+    } catch (error) {
+        console.log(error);
+        return;
     }
 
     if (!data.length) {
@@ -8168,6 +8123,7 @@ async function loadStudentsBySection() {
         document.getElementById(
             'manageStudentsTable'
         );
+    const useOfflineProjection = !navigator.onLine || String(sectionId).startsWith('local:');
 
     const sectionActions = document.getElementById('manageSectionActions');
     const hasConcreteSection = Boolean(sectionId && sectionId !== 'unassigned');
@@ -8219,7 +8175,7 @@ async function loadStudentsBySection() {
 
     let data;
     let pendingGraduationSectionIds = new Set();
-    if (!navigator.onLine) {
+    if (useOfflineProjection) {
         const roster = await window.getAdminStudentRoster?.(supabaseClient);
         if (roster?.students) {
             data = sectionId === 'unassigned'
@@ -8296,7 +8252,7 @@ async function loadStudentsBySection() {
     if (window.getAdminAccountData) {
         const { queued } = await window.getAdminAccountData(supabaseClient);
         const studentEdits = queued.filter(item => item.action === 'admin-edit' && item.role === 'student');
-        if (!navigator.onLine) {
+        if (useOfflineProjection) {
             const roster = await window.getAdminStudentRoster?.(supabaseClient);
             if (roster?.students) {
                 studentEdits.forEach(item => {
@@ -8326,7 +8282,7 @@ async function loadStudentsBySection() {
         }
     }
 
-    if (!navigator.onLine) {
+    if (useOfflineProjection) {
         const { pending, lookups } = await window.getAdminStructureData(supabaseClient);
         queuedDeletedSectionIds = getQueuedDeletedSectionIds(pending, lookups);
         const roster = await window.getAdminStudentRoster?.(supabaseClient);
@@ -8383,14 +8339,14 @@ async function loadStudentsBySection() {
 
     if (window.getAdminAccountData) {
         const { queued } = await window.getAdminAccountData(supabaseClient);
-        const { pending: structurePending, lookups } = !navigator.onLine
+        const { pending: structurePending, lookups } = useOfflineProjection
             ? await window.getAdminStructureData(supabaseClient)
             : { pending: [], lookups: null };
-        if (!navigator.onLine) queuedDeletedSectionIds = getQueuedDeletedSectionIds(structurePending, lookups);
+        if (useOfflineProjection) queuedDeletedSectionIds = getQueuedDeletedSectionIds(structurePending, lookups);
         queued.filter(item => item.role === 'student' && (item.action || 'admin-create') === 'admin-create')
             .forEach(item => {
                 let projectedSectionId = item.payload.section_id ? String(item.payload.section_id) : null;
-                if (!navigator.onLine) {
+                if (useOfflineProjection) {
                     structurePending.forEach(operation => {
                         const operationSectionId = String(operation.payload.section_id || '');
                         const matchesStudent = (operation.payload.student_numbers || []).map(String)
@@ -9339,7 +9295,7 @@ async function openEditStudentModal(studentId) {
         let lookups;
         let offlineRecords;
         let pending = [];
-        if (!navigator.onLine) {
+            if (!navigator.onLine) {
             const roster = await window.getAdminStudentRoster?.(supabaseClient);
             student = roster?.students?.find(item => String(item.student_id) === String(studentId));
             lookups = await window.getAdminAccountLookups(supabaseClient);
