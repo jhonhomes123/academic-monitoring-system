@@ -8857,8 +8857,38 @@ async function renderAdminCreatedAccounts() {
     const table = document.getElementById('adminCreatedAccountsTable');
     if (!table || !window.getAdminAccountData) return;
     try {
-        const { queued, completed } = await window.getAdminAccountData(supabaseClient);
-        const lookups = await window.getAdminAccountLookups(supabaseClient);
+        const [{ queued, completed }, lookups, structureData, structureIdMap] = await Promise.all([
+            window.getAdminAccountData(supabaseClient),
+            window.getAdminAccountLookups(supabaseClient),
+            window.getAdminStructureData?.(supabaseClient) || Promise.resolve({ pending: [] }),
+            window.getAdminStructureLocalIdMap?.(supabaseClient) || Promise.resolve(new Map())
+        ]);
+        const structurePending = structureData?.pending || [];
+        const getQueuedStudentSection = item => {
+            let sectionId = item.payload.section_id ? String(item.payload.section_id) : null;
+            if (sectionId?.startsWith('local:') && structureIdMap.has(sectionId)) {
+                sectionId = String(structureIdMap.get(sectionId));
+            }
+            structurePending.forEach(operation => {
+                const operationSectionId = String(operation.payload.section_id || '');
+                const matchesStudent = (operation.payload.student_numbers || []).map(String)
+                    .includes(String(item.payload.student_number));
+                if (operation.type === 'student_section_assign' && matchesStudent) {
+                    sectionId = operationSectionId;
+                } else if (operation.type === 'student_section_unassign' && matchesStudent
+                    && sectionId === operationSectionId) {
+                    sectionId = null;
+                } else if ((operation.type === 'section_unassign_all' || operation.type === 'section_delete')
+                    && sectionId === operationSectionId) {
+                    sectionId = null;
+                }
+            });
+            if (!sectionId) return 'Unassigned';
+            const section = (lookups?.sections || []).find(candidate => String(candidate.section_id) === sectionId)
+                || structurePending.find(operation => operation.type === 'section_add'
+                    && String(operation.localRef) === sectionId)?.payload;
+            return section?.section_name || (sectionId.startsWith('local:') ? 'Section waiting to sync' : 'Section unavailable');
+        };
         table.replaceChildren();
         const rows = [
             ...queued.filter(item => (item.action || 'admin-create') === 'admin-create').map(item => ({
@@ -8870,7 +8900,7 @@ async function renderAdminCreatedAccounts() {
                 id: item.role === 'student' ? item.payload.student_number : item.payload.teacher_number,
                 year: item.role === 'student' ? item.payload.year_level || '' : '—',
                 section: item.role === 'student'
-                    ? lookups?.sections.find(section => String(section.section_id) === String(item.payload.section_id))?.section_name || String(item.payload.section_id || '')
+                    ? getQueuedStudentSection(item)
                     : '—',
                 password: 'Available after sync',
                 status: item.processing
@@ -9299,6 +9329,7 @@ window.addEventListener('admin-password-reset-data-changed', () => {
     void renderAdminPasswordResets();
 });
 window.addEventListener('admin-structure-data-changed', () => {
+    void renderAdminCreatedAccounts();
     void renderAdminStructureQueue();
     if (document.getElementById('studentSection')?.classList.contains('active-section')
         && document.getElementById('manageStudentYear')?.value
