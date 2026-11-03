@@ -5,6 +5,7 @@
     const adminQueueStoreName = 'admin-account-create-queue';
     const adminResultsStoreName = 'admin-created-account-results';
     const adminPasswordResetResultsStoreName = 'admin-password-reset-results';
+    const adminDeletionResultsStoreName = 'admin-deletion-results';
     const adminLookupStoreName = 'admin-account-lookups';
     const adminStructureQueueStoreName = 'admin-structure-write-queue';
     const adminStructureMapStoreName = 'admin-structure-id-map';
@@ -40,7 +41,7 @@
         if (databasePromise) return databasePromise;
 
         databasePromise = new Promise((resolve, reject) => {
-            const request = indexedDB.open(databaseName, 5);
+            const request = indexedDB.open(databaseName, 6);
             request.onupgradeneeded = () => {
                 const database = request.result;
                 if (!database.objectStoreNames.contains(storeName)) {
@@ -57,6 +58,9 @@
                 }
                 if (!database.objectStoreNames.contains(adminPasswordResetResultsStoreName)) {
                     database.createObjectStore(adminPasswordResetResultsStoreName, { keyPath: 'key' });
+                }
+                if (!database.objectStoreNames.contains(adminDeletionResultsStoreName)) {
+                    database.createObjectStore(adminDeletionResultsStoreName, { keyPath: 'key' });
                 }
                 if (!database.objectStoreNames.contains(adminLookupStoreName)) {
                     database.createObjectStore(adminLookupStoreName, { keyPath: 'key' });
@@ -339,9 +343,9 @@
                 const opensAllowedModal = control.matches('button')
                     && /openCreateStudentModal|openCreateTeacherModal|openEditStudentModal|openEditQueuedStudentAccount|openAddStudentsToSectionModal|openUnassignSelectedStudentsModal|transitionAdminSection|openDepartmentModal|openMajorModal|openSectionModal|openSubjectModal|openDeleteDepartmentModal|openDeleteMajorModal|openDeleteSectionModal|openDeleteSubjectModal|openTeacherAssignModal|openAddSectionModal/.test(control.getAttribute('onclick') || '');
                 const isAllowedOfflineAction = control.matches('button')
-                    && /createStudentAccount|createTeacherAccount|saveStudentEdits|resetStudentPassword|deleteStudent|deleteCreatedStudentAccount|clearAdminCreatedAccounts|loadUnassignedStudents|loadGraduatedStudents|transitionSelectedManageSection|unassignAllStudentsFromSelectedSection|unassignSelectedStudentsFromSection|assignSelectedUnassignedStudents|createTeacherAccount|addDepartment|addMajor|addSection|addSubject|setActiveSemester|deleteDepartment|deleteMajor|deleteSectionModalAction|deleteSubject|assignTeacherToSubject|removeTeacherAssignment|saveTeacherSection|closeCreateStudentModal|closeEditStudentModal|closeModal|closeDepartmentModal|closeMajorModal|closeSectionModal|closeSubjectModal|closeDeleteDepartmentModal|closeDeleteMajorModal|closeDeleteSectionModal|closeDeleteSubjectModal|closeTeacherAssignModal|closeTeacherSectionModal|loadEditStudentMajors|loadEditStudentSections|loadDepartmentDeleteOptions|loadMajorsForDelete|loadMajorsForDeleteSection|loadSectionsForDelete|loadMajorsForDeleteSubject|loadSubjectsForDelete/.test(control.getAttribute('onclick') || '');
+                    && /createStudentAccount|createTeacherAccount|saveStudentEdits|resetStudentPassword|deleteStudent|deleteCreatedStudentAccount|clearAdminCreatedAccounts|clearAdminDeletionResults|loadUnassignedStudents|loadGraduatedStudents|transitionSelectedManageSection|unassignAllStudentsFromSelectedSection|unassignSelectedStudentsFromSection|assignSelectedUnassignedStudents|createTeacherAccount|addDepartment|addMajor|addSection|addSubject|setActiveSemester|deleteDepartment|deleteMajor|deleteSectionModalAction|deleteSubject|assignTeacherToSubject|removeTeacherAssignment|saveTeacherSection|closeCreateStudentModal|closeEditStudentModal|closeModal|closeDepartmentModal|closeMajorModal|closeSectionModal|closeSubjectModal|closeDeleteDepartmentModal|closeDeleteMajorModal|closeDeleteSectionModal|closeDeleteSubjectModal|closeTeacherAssignModal|closeTeacherSectionModal|loadEditStudentMajors|loadEditStudentSections|loadDepartmentDeleteOptions|loadMajorsForDelete|loadMajorsForDeleteSection|loadSectionsForDelete|loadMajorsForDeleteSubject|loadSubjectsForDelete/.test(control.getAttribute('onclick') || '');
                 const isAllowedOfflineStandaloneAction = control.matches('button')
-                    && /deleteStudent|deleteCreatedStudentAccount|clearAdminCreatedAccounts|clearAdminPasswordResetResults|transitionSelectedManageSection|unassignAllStudentsFromSelectedSection|openUnassignSelectedStudentsModal/.test(control.getAttribute('onclick') || '');
+                    && /deleteStudent|deleteCreatedStudentAccount|clearAdminCreatedAccounts|clearAdminPasswordResetResults|clearAdminDeletionResults|transitionSelectedManageSection|unassignAllStudentsFromSelectedSection|openUnassignSelectedStudentsModal/.test(control.getAttribute('onclick') || '');
                 const isSemesterPicker = control.id === 'activeSemesterSelect';
                 const isExplorerBack = control.id === 'backButton';
                 const isStudentFilter = ['manageStudentYear', 'manageStudentDepartment', 'manageStudentMajor', 'manageStudentSection'].includes(control.id);
@@ -494,7 +498,7 @@
         const studentId = Number(payload.student_id);
         const studentNumber = String(payload.student_number || '').trim();
         const userId = String(payload.user_id || '');
-        let query = client.from('students').select('student_id, user_id, student_number, first_name, last_name');
+        let query = client.from('students').select('student_id, user_id, student_number, first_name, middle_initial, last_name');
         if (Number.isInteger(studentId) && studentId > 0) query = query.eq('student_id', studentId);
         else if (studentNumber) query = query.eq('student_number', studentNumber);
         else if (userId) query = query.eq('user_id', userId);
@@ -557,7 +561,14 @@
             const { error: logError } = await client.from('activity_logs').insert({ user_id: null, activity });
             if (logError) console.warn('Student account was deleted, but the activity log could not be saved.', logError);
         }
-        return { ok: true, student_number: student?.student_number || studentNumber };
+        return {
+            ok: true,
+            student_id: student?.student_id || studentId || null,
+            student_number: student?.student_number || studentNumber,
+            first_name: student?.first_name || payload.first_name || '',
+            middle_initial: payload.middle_initial || '',
+            last_name: student?.last_name || payload.last_name || ''
+        };
     }
 
     async function saveAdminPasswordResetResult(userId, operationId, payload, result) {
@@ -579,6 +590,57 @@
         };
         await adminStoreRequest(adminPasswordResetResultsStoreName, 'readwrite', store => store.put(record));
         window.dispatchEvent(new CustomEvent('admin-password-reset-data-changed'));
+    }
+
+    async function saveAdminDeletionResult(userId, operationId, payload, result, status = 'Deleted') {
+        const record = {
+            key: `${userId}:${operationId}`,
+            userId,
+            operationId,
+            studentNumber: String(result.student_number || payload.student_number || payload.student_id || ''),
+            name: [result.last_name || payload.last_name, result.first_name || payload.first_name, result.middle_initial || payload.middle_initial]
+                .filter(Boolean).join(', '),
+            status,
+            deletedAt: new Date().toISOString()
+        };
+        await adminStoreRequest(adminDeletionResultsStoreName, 'readwrite', store => store.put(record));
+        window.dispatchEvent(new CustomEvent('admin-deletion-data-changed'));
+    }
+
+    async function recordAdminLocalDeletion(client, operationId, payload, status = 'Removed before sync') {
+        const userId = await getUserId(client);
+        if (!userId) throw new Error('Sign in again before recording the deletion.');
+        await saveAdminDeletionResult(userId, operationId, payload, {
+            student_number: payload.student_number || payload.student_id,
+            first_name: payload.first_name,
+            middle_initial: payload.middle_initial,
+            last_name: payload.last_name
+        }, status);
+    }
+
+    async function getAdminDeletionData(client) {
+        const userId = await getUserId(client);
+        if (!userId) return { queued: [], completed: [] };
+        const [allQueued, allCompleted] = await Promise.all([
+            adminStoreRequest(adminQueueStoreName, 'readonly', store => store.getAll()),
+            adminStoreRequest(adminDeletionResultsStoreName, 'readonly', store => store.getAll())
+        ]);
+        return {
+            queued: allQueued.filter(item => item.userId === userId && item.action === 'admin-delete')
+                .sort((first, second) => Date.parse(first.createdAt) - Date.parse(second.createdAt)),
+            completed: allCompleted.filter(item => item.userId === userId)
+                .sort((first, second) => Date.parse(second.deletedAt) - Date.parse(first.deletedAt))
+        };
+    }
+
+    async function clearAdminDeletionResults(client) {
+        const userId = await getUserId(client);
+        if (!userId) throw new Error('Sign in again before clearing deletion history.');
+        const allResults = await adminStoreRequest(adminDeletionResultsStoreName, 'readonly', store => store.getAll());
+        await Promise.all(allResults.filter(item => item.userId === userId).map(item => adminStoreRequest(
+            adminDeletionResultsStoreName, 'readwrite', store => store.delete(item.key)
+        )));
+        window.dispatchEvent(new CustomEvent('admin-deletion-data-changed'));
     }
 
     async function submitAdminPasswordReset(client, studentId, functionUrl, anonKey) {
@@ -967,6 +1029,7 @@
         }
 
         const result = await performAdminStudentDeletion(client, payload, anonKey);
+        await saveAdminDeletionResult(userId, operationId, payload, result);
         await removeAdminAccountResult(client, payload.student_number || result.student_number);
         window.dispatchEvent(new CustomEvent('admin-account-data-changed'));
         return result;
@@ -1119,6 +1182,7 @@
                     } else if (item.action === 'admin-reset') {
                         await saveAdminPasswordResetResult(userId, item.operationId, item.payload, result);
                     } else if (item.action === 'admin-delete') {
+                        await saveAdminDeletionResult(userId, item.operationId, item.payload, result);
                         await removeAdminAccountResult(client, item.payload.student_number || result.student_number);
                     }
                     await adminStoreRequest(adminQueueStoreName, 'readwrite', store => store.delete(item.key));
@@ -1203,6 +1267,9 @@
 
     window.submitAdminAccountCreation = submitAdminAccountCreation;
     window.submitAdminAccountDeletion = submitAdminAccountDeletion;
+    window.getAdminDeletionData = getAdminDeletionData;
+    window.clearAdminDeletionResults = clearAdminDeletionResults;
+    window.recordAdminLocalDeletion = recordAdminLocalDeletion;
     window.submitAdminPasswordReset = submitAdminPasswordReset;
     window.queuePasswordResetForPendingStudent = queuePasswordResetForPendingStudent;
     window.getAdminAccountData = getAdminAccountData;

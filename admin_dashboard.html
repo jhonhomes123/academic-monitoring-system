@@ -1314,6 +1314,26 @@ table td{
                 </div>
             </div>
 
+            <div class="table-section">
+                <div class="section-header" style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+                    <div>
+                        <h2>Deleted on This Device</h2>
+                        <p>Student accounts deleted online or after queued deletions sync</p>
+                    </div>
+                    <button class="btn reject-btn" onclick="clearAdminDeletionResults()">Clear deletion history</button>
+                </div>
+                <div class="dashboard-search-field">
+                    <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+                    <input id="adminDeletionSearch" type="search" placeholder="Search student ID or name..." aria-label="Search deletion history" oninput="filterAdminDashboardRows('adminDeletionTable','adminDeletionSearch')">
+                </div>
+                <div class="table-responsive" style="max-height:720px;overflow:auto;">
+                    <table>
+                        <thead><tr><th style="position:sticky;top:0;background:#fff;z-index:1;">Student ID</th><th style="position:sticky;top:0;background:#fff;z-index:1;">Student Name</th><th style="position:sticky;top:0;background:#fff;z-index:1;">Deletion Status</th></tr></thead>
+                        <tbody id="adminDeletionTable"><tr><td colspan="3">No deletion history on this device</td></tr></tbody>
+                    </table>
+                </div>
+            </div>
+
         </div>
         <!-- MANAGE DEPARTMENT -->
         <div class="content-section" id="departmentSection">
@@ -2829,10 +2849,19 @@ onchange="loadSubjectsForTeacherAssign()">
     <script>
         /* NAVIGATION */
         function formatName(first, middle, last) {
-            const firstName = String(first || '').trim();
-            const lastName = String(last || '').trim();
-            const middleInitial = String(middle || '').trim();
-            return `${lastName}, ${firstName}${middleInitial ? ` ${middleInitial.charAt(0).toUpperCase()}.` : ''}`;
+            const titleCase = value => String(value || '').trim().toLocaleLowerCase()
+                .replace(/(^|[\s'-])([\p{L}])/gu, (_match, separator, letter) => `${separator}${letter.toLocaleUpperCase()}`);
+            const firstName = titleCase(first);
+            const lastName = titleCase(last);
+            const middleInitial = String(middle || '').trim().replace(/\.$/, '').charAt(0).toLocaleUpperCase();
+            return `${lastName}, ${firstName}${middleInitial ? ` ${middleInitial}.` : ''}`;
+        }
+
+        function formatStoredDashboardName(value) {
+            const parts = String(value || '').split(',').map(part => part.trim());
+            if (parts.length >= 2) return formatName(parts[1], parts[2], parts[0]);
+            return String(value || '').toLocaleLowerCase()
+                .replace(/(^|[\s'-])([\p{L}])/gu, (_match, separator, letter) => `${separator}${letter.toLocaleUpperCase()}`);
         }
 
         function showSection(sectionId, element) {
@@ -2922,12 +2951,14 @@ onchange="loadSubjectsForTeacherAssign()">
             if (restoredOffline) {
                 void renderAdminCreatedAccounts();
                 void renderAdminPasswordResets();
+                void renderAdminDeletions();
                 void renderAdminStructureQueue();
                 return;
             }
             loadDashboardCounts();
             void renderAdminCreatedAccounts();
             void renderAdminPasswordResets();
+            void renderAdminDeletions();
             void renderAdminStructureQueue();
         }).catch(error => {
             console.warn('Offline admin view could not be prepared.', error);
@@ -9066,7 +9097,10 @@ async function renderAdminCreatedAccounts() {
                 processing: Boolean(item.processing),
                 failed: Boolean(item.lastError),
                 role: item.role,
-                name: [item.payload.first_name, item.payload.middle_initial, item.payload.last_name].filter(Boolean).join(' '),
+                name: formatName(item.payload.first_name, item.payload.middle_initial, item.payload.last_name),
+                firstName: item.payload.first_name,
+                middleInitial: item.payload.middle_initial,
+                lastName: item.payload.last_name,
                 id: item.role === 'student' ? item.payload.student_number : item.payload.teacher_number,
                 year: item.role === 'student' ? getQueuedStudentSection(item).year : '—',
                 section: item.role === 'student' ? getQueuedStudentSection(item).name : '—',
@@ -9083,7 +9117,10 @@ async function renderAdminCreatedAccounts() {
                 action: 'admin-delete',
                 operationId: item.operationId,
                 role: 'student',
-                name: [item.payload.first_name, item.payload.middle_initial, item.payload.last_name].filter(Boolean).join(' '),
+                name: formatName(item.payload.first_name, item.payload.middle_initial, item.payload.last_name),
+                firstName: item.payload.first_name,
+                middleInitial: item.payload.middle_initial,
+                lastName: item.payload.last_name,
                 id: item.payload.student_number || item.payload.student_id || '',
                 year: '—',
                 section: '—',
@@ -9107,7 +9144,10 @@ async function renderAdminCreatedAccounts() {
                     || (student || cachedStudent ? '' : item.payload.section_name);
                 return {
                     role: item.role,
-                    name: [item.payload.first_name, item.payload.middle_initial, item.payload.last_name].filter(Boolean).join(' '),
+                    name: formatName(item.payload.first_name, item.payload.middle_initial, item.payload.last_name),
+                    firstName: item.payload.first_name,
+                    middleInitial: item.payload.middle_initial,
+                    lastName: item.payload.last_name,
                     id: item.accountId,
                     studentNumber: item.role === 'student' ? item.accountId : null,
                     userId: student?.user_id || cachedStudent?.user_id || item.payload.user_id || '',
@@ -9165,7 +9205,9 @@ async function renderAdminCreatedAccounts() {
                 deleteButton.type = 'button';
                 deleteButton.className = 'btn reject-btn';
                 deleteButton.textContent = 'Delete account';
-                deleteButton.addEventListener('click', () => deleteCreatedStudentAccount(account.id, account.name, account.userId));
+                deleteButton.addEventListener('click', () => deleteCreatedStudentAccount(
+                    account.id, account.name, account.userId, account.firstName, account.middleInitial, account.lastName
+                ));
                 actionCell.appendChild(deleteButton);
             } else {
                 actionCell.textContent = '—';
@@ -9181,12 +9223,15 @@ async function renderAdminCreatedAccounts() {
 
 window.renderAdminCreatedAccounts = renderAdminCreatedAccounts;
 
-function deleteCreatedStudentAccount(studentNumber, studentName = 'this student', userId = '') {
+function deleteCreatedStudentAccount(studentNumber, studentName = 'this student', userId = '', firstName = '', middleInitial = '', lastName = '') {
     showConfirmModal('Delete Student Account', `Delete ${studentName} and remove the student profile, login, and related academic records? This cannot be undone.`, async () => {
         try {
             const result = await window.submitAdminAccountDeletion(
                 supabaseClient,
-                { student_number: String(studentNumber), user_id: String(userId || '') },
+                {
+                    student_number: String(studentNumber), user_id: String(userId || ''),
+                    first_name: firstName, middle_initial: middleInitial, last_name: lastName
+                },
                 STUDENT_ACCOUNT_FUNCTION_URL,
                 SUPABASE_ANON_KEY
             );
@@ -9221,13 +9266,62 @@ function filterAdminDashboardRows(tableId, searchId) {
             emptyRow = table.insertRow();
             emptyRow.className = 'dashboard-search-empty';
             const cell = emptyRow.insertCell();
-            cell.colSpan = tableId === 'adminCreatedAccountsTable' ? 8 : 5;
+            cell.colSpan = tableId === 'adminCreatedAccountsTable' ? 8 : tableId === 'adminDeletionTable' ? 3 : 5;
             cell.textContent = 'No matching records';
         }
         emptyRow.hidden = false;
     } else if (emptyRow) {
         emptyRow.remove();
     }
+}
+
+async function renderAdminDeletions() {
+    const table = document.getElementById('adminDeletionTable');
+    if (!table || !window.getAdminDeletionData) return;
+    const { queued, completed } = await window.getAdminDeletionData(supabaseClient);
+    const rows = [
+        ...queued.filter(item => !completed.some(result => result.operationId === item.operationId)).map(item => ({
+            studentNumber: item.payload.student_number || item.payload.student_id || '',
+            name: formatName(item.payload.first_name, item.payload.middle_initial, item.payload.last_name) || 'Student',
+            status: item.lastError ? `Needs attention: ${item.lastError}` : 'Waiting for connection'
+        })),
+        ...completed.map(item => ({
+            studentNumber: item.studentNumber || '',
+            name: formatStoredDashboardName(item.name || 'Student'),
+            status: item.status || 'Deleted'
+        }))
+    ];
+    table.replaceChildren();
+    if (!rows.length) {
+        const row = table.insertRow();
+        const cell = row.insertCell();
+        cell.colSpan = 3;
+        cell.textContent = 'No deletion history on this device';
+        return;
+    }
+    rows.forEach(item => {
+        const row = table.insertRow();
+        row.dataset.search = `${item.studentNumber} ${item.name}`.toLowerCase();
+        [item.studentNumber, item.name, item.status].forEach(value => {
+            row.insertCell().textContent = value || '';
+        });
+    });
+    filterAdminDashboardRows('adminDeletionTable', 'adminDeletionSearch');
+}
+
+async function clearAdminDeletionResults() {
+    showConfirmModal('Clear Deletion History', 'Clear the deletion history saved on this device? This does not undo account deletions or cancel pending deletions.', async () => {
+        try {
+            await window.clearAdminDeletionResults(supabaseClient);
+            closeConfirmModal();
+            await renderAdminDeletions();
+            await renderAdminCreatedAccounts();
+            showAlert('success', 'Deletion History Cleared', 'Saved deletion history was removed from this device.');
+        } catch (error) {
+            closeConfirmModal();
+            showAlert('error', 'Could Not Clear Deletion History', error.message || 'Unable to clear deletion history.');
+        }
+    });
 }
 
 async function renderAdminPasswordResets() {
@@ -9244,7 +9338,7 @@ async function renderAdminPasswordResets() {
             const emailAvailable = Boolean(email && !email.endsWith('@accounts.tcc.invalid'));
             return {
                 studentNumber: student?.student_number || String(item.payload.student_id),
-                name: student ? [student.last_name, student.first_name, student.middle_initial ? `${String(student.middle_initial).replace(/\.$/, '')}.` : ''].filter(Boolean).join(', ') : 'Student',
+                name: student ? formatName(student.first_name, student.middle_initial, student.last_name) : 'Student',
                 password: 'Available after reset syncs',
                 emailStatus: emailAvailable ? 'Will check when connected' : 'Email not set',
                 status: item.processing
@@ -9256,7 +9350,7 @@ async function renderAdminPasswordResets() {
         }),
         ...completed.map(item => ({
             studentNumber: item.studentNumber,
-            name: item.name || 'Student',
+            name: formatStoredDashboardName(item.name || 'Student'),
             password: item.temporaryPassword || '',
             emailStatus: item.emailError
                 ? `Email failed: ${item.emailError}`
@@ -9328,10 +9422,20 @@ async function resetQueuedStudentPassword(operationId, studentNumber) {
 async function deleteQueuedStudentAccount(operationId) {
     showConfirmModal('Delete Pending Student', 'Discard this offline student account request? The account has not been created on the server.', async () => {
         try {
+            const { queued } = await window.getAdminAccountData(supabaseClient);
+            const item = queued.find(candidate => candidate.operationId === operationId);
+            if (!item) throw new Error('This pending student account could not be found.');
             await window.discardQueuedAdminAccountRequest(supabaseClient, operationId);
+            await window.recordAdminLocalDeletion(supabaseClient, operationId, {
+                student_number: item.payload.student_number,
+                first_name: item.payload.first_name,
+                middle_initial: item.payload.middle_initial,
+                last_name: item.payload.last_name
+            });
             closeConfirmModal();
-            showAlert('success', 'Pending Student Deleted', 'The student account request was removed from this device.');
+            showAlert('success', 'Pending Student Deleted', 'The student account request was removed from this device and added to deletion history.');
             await renderAdminCreatedAccounts();
+            await renderAdminDeletions();
             await loadStudentsBySection();
         } catch (error) {
             closeConfirmModal();
@@ -9501,9 +9605,9 @@ async function renderAdminStructureQueue() {
             : item.type === 'subject_add'
                 ? `${item.payload.subject_code} - ${item.payload.subject_name}, ${item.payload.year_level}`
             : item.type === 'student_account_create'
-                ? `${item.payload.student_number} - ${[item.payload.first_name, item.payload.middle_initial, item.payload.last_name].filter(Boolean).join(' ')}`
+                ? `${item.payload.student_number} - ${formatName(item.payload.first_name, item.payload.middle_initial, item.payload.last_name)}`
             : item.type === 'teacher_account_create'
-                ? `${item.payload.teacher_number} - ${[item.payload.first_name, item.payload.middle_initial, item.payload.last_name].filter(Boolean).join(' ')}`
+                ? `${item.payload.teacher_number} - ${formatName(item.payload.first_name, item.payload.middle_initial, item.payload.last_name)}`
             : item.type === 'student_password_reset'
                 ? `Student ID ${item.payload.student_number || item.payload.student_id}`
             : item.type === 'student_section_assign'
@@ -9557,6 +9661,7 @@ async function renderAdminStructureQueue() {
 
 window.addEventListener('admin-account-data-changed', () => {
     void renderAdminCreatedAccounts();
+    void renderAdminDeletions();
     void renderAdminStructureQueue();
     if (navigator.onLine && document.getElementById('manageStudentSection')?.value) {
         void loadStudentsBySection();
@@ -9564,6 +9669,9 @@ window.addEventListener('admin-account-data-changed', () => {
 });
 window.addEventListener('admin-password-reset-data-changed', () => {
     void renderAdminPasswordResets();
+});
+window.addEventListener('admin-deletion-data-changed', () => {
+    void renderAdminDeletions();
 });
 window.addEventListener('admin-structure-data-changed', () => {
     void renderAdminCreatedAccounts();
@@ -10014,7 +10122,10 @@ async function deleteStudent(
                     {
                         student_id: Number(studentId),
                         user_id: String(userId || ''),
-                        student_number: cachedStudent?.student_number || ''
+                        student_number: cachedStudent?.student_number || '',
+                        first_name: cachedStudent?.first_name || '',
+                        middle_initial: cachedStudent?.middle_initial || '',
+                        last_name: cachedStudent?.last_name || ''
                     },
                     STUDENT_ACCOUNT_FUNCTION_URL,
                     SUPABASE_ANON_KEY
