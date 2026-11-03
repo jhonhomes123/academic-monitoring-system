@@ -2870,7 +2870,7 @@ onchange="loadSubjectsForTeacherAssign()">
 
             if (sectionId === 'studentSection') {
 
-                loadStudentsBySection();
+                void refreshManageStudentsSelectors();
 
             }
 
@@ -7889,6 +7889,46 @@ MANAGE STUDENTS FUNCTIONS
 =========================*/
 async function loadDepartmentsForManageStudents() {
     await loadDepartmentOptions('manageStudentDepartment');
+}
+async function refreshManageStudentsSelectors() {
+    const yearSelect = document.getElementById('manageStudentYear');
+    const departmentSelect = document.getElementById('manageStudentDepartment');
+    const majorSelect = document.getElementById('manageStudentMajor');
+    const sectionSelect = document.getElementById('manageStudentSection');
+    const yearLevel = yearSelect.value;
+
+    if (yearLevel === 'unassigned') {
+        departmentSelect.disabled = true;
+        majorSelect.disabled = true;
+        sectionSelect.disabled = true;
+        departmentSelect.value = '';
+        majorSelect.innerHTML = '<option value="">Select Major</option>';
+        sectionSelect.innerHTML = '<option value="">Select Section</option>';
+        await loadStudentsBySection();
+        return;
+    }
+
+    departmentSelect.disabled = false;
+    majorSelect.disabled = false;
+    sectionSelect.disabled = false;
+    const selectedDepartmentId = departmentSelect.value;
+    const selectedMajorId = majorSelect.value;
+    const selectedSectionId = sectionSelect.value;
+
+    await loadDepartmentsForManageStudents();
+    const departmentId = await resolveAdminStructureLocalId(selectedDepartmentId);
+    departmentSelect.value = [...departmentSelect.options].some(option => option.value === departmentId)
+        ? departmentId
+        : '';
+
+    await loadMajorsForManageStudents();
+    const majorId = await resolveAdminStructureLocalId(selectedMajorId);
+    majorSelect.value = [...majorSelect.options].some(option => option.value === majorId) ? majorId : '';
+
+    await loadSectionsForManageStudents();
+    const sectionId = await resolveAdminStructureLocalId(selectedSectionId);
+    sectionSelect.value = [...sectionSelect.options].some(option => option.value === sectionId) ? sectionId : '';
+    await loadStudentsBySection();
 }
 async function handleManageStudentsYearChange() {
     const yearLevel = document.getElementById('manageStudentYear').value;
