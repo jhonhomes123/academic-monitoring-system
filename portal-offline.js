@@ -349,6 +349,18 @@
                     || isExplorerBack || isStudentFilter || isAllowedOfflineStandaloneAction || control.id === 'confirmActionBtn' || control.matches('.cancel-btn')
                     || (inAllowedModal && (!control.matches('button') || isAllowedOfflineAction)));
             });
+                    const manageYear = main.querySelector('#manageStudentYear');
+                    const manageDepartment = main.querySelector('#manageStudentDepartment');
+                    const manageMajor = main.querySelector('#manageStudentMajor');
+                    const manageSection = main.querySelector('#manageStudentSection');
+                    if (manageYear) manageYear.value = '';
+                    if (manageDepartment) manageDepartment.value = '';
+                    if (manageMajor) manageMajor.value = '';
+                    if (manageSection) manageSection.value = '';
+                    const manageTable = main.querySelector('#manageStudentsTable');
+                    if (manageTable) manageTable.innerHTML = '<tr><td colspan="4">Select a year, department, major, and section to view students.</td></tr>';
+                    const sectionActions = main.querySelector('#manageSectionActions');
+                    if (sectionActions) sectionActions.style.display = 'none';
             window.adminOfflineView = true;
             setNotice(`Offline view: admin data saved ${new Date(snapshot.savedAt).toLocaleString()}. Only saved admin data is available.`, true);
             return true;
