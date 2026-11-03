@@ -2164,7 +2164,8 @@ onchange="loadSubjectsForTeacherAssign()">
                 <p id="bulkAssignTargetSection"></p>
                 <input id="unassignedStudentSearch" type="search" placeholder="Search student ID or name..." oninput="filterUnassignedStudentChoices()" autocomplete="off">
                 <div class="table-responsive" style="max-height:42vh;overflow:auto;">
-                    <table>
+                    <table style="width:100%;table-layout:fixed;word-break:break-word;overflow-wrap:anywhere;">
+                        <colgroup><col style="width:38px;"><col style="width:120px;"><col></colgroup>
                         <thead><tr><th><input type="checkbox" id="selectAllUnassignedStudents" onchange="toggleAllUnassignedStudents(this.checked)"></th><th>Student ID</th><th>Name</th></tr></thead>
                         <tbody id="unassignedStudentChoices"><tr><td colspan="3">Choose a section in Manage Students first</td></tr></tbody>
                     </table>
@@ -2185,7 +2186,8 @@ onchange="loadSubjectsForTeacherAssign()">
                 <p id="unassignSelectedTargetSection"></p>
                 <input id="sectionStudentSearch" type="search" placeholder="Search student ID or name..." oninput="filterSectionStudentChoices()" autocomplete="off">
                 <div class="table-responsive" style="max-height:42vh;overflow:auto;">
-                    <table>
+                    <table style="width:100%;table-layout:fixed;word-break:break-word;overflow-wrap:anywhere;">
+                        <colgroup><col style="width:38px;"><col style="width:120px;"><col></colgroup>
                         <thead><tr><th><input type="checkbox" id="selectAllSectionStudents" onchange="toggleAllSectionStudents(this.checked)"></th><th>Student ID</th><th>Name</th></tr></thead>
                         <tbody id="sectionStudentChoices"><tr><td colspan="3">Choose a section in Manage Students first</td></tr></tbody>
                     </table>
@@ -8006,17 +8008,82 @@ async function loadUnassignedStudentChoices() {
         .filter(student => !student.section_id);
 
     const structure = await window.getAdminStructureData(supabaseClient);
-    const pendingAssignments = new Set(structure.pending.filter(item => item.type === 'student_section_assign')
-        .flatMap(item => item.payload.student_ids || []).map(String));
-    students = students.filter(student => !pendingAssignments.has(String(student.student_id)));
+    const deletedSections = getQueuedDeletedSectionIds(structure.pending, structure.lookups);
+    if (!navigator.onLine) {
+        const roster = await window.getAdminStudentRoster?.(supabaseClient);
+        if (roster?.students) {
+            roster.students.forEach(original => {
+                const studentId = String(original.student_id);
+                const queuedEdit = queuedEdits.find(item => String(item.payload.student_id) === studentId);
+                let projectedSectionId = queuedEdit?.payload.section_id
+                    ? String(queuedEdit.payload.section_id)
+                    : original.section_id == null ? null : String(original.section_id);
+                structure.pending.forEach(operation => {
+                    const operationSectionId = String(operation.payload.section_id || '');
+                    if (operation.type === 'student_section_assign' && (operation.payload.student_ids || []).map(String).includes(studentId)) {
+                        projectedSectionId = operationSectionId;
+                    } else if (operation.type === 'student_section_unassign'
+                        && (operation.payload.student_ids || []).map(String).includes(studentId)
+                        && projectedSectionId === operationSectionId) {
+                        projectedSectionId = null;
+                    } else if (operation.type === 'section_unassign_all' && projectedSectionId === operationSectionId) {
+                        projectedSectionId = null;
+                    }
+                });
+                if (projectedSectionId && deletedSections.has(projectedSectionId)) projectedSectionId = null;
+                if (projectedSectionId !== null) return;
+                const unassignedStudent = queuedEdit
+                    ? { ...original, ...queuedEdit.payload, section_id: null }
+                    : { ...original, section_id: null };
+                if (!students.some(existing => String(existing.student_id) === studentId)) students.push(unassignedStudent);
+            });
+        }
+    } else {
+        const pendingAssignments = new Set(structure.pending.filter(item => item.type === 'student_section_assign')
+            .flatMap(item => item.payload.student_ids || []).map(String));
+        const pendingAssignmentNumbers = new Set(structure.pending.filter(item => item.type === 'student_section_assign')
+            .flatMap(item => item.payload.student_numbers || []).map(String));
+        students = students.filter(student => !pendingAssignments.has(String(student.student_id))
+            && !pendingAssignmentNumbers.has(String(student.student_number)));
+    }
+    const queuedAccountData = await window.getAdminAccountData(supabaseClient);
+    queuedAccountData.queued.filter(item => item.role === 'student'
+        && (item.action || 'admin-create') === 'admin-create')
+        .forEach(item => {
+            let projectedSectionId = item.payload.section_id ? String(item.payload.section_id) : null;
+            structure.pending.forEach(operation => {
+                const operationSectionId = String(operation.payload.section_id || '');
+                if (operation.type === 'student_section_assign'
+                    && (operation.payload.student_numbers || []).map(String).includes(String(item.payload.student_number))) {
+                    projectedSectionId = operationSectionId;
+                } else if (operation.type === 'student_section_unassign'
+                    && (operation.payload.student_numbers || []).map(String).includes(String(item.payload.student_number))
+                    && projectedSectionId === operationSectionId) {
+                    projectedSectionId = null;
+                } else if ((operation.type === 'section_unassign_all' || operation.type === 'section_delete')
+                    && operationSectionId === projectedSectionId) projectedSectionId = null;
+            });
+            if (projectedSectionId && deletedSections.has(projectedSectionId)) projectedSectionId = null;
+            if (projectedSectionId !== null) return;
+            if (!students.some(student => student.pendingOperationId === item.operationId)) students.push({
+                student_id: `pending:${item.operationId}`,
+                pendingOperationId: item.operationId,
+                student_number: item.payload.student_number,
+                first_name: item.payload.first_name,
+                middle_initial: item.payload.middle_initial,
+                last_name: item.payload.last_name,
+                section_id: null,
+                pendingCreate: true
+            });
+        });
     if (!students.length) {
         table.innerHTML = '<tr><td colspan="3">No unassigned students available</td></tr>';
         return;
     }
     table.innerHTML = students.map(student => `<tr>
-        <td><input class="bulk-unassigned-student" type="checkbox" value="${student.student_id}" onchange="updateBulkAssignStudentCount()"></td>
+        <td><input class="bulk-unassigned-student" type="checkbox" value="${student.student_id}" data-student-number="${student.pendingCreate ? student.student_number : ''}" onchange="updateBulkAssignStudentCount()"></td>
         <td>${student.student_number || ''}</td>
-        <td>${formatName(student.first_name, student.middle_initial, student.last_name)}</td>
+        <td>${formatName(student.first_name, student.middle_initial, student.last_name)}${student.pendingCreate ? ' (account waiting to sync)' : ''}</td>
     </tr>`).join('');
     table.querySelectorAll('tr').forEach((row, index) => {
         const student = students[index];
@@ -8045,16 +8112,18 @@ function updateBulkAssignStudentCount() {
 }
 
 async function assignSelectedUnassignedStudents() {
-    const studentIds = [...document.querySelectorAll('#unassignedStudentChoices .bulk-unassigned-student:checked')]
+    const selectedStudents = [...document.querySelectorAll('#unassignedStudentChoices .bulk-unassigned-student:checked')];
+    const studentIds = selectedStudents.filter(input => !input.dataset.studentNumber)
         .map(input => Number(input.value)).filter(Number.isInteger);
+    const studentNumbers = selectedStudents.map(input => input.dataset.studentNumber).filter(Boolean);
     const sectionId = document.getElementById('manageStudentSection').value;
     const errorBox = document.getElementById('bulkAssignStudentError');
     errorBox.textContent = '';
-    if (!sectionId || !studentIds.length) {
+    if (!sectionId || (!studentIds.length && !studentNumbers.length)) {
         errorBox.textContent = 'Choose a section and select at least one student.';
         return;
     }
-    const payload = { section_id: String(sectionId), student_ids: studentIds };
+    const payload = { section_id: String(sectionId), student_ids: studentIds, student_numbers: studentNumbers };
     try {
         const queuedOperation = !navigator.onLine || String(sectionId).startsWith('local:');
         if (queuedOperation) {
@@ -8076,9 +8145,10 @@ async function assignSelectedUnassignedStudents() {
         const departmentId = document.getElementById('manageStudentDepartment').value;
         const yearLevel = document.getElementById('manageStudentYear').value;
         closeModal('addStudentsToSectionModal');
+        const selectedCount = studentIds.length + studentNumbers.length;
         showAlert('success', !queuedOperation ? 'Students Added' : 'Student Assignment Queued', !queuedOperation
-            ? `${studentIds.length} students were added to ${section?.section_name || 'the section'}.`
-            : `${studentIds.length} student assignments ${navigator.onLine ? 'will apply when earlier queued sections finish syncing.' : 'will apply when you reconnect.'}`);
+            ? `${selectedCount} students were added to ${section?.section_name || 'the section'}.`
+            : `${selectedCount} student assignments ${navigator.onLine ? 'will apply when earlier queued sections finish syncing.' : 'will apply when you reconnect.'}`);
         await showManagedStudentsInSection({ department_id: departmentId, major_id: majorId, year_level: yearLevel, section_id: sectionId });
     } catch (error) {
         errorBox.textContent = error.message || 'Unable to assign selected students.';
@@ -9015,7 +9085,7 @@ async function renderAdminStructureQueue() {
             : item.type === 'student_section_assign'
                 ? `Section ${(lookups?.sections || []).find(section => String(section.section_id) === String(item.payload.section_id))?.section_name
                     || structurePending.find(section => section.type === 'section_add' && String(section.localRef) === String(item.payload.section_id))?.payload.section_name
-                    || item.payload.section_id}; ${item.payload.student_ids?.length || 0} student(s)`
+                    || item.payload.section_id}; ${(item.payload.student_ids?.length || 0) + (item.payload.student_numbers?.length || 0)} student(s)`
             : item.type === 'section_transition'
                 ? `Section ${(lookups?.sections || []).find(section => String(section.section_id) === String(item.payload.section_id))?.section_name
                     || structurePending.find(section => section.type === 'section_add' && String(section.localRef) === String(item.payload.section_id))?.payload.section_name
