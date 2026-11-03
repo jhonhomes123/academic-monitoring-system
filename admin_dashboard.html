@@ -1283,9 +1283,9 @@ table td{
                     <h2>Pending Academic Changes</h2>
                     <p>Changes saved offline will apply in order after reconnecting</p>
                 </div>
-                <div class="table-responsive">
+                <div class="table-responsive" style="max-height:720px;overflow:auto;">
                     <table>
-                        <thead><tr><th>Change</th><th>Details</th><th>Status</th></tr></thead>
+                        <thead><tr><th style="position:sticky;top:0;background:#fff;z-index:1;">Change</th><th style="position:sticky;top:0;background:#fff;z-index:1;">Details</th><th style="position:sticky;top:0;background:#fff;z-index:1;">Status</th></tr></thead>
                         <tbody id="adminStructureQueueTable"><tr><td colspan="3">No pending changes</td></tr></tbody>
                     </table>
                 </div>
@@ -8454,10 +8454,14 @@ async function loadStudentsBySection() {
         const { pending: structurePending, lookups } = useOfflineProjection
             ? await window.getAdminStructureData(supabaseClient)
             : { pending: [], lookups: null };
+        const structureIdMap = await window.getAdminStructureLocalIdMap?.(supabaseClient) || new Map();
         if (useOfflineProjection) queuedDeletedSectionIds = getQueuedDeletedSectionIds(structurePending, lookups);
         queued.filter(item => item.role === 'student' && (item.action || 'admin-create') === 'admin-create')
             .forEach(item => {
                 let projectedSectionId = item.payload.section_id ? String(item.payload.section_id) : null;
+                if (projectedSectionId?.startsWith('local:') && structureIdMap.has(projectedSectionId)) {
+                    projectedSectionId = String(structureIdMap.get(projectedSectionId));
+                }
                 if (useOfflineProjection) {
                     structurePending.forEach(operation => {
                         const operationSectionId = String(operation.payload.section_id || '');

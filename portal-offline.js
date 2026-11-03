@@ -756,6 +756,11 @@
         return new Map(mappings.filter(item => item.userId === userId).map(item => [item.localRef, item.realId]));
     }
 
+    async function getAdminStructureLocalIdMap(client) {
+        const userId = await getUserId(client);
+        return userId ? await getAdminStructureIdMap(userId) : new Map();
+    }
+
     async function syncAdminStructureQueue(client, operationId = null) {
         if (!navigator.onLine || window.adminStructureSyncInProgress) return;
         window.adminStructureSyncInProgress = true;
@@ -1081,6 +1086,7 @@
     window.getAdminStructureData = getAdminStructureData;
     window.syncAdminStructureQueue = syncAdminQueues;
     window.clearAdminStructureQueue = clearAdminStructureQueue;
+    window.getAdminStructureLocalIdMap = getAdminStructureLocalIdMap;
 
     async function removeQueuedTeacherOperation(key) {
         const database = await openDatabase();
