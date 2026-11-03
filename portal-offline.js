@@ -468,6 +468,7 @@
                 first_name: payload.first_name,
                 middle_initial: payload.middle_initial,
                 last_name: payload.last_name,
+                section_id: payload.section_id || result.section_id || null,
                 year_level: payload.year_level || section?.year_level || '',
                 section_name: section?.section_name || ''
             }
