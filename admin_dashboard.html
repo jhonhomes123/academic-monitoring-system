@@ -362,12 +362,35 @@ table td{
             overflow: hidden;
         }
 
-        #addStudentsToSectionModal .modal-header {
-            flex: 0 0 auto;
-            margin-bottom: 10px;
+        #unassignSelectedStudentsModal {
+            padding: 18px;
         }
 
-        #addStudentsToSectionModal .modal-body {
+        #unassignSelectedStudentsModal .modal-content {
+            width: min(980px, 100%);
+            max-width: 100%;
+            height: min(88vh, 900px);
+            height: min(88dvh, 900px);
+            min-height: 0;
+            overflow: hidden;
+        }
+
+        #addStudentsToSectionModal .modal-header,
+        #unassignSelectedStudentsModal .modal-header {
+            flex: 0 0 auto;
+            margin-bottom: 10px;
+            justify-content: flex-start;
+            gap: 12px;
+        }
+
+        #addStudentsToSectionModal .modal-header h3,
+        #unassignSelectedStudentsModal .modal-header h3 {
+            margin: 0 auto 0 0;
+            text-align: left;
+        }
+
+        #addStudentsToSectionModal .modal-body,
+        #unassignSelectedStudentsModal .modal-body {
             display: flex;
             flex: 1 1 auto;
             flex-direction: column;
@@ -376,7 +399,8 @@ table td{
             gap: 12px;
         }
 
-        #addStudentsToSectionModal .table-responsive {
+        #addStudentsToSectionModal .table-responsive,
+        #unassignSelectedStudentsModal .table-responsive {
             flex: 1 1 auto;
             min-height: 0;
             max-height: none !important;
@@ -386,40 +410,56 @@ table td{
             border-radius: 6px;
         }
 
-        #addStudentsToSectionModal table {
+        #addStudentsToSectionModal table,
+        #unassignSelectedStudentsModal table {
             width: 100%;
+            min-width: 0;
             table-layout: fixed;
             border-collapse: separate;
             border-spacing: 0;
         }
 
-        #addStudentsToSectionModal th {
+        #addStudentsToSectionModal th,
+        #unassignSelectedStudentsModal th {
             position: sticky;
             top: 0;
             z-index: 1;
             background: #f4f7fc;
+            white-space: normal;
         }
 
         #addStudentsToSectionModal th:first-child,
-        #addStudentsToSectionModal td:first-child {
-            width: 54px;
+        #addStudentsToSectionModal td:first-child,
+        #unassignSelectedStudentsModal th:first-child,
+        #unassignSelectedStudentsModal td:first-child {
+            width: 60px;
+            padding-left: 18px;
+            padding-right: 18px;
             text-align: center;
+            vertical-align: middle;
         }
 
         #addStudentsToSectionModal th:nth-child(2),
-        #addStudentsToSectionModal td:nth-child(2) {
-            width: 140px;
+        #addStudentsToSectionModal td:nth-child(2),
+        #unassignSelectedStudentsModal th:nth-child(2),
+        #unassignSelectedStudentsModal td:nth-child(2) {
+            width: 150px;
+            white-space: normal;
+            overflow-wrap: anywhere;
         }
 
         #addStudentsToSectionModal th:nth-child(3),
-        #addStudentsToSectionModal td:nth-child(3) {
+        #addStudentsToSectionModal td:nth-child(3),
+        #unassignSelectedStudentsModal th:nth-child(3),
+        #unassignSelectedStudentsModal td:nth-child(3) {
             width: auto;
             white-space: normal;
             overflow-wrap: anywhere;
             word-break: break-word;
         }
 
-        #addStudentsToSectionModal tbody tr:hover {
+        #addStudentsToSectionModal tbody tr:hover,
+        #unassignSelectedStudentsModal tbody tr:hover {
             background: #f7f9fc;
         }
 
@@ -2206,7 +2246,7 @@ onchange="loadSubjectsForTeacherAssign()">
                 <input id="unassignedStudentSearch" type="search" placeholder="Search student ID or name..." oninput="filterUnassignedStudentChoices()" autocomplete="off">
                 <div class="table-responsive" style="max-height:42vh;overflow:auto;">
                     <table style="width:100%;table-layout:fixed;word-break:break-word;overflow-wrap:anywhere;">
-                        <colgroup><col style="width:38px;"><col style="width:120px;"><col></colgroup>
+                        <colgroup><col style="width:60px;"><col style="width:150px;"><col></colgroup>
                         <thead><tr><th><input type="checkbox" id="selectAllUnassignedStudents" style="width:20px;height:20px;" onchange="toggleAllUnassignedStudents(this.checked)"></th><th>Student ID</th><th>Name</th></tr></thead>
                         <tbody id="unassignedStudentChoices"><tr><td colspan="3">Choose a section in Manage Students first</td></tr></tbody>
                     </table>
@@ -2228,7 +2268,7 @@ onchange="loadSubjectsForTeacherAssign()">
                 <input id="sectionStudentSearch" type="search" placeholder="Search student ID or name..." oninput="filterSectionStudentChoices()" autocomplete="off">
                 <div class="table-responsive" style="max-height:42vh;overflow:auto;">
                     <table style="width:100%;table-layout:fixed;word-break:break-word;overflow-wrap:anywhere;">
-                        <colgroup><col style="width:38px;"><col style="width:120px;"><col></colgroup>
+                        <colgroup><col style="width:60px;"><col style="width:150px;"><col></colgroup>
                         <thead><tr><th><input type="checkbox" id="selectAllSectionStudents" style="width:20px;height:20px;" onchange="toggleAllSectionStudents(this.checked)"></th><th>Student ID</th><th>Name</th></tr></thead>
                         <tbody id="sectionStudentChoices"><tr><td colspan="3">Choose a section in Manage Students first</td></tr></tbody>
                     </table>
