@@ -7917,7 +7917,12 @@ async function handleManageStudentsYearChange() {
     departmentSelect.disabled = false;
     majorSelect.disabled = false;
     sectionSelect.disabled = false;
+    departmentSelect.value = '';
+    majorSelect.innerHTML = '<option value="">Select Major</option>';
+    sectionSelect.innerHTML = '<option value="">Select Section</option>';
+    document.getElementById('studentSearchInput').value = '';
     await loadDepartmentsForManageStudents();
+    await loadStudentsBySection();
 }
 async function loadMajorsForManageStudents() {
 
