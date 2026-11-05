@@ -10486,8 +10486,14 @@ function confirmScopedStudentDeletion(title, description, scope) {
 
                 await window.saveAdminAccountLookups?.(supabaseClient);
                 await loadDashboardCounts();
-                await loadStudentsBySection();
-                await loadDepartmentExplorer();
+                if (document.getElementById('studentSection')?.classList.contains('active-section')) {
+                    await refreshManageStudentsSelectors();
+                } else {
+                    await loadStudentsBySection();
+                }
+                if (document.getElementById('departmentSection')?.classList.contains('active-section')) {
+                    await refreshCurrentExplorer();
+                }
                 await renderAdminCreatedAccounts();
                 await renderAdminStructureQueue();
                 showAlert('success', scope === 'unassigned' ? 'Unassigned Students Deleted' : 'Graduate Sections Deleted', scope === 'unassigned'
