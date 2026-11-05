@@ -494,6 +494,26 @@
         )));
     }
 
+    async function removeAdminStudentFromLocalRosters(client, studentId, studentNumber) {
+        const userId = await getUserId(client);
+        if (!userId) return;
+        const allRecords = await adminStoreRequest(adminLookupStoreName, 'readonly', store => store.getAll());
+        const matchesStudent = student =>
+            (studentId != null && String(student.student_id) === String(studentId))
+            || (studentNumber && String(student.student_number || '') === String(studentNumber));
+        const rosterRecords = allRecords.filter(record => record.userId === userId && Array.isArray(record.students));
+        await Promise.all(rosterRecords.map(record => adminStoreRequest(
+            adminLookupStoreName,
+            'readwrite',
+            store => store.put({
+                ...record,
+                students: record.students.filter(student => !matchesStudent(student)),
+                savedAt: new Date().toISOString()
+            })
+        )));
+        window.dispatchEvent(new CustomEvent('admin-student-data-changed'));
+    }
+
     window.removeAdminAccountResult = removeAdminAccountResult;
 
     async function performAdminStudentDeletion(client, payload, anonKey) {
@@ -1039,6 +1059,7 @@
         const result = await performAdminStudentDeletion(client, payload, anonKey);
         await saveAdminDeletionResult(userId, operationId, payload, result);
         await removeAdminAccountResult(client, payload.student_number || result.student_number);
+        await removeAdminStudentFromLocalRosters(client, result.student_id || payload.student_id, result.student_number || payload.student_number);
         window.dispatchEvent(new CustomEvent('admin-account-data-changed'));
         return result;
     }
@@ -1060,6 +1081,7 @@
         setNotice('Scoped student cleanup saved on this device. It will run when connected.', true, 'sync');
         window.dispatchEvent(new CustomEvent('admin-account-data-changed'));
         window.dispatchEvent(new CustomEvent('admin-deletion-data-changed'));
+        window.dispatchEvent(new CustomEvent('admin-structure-data-changed'));
         return { queued: true, operationId };
     }
 
@@ -1224,6 +1246,7 @@
                     } else if (item.action === 'admin-delete') {
                         await saveAdminDeletionResult(userId, item.operationId, item.payload, result);
                         await removeAdminAccountResult(client, item.payload.student_number || result.student_number);
+                        await removeAdminStudentFromLocalRosters(client, result.student_id || item.payload.student_id, result.student_number || item.payload.student_number);
                     } else if (item.action === 'admin-bulk-delete') {
                         const label = item.payload.scope === 'unassigned' ? 'Unassigned students' : 'Graduate sections';
                         await saveAdminDeletionResult(

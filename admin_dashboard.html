@@ -3681,7 +3681,14 @@ async function approveAccount(id) {
                 }
             });
 
-            return { departments, majors, sections, subjects, pending, lookups };
+            const { queued: accountQueue = [] } = await window.getAdminAccountData?.(supabaseClient) || {};
+            const deletingGraduates = accountQueue.some(item => item.action === 'admin-bulk-delete'
+                && item.payload.scope === 'graduated');
+            const visibleSections = deletingGraduates
+                ? sections.filter(section => section.year_level !== 'Graduate')
+                : sections;
+
+            return { departments, majors, sections: visibleSections, subjects, pending, lookups, accountQueue };
         }
 
         function getQueuedDeletedSectionIds(pending, lookups) {
@@ -8654,6 +8661,16 @@ async function loadStudentsBySection() {
             .map(item => String(item.payload.student_id || '')).filter(Boolean));
         data = data.filter(student => !deletedStudentNumbers.has(String(student.student_number || ''))
             && !deletedStudentIds.has(String(student.student_id || '')));
+        if (!navigator.onLine) {
+            const queuedBulkScopes = new Set(queued.filter(item => item.action === 'admin-bulk-delete')
+                .map(item => item.payload.scope));
+            if ((sectionId === 'unassigned' || selectedYear === 'unassigned') && queuedBulkScopes.has('unassigned')) {
+                data = [];
+            }
+            if (selectedYear === 'Graduate' && queuedBulkScopes.has('graduated')) {
+                data = [];
+            }
+        }
     }
 
     if (!data.length) {
@@ -9083,6 +9100,14 @@ async function renderAdminCreatedAccounts() {
                     year: getProjectedYear(sectionId, fallbackYear, section) || fallbackYear || '—'
             };
         };
+        const pendingBulkScopes = new Set(queued.filter(item => item.action === 'admin-bulk-delete')
+            .map(item => item.payload.scope));
+        const targetedByPendingBulkCleanup = (studentNumber, studentId, sectionId, yearLevel) => {
+            if (!studentNumber && !studentId) return false;
+            const enrollment = getProjectedStudentEnrollment(studentNumber, studentId, sectionId, yearLevel);
+            return (pendingBulkScopes.has('unassigned') && !enrollment.sectionId)
+                || (pendingBulkScopes.has('graduated') && enrollment.sectionId && enrollment.year === 'Graduate');
+        };
         const pendingDeletedStudentNumbers = new Set(queued
             .filter(item => item.action === 'admin-delete')
             .map(item => String(item.payload.student_number || ''))
@@ -9090,7 +9115,10 @@ async function renderAdminCreatedAccounts() {
         table.replaceChildren();
         const rows = [
             ...queued.filter(item => (item.action || 'admin-create') === 'admin-create'
-                && !pendingDeletedStudentNumbers.has(String(item.payload.student_number || ''))).map(item => ({
+                && !pendingDeletedStudentNumbers.has(String(item.payload.student_number || ''))
+                && !(item.role === 'student' && targetedByPendingBulkCleanup(
+                    item.payload.student_number, null, item.payload.section_id, item.payload.year_level
+                ))).map(item => ({
                 operationId: item.operationId,
                 processing: Boolean(item.processing),
                 failed: Boolean(item.lastError),
@@ -9125,9 +9153,13 @@ async function renderAdminCreatedAccounts() {
                     : cachedStudent
                         ? cachedStudent.section_id
                         : item.payload.section_id;
+                const studentId = student?.student_id || cachedStudent?.student_id;
+                if (item.role === 'student' && targetedByPendingBulkCleanup(
+                    item.accountId, studentId, initialSectionId, item.payload.year_level
+                )) return null;
                 const enrollment = getProjectedStudentEnrollment(
                     item.accountId,
-                    student?.student_id || cachedStudent?.student_id,
+                    studentId,
                     initialSectionId,
                     item.payload.year_level
                 );
@@ -9145,7 +9177,7 @@ async function renderAdminCreatedAccounts() {
                     password: item.temporaryPassword,
                     status: 'Created'
                 };
-            })
+            }).filter(Boolean)
         ];
         if (!rows.length) {
             const emptyRow = document.createElement('tr');
@@ -9474,11 +9506,15 @@ async function renderAdminStructureQueue() {
             createdAt: item.createdAt
         }));
     const accountPending = (accountData.queued || [])
-        .filter(item => (item.action || 'admin-create') === 'admin-create' || item.action === 'admin-reset')
+        .filter(item => (item.action || 'admin-create') === 'admin-create'
+            || item.action === 'admin-reset'
+            || item.action === 'admin-bulk-delete')
         .map(item => ({
             type: item.action === 'admin-reset'
                 ? 'student_password_reset'
-                : item.role === 'teacher' ? 'teacher_account_create' : 'student_account_create',
+                : item.action === 'admin-bulk-delete'
+                    ? 'student_bulk_delete'
+                    : item.role === 'teacher' ? 'teacher_account_create' : 'student_account_create',
             operationId: item.operationId,
             role: item.role,
             payload: item.payload,
@@ -9516,7 +9552,8 @@ async function renderAdminStructureQueue() {
         student_section_assign: 'Assign students to section',
         student_edit: 'Edit student',
         student_account_create: 'Create student account',
-        student_password_reset: 'Reset student password'
+        student_password_reset: 'Reset student password',
+        student_bulk_delete: 'Bulk student cleanup'
     };
     const studentEditDetails = payload => {
         const original = roster?.students?.find(student => String(student.student_id) === String(payload.student_id));
@@ -9586,6 +9623,12 @@ async function renderAdminStructureQueue() {
                 ? `${item.payload.teacher_number} - ${formatName(item.payload.first_name, item.payload.middle_initial, item.payload.last_name)}`
             : item.type === 'student_password_reset'
                 ? `Student ID ${item.payload.student_number || item.payload.student_id}`
+            : item.type === 'student_bulk_delete'
+                ? item.payload.scope === 'unassigned'
+                    ? 'Delete unassigned student accounts only'
+                    : item.payload.scope === 'graduated'
+                        ? 'Delete Graduate sections and their student accounts'
+                        : 'Invalid cleanup scope'
             : item.type === 'student_section_assign'
                 ? `Section ${(lookups?.sections || []).find(section => String(section.section_id) === String(item.payload.section_id))?.section_name
                     || structurePending.find(section => section.type === 'section_add' && String(section.localRef) === String(item.payload.section_id))?.payload.section_name
