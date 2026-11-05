@@ -4631,6 +4631,7 @@ async function refreshManageStudentsAfterSectionTransition(sectionId, yearLevel)
     const sectionSelect = document.getElementById('manageStudentSection');
     sectionSelect.value = String(sectionId);
     await loadStudentsBySection();
+    await renderAdminCreatedAccounts();
 }
 
         async function viewSubjectTeachers(subjectId,subjectName) {
@@ -8284,6 +8285,7 @@ async function assignSelectedUnassignedStudents() {
             year_level: yearLevel,
             section_id: displaySectionId
         });
+        await renderAdminCreatedAccounts();
     } catch (error) {
         errorBox.textContent = error.message || 'Unable to assign selected students.';
     }
@@ -8775,6 +8777,7 @@ async function unassignAllStudentsFromSelectedSection() {
                         ? `Students in ${sectionName} are now unassigned. Their records remain intact.`
                         : `Students in ${sectionName} will be unassigned when you reconnect. Their records remain intact.`);
                 if (yearLevel !== 'Graduate') await loadStudentsBySection();
+                await renderAdminCreatedAccounts();
                 await renderAdminStructureQueue();
             } catch (error) {
                 showAlert('error', 'Could Not Unassign Students', error.message || 'Unable to unassign students from this section.');
@@ -8926,6 +8929,7 @@ async function unassignSelectedStudentsFromSection() {
                     ? `${selectedCount} student(s) were unassigned from ${sectionName}.`
                     : `${selectedCount} student(s) will be unassigned from ${sectionName} when you reconnect.`);
             await loadStudentsBySection();
+            await renderAdminCreatedAccounts();
             await renderAdminStructureQueue();
         } catch (error) {
             closeConfirmModal();
@@ -8993,7 +8997,7 @@ async function renderAdminCreatedAccounts() {
                     : Promise.resolve({ data: [] }),
                 completedStudentNumbers.length
                     ? supabaseClient.from('students')
-                        .select('student_number, section_id, sections(section_name, year_level)')
+                        .select('student_id, student_number, section_id, sections(section_name, year_level)')
                         .in('student_number', completedStudentNumbers)
                     : Promise.resolve({ data: [] })
             ]);
@@ -9012,30 +9016,48 @@ async function renderAdminCreatedAccounts() {
                 });
             return year;
         };
-        const getQueuedStudentSection = item => {
-            let sectionId = item.payload.section_id ? resolveSectionId(item.payload.section_id) : null;
-            structurePending.forEach(operation => {
-                const operationSectionId = resolveSectionId(operation.payload.section_id || '');
-                const matchesStudent = (operation.payload.student_numbers || []).map(String)
-                    .includes(String(item.payload.student_number));
-                if (operation.type === 'student_section_assign' && matchesStudent) {
-                    sectionId = operationSectionId;
-                } else if (operation.type === 'student_section_unassign' && matchesStudent
-                    && sectionId === operationSectionId) {
-                    sectionId = null;
-                } else if ((operation.type === 'section_unassign_all' || operation.type === 'section_delete')
-                    && sectionId === operationSectionId) {
-                    sectionId = null;
-                }
-            });
-            if (!sectionId) return { name: 'Unassigned', year: item.payload.year_level || '—' };
+            const getProjectedStudentEnrollment = (studentNumber, studentId, initialSectionId, fallbackYear) => {
+                let sectionId = initialSectionId ? resolveSectionId(initialSectionId) : null;
+                const events = [
+                    ...structurePending
+                        .filter(operation => ['student_section_assign', 'student_section_unassign', 'section_unassign_all', 'section_delete'].includes(operation.type))
+                        .map(operation => ({ ...operation, queueType: 'structure' })),
+                    ...queued
+                        .filter(operation => operation.action === 'admin-edit' && operation.role === 'student'
+                            && ((studentNumber && String(operation.payload.student_number || '') === String(studentNumber))
+                                || (studentId && String(operation.payload.student_id || '') === String(studentId))))
+                        .map(operation => ({ ...operation, queueType: 'account' }))
+                ].sort((first, second) => Date.parse(first.createdAt || 0) - Date.parse(second.createdAt || 0));
+
+                events.forEach(operation => {
+                    const operationSectionId = resolveSectionId(operation.payload.section_id || '');
+                    if (operation.queueType === 'account') {
+                        sectionId = operation.payload.section_id ? operationSectionId : null;
+                        return;
+                    }
+                    const matchesStudent = (operation.payload.student_numbers || []).map(String)
+                        .includes(String(studentNumber || ''))
+                        || (operation.payload.student_ids || []).map(String).includes(String(studentId || ''));
+                    if (operation.type === 'student_section_assign' && matchesStudent) {
+                        sectionId = operationSectionId;
+                    } else if (operation.type === 'student_section_unassign' && matchesStudent
+                        && sectionId === operationSectionId) {
+                        sectionId = null;
+                    } else if ((operation.type === 'section_unassign_all' || operation.type === 'section_delete')
+                        && sectionId === operationSectionId) {
+                        sectionId = null;
+                    }
+                });
+
+                if (!sectionId) return { sectionId: null, name: 'Unassigned', year: '—' };
             const section = liveSections.get(sectionId)
                 || (lookups?.sections || []).find(candidate => String(candidate.section_id) === sectionId)
                 || structurePending.find(operation => operation.type === 'section_add'
                     && String(operation.localRef) === sectionId)?.payload;
             return {
+                    sectionId,
                 name: section?.section_name || (sectionId.startsWith('local:') ? 'Section waiting to sync' : 'Section unavailable'),
-                year: getProjectedYear(sectionId, item.payload.year_level, section) || item.payload.year_level || '—'
+                    year: getProjectedYear(sectionId, fallbackYear, section) || fallbackYear || '—'
             };
         };
         const pendingDeletedStudentNumbers = new Set(queued
@@ -9055,8 +9077,12 @@ async function renderAdminCreatedAccounts() {
                 middleInitial: item.payload.middle_initial,
                 lastName: item.payload.last_name,
                 id: item.role === 'student' ? item.payload.student_number : item.payload.teacher_number,
-                year: item.role === 'student' ? getQueuedStudentSection(item).year : '—',
-                section: item.role === 'student' ? getQueuedStudentSection(item).name : '—',
+                year: item.role === 'student'
+                    ? getProjectedStudentEnrollment(item.payload.student_number, null, item.payload.section_id, item.payload.year_level).year
+                    : '—',
+                section: item.role === 'student'
+                    ? getProjectedStudentEnrollment(item.payload.student_number, null, item.payload.section_id, item.payload.year_level).name
+                    : '—',
                 password: 'Available after sync',
                 status: item.processing
                     ? 'Being created'
@@ -9070,17 +9096,17 @@ async function renderAdminCreatedAccounts() {
                 && String(operation.payload.student_number || '') === String(item.accountId))).map(item => {
                 const student = item.role === 'student' ? liveStudents.get(String(item.accountId)) : null;
                 const cachedStudent = item.role === 'student' ? cachedStudents.get(String(item.accountId)) : null;
-                const sectionId = resolveSectionId(student?.section_id || cachedStudent?.section_id || item.payload.section_id || '');
-                const section = liveSections.get(sectionId)
-                    || (lookups?.sections || []).find(candidate => String(candidate.section_id) === sectionId)
-                    || structurePending.find(operation => operation.type === 'section_add'
-                        && resolveSectionId(operation.localRef) === sectionId)?.payload;
-                const currentYear = sectionId
-                    ? getProjectedYear(sectionId, item.payload.year_level, section)
-                    : '';
-                const currentSectionName = student?.sections?.section_name
-                    || section?.section_name
-                    || (student || cachedStudent ? '' : item.payload.section_name);
+                const initialSectionId = student
+                    ? student.section_id
+                    : cachedStudent
+                        ? cachedStudent.section_id
+                        : item.payload.section_id;
+                const enrollment = getProjectedStudentEnrollment(
+                    item.accountId,
+                    student?.student_id || cachedStudent?.student_id,
+                    initialSectionId,
+                    item.payload.year_level
+                );
                 return {
                     role: item.role,
                     name: formatName(item.payload.first_name, item.payload.middle_initial, item.payload.last_name),
@@ -9090,16 +9116,8 @@ async function renderAdminCreatedAccounts() {
                     id: item.accountId,
                     studentNumber: item.role === 'student' ? item.accountId : null,
                     userId: student?.user_id || cachedStudent?.user_id || item.payload.user_id || '',
-                    year: item.role !== 'student'
-                        ? '—'
-                        : (student || cachedStudent) && !sectionId
-                            ? '—'
-                            : currentYear || item.payload.year_level || '—',
-                    section: item.role !== 'student'
-                        ? '—'
-                        : (student || cachedStudent) && !sectionId
-                            ? 'Unassigned'
-                            : currentSectionName || 'Unassigned',
+                    year: item.role !== 'student' || !enrollment.sectionId ? '—' : enrollment.year,
+                    section: item.role !== 'student' ? '—' : enrollment.name,
                     password: item.temporaryPassword,
                     status: 'Created'
                 };
