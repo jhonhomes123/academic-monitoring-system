@@ -8978,6 +8978,7 @@ async function renderAdminCreatedAccounts() {
         };
         const liveSections = new Map();
         const liveStudents = new Map();
+        let liveStudentLookupSucceeded = false;
         if (navigator.onLine) {
             const queuedSectionIds = [...new Set(queued
                 .filter(item => item.role === 'student' && (item.action || 'admin-create') === 'admin-create')
@@ -9002,8 +9003,20 @@ async function renderAdminCreatedAccounts() {
                     : Promise.resolve({ data: [] })
             ]);
             (sectionResult.data || []).forEach(section => liveSections.set(String(section.section_id), section));
-            (studentResult.data || []).forEach(student => liveStudents.set(String(student.student_number), student));
+            if (!studentResult.error) {
+                liveStudentLookupSucceeded = true;
+                (studentResult.data || []).forEach(student => liveStudents.set(String(student.student_number), student));
+            } else {
+                console.warn('Unable to verify saved student accounts against the live roster.', studentResult.error);
+            }
         }
+        const deletedSavedStudentNumbers = liveStudentLookupSucceeded
+            ? completed.filter(item => item.role === 'student' && !liveStudents.has(String(item.accountId)))
+                .map(item => String(item.accountId))
+            : [];
+        await Promise.all(deletedSavedStudentNumbers.map(studentNumber =>
+            window.removeAdminAccountResult?.(supabaseClient, studentNumber)
+        ));
         const getProjectedYear = (sectionId, fallbackYear, section) => {
             let year = section?.year_level || fallbackYear || '';
             structurePending.filter(operation => operation.type === 'section_transition'
@@ -9092,8 +9105,9 @@ async function renderAdminCreatedAccounts() {
                             : `Needs attention: ${item.lastError}`)
                         : 'Waiting for connection'
             })),
-            ...completed.filter(item => !queued.some(operation => operation.action === 'admin-delete'
-                && String(operation.payload.student_number || '') === String(item.accountId))).map(item => {
+            ...completed.filter(item => !deletedSavedStudentNumbers.includes(String(item.accountId))
+                && !queued.some(operation => operation.action === 'admin-delete'
+                    && String(operation.payload.student_number || '') === String(item.accountId))).map(item => {
                 const student = item.role === 'student' ? liveStudents.get(String(item.accountId)) : null;
                 const cachedStudent = item.role === 'student' ? cachedStudents.get(String(item.accountId)) : null;
                 const initialSectionId = student

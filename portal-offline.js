@@ -494,6 +494,8 @@
         )));
     }
 
+    window.removeAdminAccountResult = removeAdminAccountResult;
+
     async function performAdminStudentDeletion(client, payload, anonKey) {
         const studentId = Number(payload.student_id);
         const studentNumber = String(payload.student_number || '').trim();
