@@ -2300,6 +2300,7 @@ onchange="loadSubjectsForTeacherAssign()">
     <div class="danger-zone">
 
         <h3>Student Account Cleanup</h3>
+        <p>Choose one of the two limited cleanup actions below.</p>
 
         <div style="display:flex;flex-direction:column;align-items:flex-start;gap:10px;margin:14px 0;">
             <p style="margin:0;">
@@ -10433,7 +10434,7 @@ function confirmScopedStudentDeletion(title, description, scope) {
             try {
                 const { data: { session } } = await supabaseClient.auth.getSession();
                 if (!session) throw new Error('Please sign in again as an administrator.');
-                const response = await fetch(`${SUPABASE_URL}/functions/v1/delete-all-students`, {
+                const response = await fetch(`${SUPABASE_URL}/functions/v1/bulk-delete-students`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -10468,7 +10469,8 @@ function confirmScopedStudentDeletion(title, description, scope) {
 }
 
 async function dropAllStudents() {
-    return deleteAllUnassignedStudents();
+    showAlert('warning', 'Choose a Deletion Scope', 'Use Delete All Unassigned Students or Delete Graduate Sections and Students.');
+    return;
 
     /* ======================
        FIRST CONFIRM MODAL
