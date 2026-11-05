@@ -449,18 +449,39 @@
         }));
     }
 
-    async function clearAdminUserRecords(storeName, userId) {
+    async function clearAdminHistory(storeName, userId, queueActions) {
         const database = await openDatabase();
         return new Promise((resolve, reject) => {
-            const transaction = database.transaction(storeName, 'readwrite');
-            const request = transaction.objectStore(storeName).openCursor();
-            request.onsuccess = () => {
-                const cursor = request.result;
-                if (!cursor) return;
-                if (cursor.value.userId === userId) cursor.delete();
-                cursor.continue();
+            const transaction = database.transaction([storeName, adminQueueStoreName], 'readwrite');
+            const resultStore = transaction.objectStore(storeName);
+            const queueStore = transaction.objectStore(adminQueueStoreName);
+            const resultRequest = resultStore.getAll();
+            const queueRequest = queueStore.getAll();
+            let resultReady = false;
+            let queueReady = false;
+            const finishClear = () => {
+                if (!resultReady || !queueReady) return;
+                const results = resultRequest.result.filter(item => item.userId === userId);
+                const existingMarker = results.find(item => item.recordType === 'clear-marker');
+                const hiddenOperationIds = new Set(existingMarker?.hiddenOperationIds || []);
+                results.forEach(item => {
+                    if (item.operationId) hiddenOperationIds.add(item.operationId);
+                    if (item.recordType !== 'clear-marker') resultStore.delete(item.key);
+                });
+                queueRequest.result.filter(item => item.userId === userId && queueActions.includes(item.action))
+                    .forEach(item => hiddenOperationIds.add(item.operationId));
+                resultStore.put({
+                    key: `${userId}:__clear_marker__`,
+                    userId,
+                    recordType: 'clear-marker',
+                    hiddenOperationIds: [...hiddenOperationIds],
+                    clearedAt: new Date().toISOString()
+                });
             };
-            request.onerror = () => reject(request.error || new Error('Unable to clear saved admin results.'));
+            resultRequest.onsuccess = () => { resultReady = true; finishClear(); };
+            queueRequest.onsuccess = () => { queueReady = true; finishClear(); };
+            resultRequest.onerror = () => reject(resultRequest.error || new Error('Unable to read saved admin results.'));
+            queueRequest.onerror = () => reject(queueRequest.error || new Error('Unable to read pending admin operations.'));
             transaction.oncomplete = () => resolve();
             transaction.onerror = () => reject(transaction.error || new Error('Unable to clear saved admin results.'));
             transaction.onabort = () => reject(transaction.error || new Error('Clearing saved admin results was interrupted.'));
@@ -715,11 +736,16 @@
             adminStoreRequest(adminQueueStoreName, 'readonly', store => store.getAll()),
             adminStoreRequest(adminDeletionResultsStoreName, 'readonly', store => store.getAll())
         ]);
+        const userResults = allCompleted.filter(item => item.userId === userId);
+        const clearMarker = userResults.find(item => item.recordType === 'clear-marker');
+        const hiddenOperationIds = new Set(clearMarker?.hiddenOperationIds || []);
         return {
             queued: allQueued.filter(item => item.userId === userId
-                && ['admin-delete', 'admin-bulk-delete'].includes(item.action))
+                && ['admin-delete', 'admin-bulk-delete'].includes(item.action)
+                && !hiddenOperationIds.has(item.operationId))
                 .sort((first, second) => Date.parse(first.createdAt) - Date.parse(second.createdAt)),
-            completed: allCompleted.filter(item => item.userId === userId)
+            completed: userResults.filter(item => item.recordType !== 'clear-marker'
+                && !hiddenOperationIds.has(item.operationId))
                 .sort((first, second) => Date.parse(second.deletedAt) - Date.parse(first.deletedAt))
         };
     }
@@ -727,7 +753,7 @@
     async function clearAdminDeletionResults(client) {
         const userId = await getUserId(client);
         if (!userId) throw new Error('Sign in again before clearing deletion history.');
-        await clearAdminUserRecords(adminDeletionResultsStoreName, userId);
+        await clearAdminHistory(adminDeletionResultsStoreName, userId, ['admin-delete', 'admin-bulk-delete']);
         window.dispatchEvent(new CustomEvent('admin-deletion-data-changed'));
     }
 
@@ -786,10 +812,15 @@
             adminStoreRequest(adminQueueStoreName, 'readonly', store => store.getAll()),
             adminStoreRequest(adminPasswordResetResultsStoreName, 'readonly', store => store.getAll())
         ]);
+        const userResults = allCompleted.filter(item => item.userId === userId);
+        const clearMarker = userResults.find(item => item.recordType === 'clear-marker');
+        const hiddenOperationIds = new Set(clearMarker?.hiddenOperationIds || []);
         return {
-            queued: allQueued.filter(item => item.userId === userId && item.action === 'admin-reset')
+            queued: allQueued.filter(item => item.userId === userId && item.action === 'admin-reset'
+                && !hiddenOperationIds.has(item.operationId))
                 .sort((first, second) => Date.parse(first.createdAt) - Date.parse(second.createdAt)),
-            completed: allCompleted.filter(item => item.userId === userId)
+            completed: userResults.filter(item => item.recordType !== 'clear-marker'
+                && !hiddenOperationIds.has(item.operationId))
                 .sort((first, second) => Date.parse(second.createdAt) - Date.parse(first.createdAt))
         };
     }
@@ -953,7 +984,7 @@
     async function clearAdminPasswordResetResults(client) {
         const userId = await getUserId(client);
         if (!userId) throw new Error('Sign in again before clearing saved reset results.');
-        await clearAdminUserRecords(adminPasswordResetResultsStoreName, userId);
+        await clearAdminHistory(adminPasswordResetResultsStoreName, userId, ['admin-reset']);
         window.dispatchEvent(new CustomEvent('admin-password-reset-data-changed'));
     }
 

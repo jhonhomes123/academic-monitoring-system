@@ -9360,14 +9360,40 @@ async function renderAdminDeletions() {
     const renderGeneration = ++adminDeletionRenderGeneration;
     const table = document.getElementById('adminDeletionTable');
     if (!table || !window.getAdminDeletionData) return;
-    const { completed } = await window.getAdminDeletionData(supabaseClient);
+    const [{ queued, completed }, lookups, roster] = await Promise.all([
+        window.getAdminDeletionData(supabaseClient),
+        window.getAdminAccountLookups?.(supabaseClient) || Promise.resolve(null),
+        window.getAdminStudentRoster?.(supabaseClient) || Promise.resolve(null)
+    ]);
     if (renderGeneration !== adminDeletionRenderGeneration) return;
-    const rows = completed.map(item => ({
+    const rows = [
+        ...queued.filter(item => !completed.some(result => result.operationId === item.operationId)).map(item => {
+            const teacher = item.role === 'teacher' ? (lookups?.teachers || []).find(candidate =>
+                String(candidate.teacher_id) === String(item.payload.teacher_id || '')
+                || String(candidate.teacher_number) === String(item.payload.teacher_number || '')) : null;
+            const student = item.role === 'student' && item.payload.student_id
+                ? (roster?.students || []).find(candidate => String(candidate.student_id) === String(item.payload.student_id))
+                : null;
+            return {
+                role: item.role === 'teacher' ? 'Teacher' : 'Student',
+                studentNumber: item.payload.scope ? 'Bulk cleanup'
+                    : item.payload.teacher_number || item.payload.student_number || item.payload.teacher_id || item.payload.student_id || '',
+                name: item.payload.scope
+                    ? item.payload.scope === 'unassigned' ? 'Unassigned student accounts' : 'Graduate sections and students'
+                    : formatName(item.payload.last_name || teacher?.last_name || student?.last_name,
+                        item.payload.first_name || teacher?.first_name || student?.first_name,
+                        item.payload.middle_initial || teacher?.middle_initial || student?.middle_initial),
+                status: item.lastError ? `Waiting to retry: ${item.lastError}` : item.processing ? 'Deletion is processing'
+                    : item.payload.scope ? 'Cleanup waiting for connection' : 'Deletion waiting for connection'
+            };
+        }),
+        ...completed.map(item => ({
             role: item.role === 'teacher' ? 'Teacher' : 'Student',
             studentNumber: item.studentNumber || '',
             name: formatStoredDashboardName(item.name || 'Student'),
             status: item.status || 'Deleted'
-        }));
+        }))
+    ];
     table.replaceChildren();
     if (!rows.length) {
         const row = table.insertRow();
@@ -9415,9 +9441,34 @@ async function renderAdminPasswordResets() {
     const renderGeneration = ++adminPasswordResetRenderGeneration;
     const table = document.getElementById('adminPasswordResetTable');
     if (!table || !window.getAdminPasswordResetData) return;
-    const { completed } = await window.getAdminPasswordResetData(supabaseClient);
+    const [{ queued, completed }, roster, lookups] = await Promise.all([
+        window.getAdminPasswordResetData(supabaseClient),
+        window.getAdminStudentRoster?.(supabaseClient) || Promise.resolve(null),
+        window.getAdminAccountLookups?.(supabaseClient) || Promise.resolve(null)
+    ]);
     if (renderGeneration !== adminPasswordResetRenderGeneration) return;
-    const rows = completed.map(item => ({
+    const rows = [
+        ...queued.filter(item => !completed.some(result => result.operationId === item.operationId)).map(item => {
+            const teacher = item.role === 'teacher' ? (lookups?.teachers || []).find(candidate =>
+                String(candidate.teacher_id) === String(item.payload.teacher_id || '')
+                || String(candidate.teacher_number) === String(item.payload.teacher_number || '')) : null;
+            const student = item.role === 'student' ? (roster?.students || []).find(candidate =>
+                item.payload.student_number
+                    ? String(candidate.student_number) === String(item.payload.student_number)
+                    : String(candidate.student_id) === String(item.payload.student_id)) : null;
+            return {
+                role: item.role === 'teacher' ? 'Teacher' : 'Student',
+                studentNumber: item.payload.teacher_number || item.payload.student_number || teacher?.teacher_number || student?.student_number || item.payload.teacher_id || item.payload.student_id || '',
+                name: teacher ? formatName(teacher.first_name, teacher.middle_initial, teacher.last_name)
+                    : student ? formatName(student.first_name, student.middle_initial, student.last_name)
+                        : item.role === 'teacher' ? 'Teacher' : 'Student',
+                password: 'Available after reset syncs',
+                emailStatus: 'Will check when connected',
+                status: item.processing ? 'Reset is processing'
+                    : item.lastError ? `Waiting to retry: ${item.lastError}` : 'Waiting for connection'
+            };
+        }),
+        ...completed.map(item => ({
             role: item.role === 'teacher' ? 'Teacher' : 'Student',
             studentNumber: item.studentNumber,
             name: formatStoredDashboardName(item.name || 'Student'),
@@ -9430,7 +9481,8 @@ async function renderAdminPasswordResets() {
                         ? 'Email not set'
                         : 'Email not sent',
             status: 'Reset complete'
-        }));
+        }))
+    ];
     table.replaceChildren();
     if (!rows.length) {
         const row = table.insertRow();
