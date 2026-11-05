@@ -8661,15 +8661,13 @@ async function loadStudentsBySection() {
             .map(item => String(item.payload.student_id || '')).filter(Boolean));
         data = data.filter(student => !deletedStudentNumbers.has(String(student.student_number || ''))
             && !deletedStudentIds.has(String(student.student_id || '')));
-        if (!navigator.onLine) {
-            const queuedBulkScopes = new Set(queued.filter(item => item.action === 'admin-bulk-delete')
-                .map(item => item.payload.scope));
-            if ((sectionId === 'unassigned' || selectedYear === 'unassigned') && queuedBulkScopes.has('unassigned')) {
-                data = [];
-            }
-            if (selectedYear === 'Graduate' && queuedBulkScopes.has('graduated')) {
-                data = [];
-            }
+        const queuedBulkScopes = new Set(queued.filter(item => item.action === 'admin-bulk-delete')
+            .map(item => item.payload.scope));
+        if ((sectionId === 'unassigned' || selectedYear === 'unassigned') && queuedBulkScopes.has('unassigned')) {
+            data = [];
+        }
+        if (selectedYear === 'Graduate' && queuedBulkScopes.has('graduated')) {
+            data = [];
         }
     }
 
@@ -9490,9 +9488,10 @@ async function clearAdminPasswordResetResults() {
 async function renderAdminStructureQueue() {
     const table = document.getElementById('adminStructureQueueTable');
     if (!table || !window.getAdminStructureData) return;
-    const [{ pending: structurePending }, accountData, lookups, roster] = await Promise.all([
+    const [{ pending: structurePending }, accountData, deletionData, lookups, roster] = await Promise.all([
         window.getAdminStructureData(supabaseClient),
         window.getAdminAccountData?.(supabaseClient) || Promise.resolve({ queued: [] }),
+        window.getAdminDeletionData?.(supabaseClient) || Promise.resolve({ queued: [] }),
         window.getAdminAccountLookups?.(supabaseClient) || Promise.resolve(null),
         window.getAdminStudentRoster?.(supabaseClient) || Promise.resolve(null)
     ]);
@@ -9507,8 +9506,7 @@ async function renderAdminStructureQueue() {
         }));
     const accountPending = (accountData.queued || [])
         .filter(item => (item.action || 'admin-create') === 'admin-create'
-            || item.action === 'admin-reset'
-            || item.action === 'admin-bulk-delete')
+            || item.action === 'admin-reset')
         .map(item => ({
             type: item.action === 'admin-reset'
                 ? 'student_password_reset'
@@ -9522,7 +9520,18 @@ async function renderAdminStructureQueue() {
             lastError: item.lastError,
             createdAt: item.createdAt
         }));
-    const pending = [...structurePending, ...studentEditPending, ...accountPending]
+    const bulkDeletionPending = (deletionData.queued || [])
+        .filter(item => item.action === 'admin-bulk-delete')
+        .map(item => ({
+            type: 'student_bulk_delete',
+            operationId: item.operationId,
+            role: item.role,
+            payload: item.payload,
+            processing: item.processing,
+            lastError: item.lastError,
+            createdAt: item.createdAt
+        }));
+    const pending = [...structurePending, ...studentEditPending, ...accountPending, ...bulkDeletionPending]
         .sort((first, second) => Date.parse(first.createdAt || 0) - Date.parse(second.createdAt || 0));
     table.replaceChildren();
     if (!pending.length) {
