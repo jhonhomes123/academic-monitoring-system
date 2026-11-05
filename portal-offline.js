@@ -343,9 +343,9 @@
                 const opensAllowedModal = control.matches('button')
                     && /openCreateStudentModal|openCreateTeacherModal|openEditStudentModal|openEditQueuedStudentAccount|openAddStudentsToSectionModal|openUnassignSelectedStudentsModal|transitionAdminSection|openDepartmentModal|openMajorModal|openSectionModal|openSubjectModal|openDeleteDepartmentModal|openDeleteMajorModal|openDeleteSectionModal|openDeleteSubjectModal|openTeacherAssignModal|openAddSectionModal/.test(control.getAttribute('onclick') || '');
                 const isAllowedOfflineAction = control.matches('button')
-                    && /createStudentAccount|createTeacherAccount|saveStudentEdits|resetStudentPassword|deleteStudent|deleteCreatedStudentAccount|clearAdminCreatedAccounts|clearAdminDeletionResults|loadUnassignedStudents|loadGraduatedStudents|transitionSelectedManageSection|unassignAllStudentsFromSelectedSection|unassignSelectedStudentsFromSection|assignSelectedUnassignedStudents|createTeacherAccount|addDepartment|addMajor|addSection|addSubject|setActiveSemester|deleteDepartment|deleteMajor|deleteSectionModalAction|deleteSubject|assignTeacherToSubject|removeTeacherAssignment|saveTeacherSection|closeCreateStudentModal|closeEditStudentModal|closeModal|closeDepartmentModal|closeMajorModal|closeSectionModal|closeSubjectModal|closeDeleteDepartmentModal|closeDeleteMajorModal|closeDeleteSectionModal|closeDeleteSubjectModal|closeTeacherAssignModal|closeTeacherSectionModal|loadEditStudentMajors|loadEditStudentSections|loadDepartmentDeleteOptions|loadMajorsForDelete|loadMajorsForDeleteSection|loadSectionsForDelete|loadMajorsForDeleteSubject|loadSubjectsForDelete/.test(control.getAttribute('onclick') || '');
+                    && /createStudentAccount|createTeacherAccount|saveStudentEdits|resetStudentPassword|deleteStudent|deleteCreatedStudentAccount|deleteAllUnassignedStudents|deleteAllGraduatedStudents|clearAdminCreatedAccounts|clearAdminDeletionResults|loadUnassignedStudents|loadGraduatedStudents|transitionSelectedManageSection|unassignAllStudentsFromSelectedSection|unassignSelectedStudentsFromSection|assignSelectedUnassignedStudents|createTeacherAccount|addDepartment|addMajor|addSection|addSubject|setActiveSemester|deleteDepartment|deleteMajor|deleteSectionModalAction|deleteSubject|assignTeacherToSubject|removeTeacherAssignment|saveTeacherSection|closeCreateStudentModal|closeEditStudentModal|closeModal|closeDepartmentModal|closeMajorModal|closeSectionModal|closeSubjectModal|closeDeleteDepartmentModal|closeDeleteMajorModal|closeDeleteSectionModal|closeDeleteSubjectModal|closeTeacherAssignModal|closeTeacherSectionModal|loadEditStudentMajors|loadEditStudentSections|loadDepartmentDeleteOptions|loadMajorsForDelete|loadMajorsForDeleteSection|loadSectionsForDelete|loadMajorsForDeleteSubject|loadSubjectsForDelete/.test(control.getAttribute('onclick') || '');
                 const isAllowedOfflineStandaloneAction = control.matches('button')
-                    && /deleteStudent|deleteCreatedStudentAccount|clearAdminCreatedAccounts|clearAdminPasswordResetResults|clearAdminDeletionResults|transitionSelectedManageSection|unassignAllStudentsFromSelectedSection|openUnassignSelectedStudentsModal/.test(control.getAttribute('onclick') || '');
+                    && /deleteStudent|deleteCreatedStudentAccount|deleteAllUnassignedStudents|deleteAllGraduatedStudents|clearAdminCreatedAccounts|clearAdminPasswordResetResults|clearAdminDeletionResults|transitionSelectedManageSection|unassignAllStudentsFromSelectedSection|openUnassignSelectedStudentsModal/.test(control.getAttribute('onclick') || '');
                 const isSemesterPicker = control.id === 'activeSemesterSelect';
                 const isExplorerBack = control.id === 'backButton';
                 const isStudentFilter = ['manageStudentYear', 'manageStudentDepartment', 'manageStudentMajor', 'manageStudentSection'].includes(control.id);
@@ -595,13 +595,18 @@
     }
 
     async function saveAdminDeletionResult(userId, operationId, payload, result, status = 'Deleted') {
+        const isBulkCleanup = Boolean(payload.scope);
         const record = {
             key: `${userId}:${operationId}`,
             userId,
             operationId,
-            studentNumber: String(result.student_number || payload.student_number || payload.student_id || ''),
-            name: [result.last_name || payload.last_name, result.first_name || payload.first_name, result.middle_initial || payload.middle_initial]
-                .filter(Boolean).join(', '),
+            studentNumber: isBulkCleanup
+                ? 'Bulk cleanup'
+                : String(result.student_number || payload.student_number || payload.student_id || ''),
+            name: isBulkCleanup
+                ? payload.scope === 'unassigned' ? 'Unassigned student accounts' : 'Graduate sections and students'
+                : [result.last_name || payload.last_name, result.first_name || payload.first_name, result.middle_initial || payload.middle_initial]
+                    .filter(Boolean).join(', '),
             status,
             deletedAt: new Date().toISOString()
         };
@@ -628,7 +633,8 @@
             adminStoreRequest(adminDeletionResultsStoreName, 'readonly', store => store.getAll())
         ]);
         return {
-            queued: allQueued.filter(item => item.userId === userId && item.action === 'admin-delete')
+            queued: allQueued.filter(item => item.userId === userId
+                && ['admin-delete', 'admin-bulk-delete'].includes(item.action))
                 .sort((first, second) => Date.parse(first.createdAt) - Date.parse(second.createdAt)),
             completed: allCompleted.filter(item => item.userId === userId)
                 .sort((first, second) => Date.parse(second.deletedAt) - Date.parse(first.deletedAt))
@@ -1037,6 +1043,26 @@
         return result;
     }
 
+    async function queueAdminBulkDeletion(client, scope, functionUrl, anonKey) {
+        if (!['unassigned', 'graduated'].includes(scope)) {
+            throw new Error('Choose an approved student cleanup scope.');
+        }
+        const userId = await getUserId(client);
+        if (!userId) throw new Error('Sign in again before scheduling student cleanup.');
+        if (navigator.onLine) throw new Error('A connected cleanup should run immediately, not be queued.');
+        const operationId = createOperationId();
+        const createdAt = await nextAdminQueueTimestamp(userId);
+        const payload = { scope };
+        await adminStoreRequest(adminQueueStoreName, 'readwrite', store => store.put({
+            key: `${userId}:${operationId}`, userId, operationId, role: 'student',
+            action: 'admin-bulk-delete', payload, functionUrl, anonKey, createdAt, lastError: null
+        }));
+        setNotice('Scoped student cleanup saved on this device. It will run when connected.', true, 'sync');
+        window.dispatchEvent(new CustomEvent('admin-account-data-changed'));
+        window.dispatchEvent(new CustomEvent('admin-deletion-data-changed'));
+        return { queued: true, operationId };
+    }
+
     async function queueAdminStudentEdit(client, payload, functionUrl, anonKey) {
         const userId = await getUserId(client);
         if (!userId) throw new Error('Sign in while connected before making offline student edits.');
@@ -1170,6 +1196,18 @@
                     let result;
                     if (item.action === 'admin-delete') {
                         result = await performAdminStudentDeletion(client, payload, item.anonKey);
+                    } else if (item.action === 'admin-bulk-delete') {
+                        const response = await fetch(item.functionUrl, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                apikey: item.anonKey,
+                                Authorization: `Bearer ${session.access_token}`
+                            },
+                            body: JSON.stringify({ scope: item.payload.scope })
+                        });
+                        result = await response.json().catch(() => ({}));
+                        if (!response.ok) throw new Error(result.error || 'Scoped student cleanup failed.');
                     } else {
                         const response = await fetch(item.functionUrl, {
                             method: 'POST',
@@ -1186,6 +1224,18 @@
                     } else if (item.action === 'admin-delete') {
                         await saveAdminDeletionResult(userId, item.operationId, item.payload, result);
                         await removeAdminAccountResult(client, item.payload.student_number || result.student_number);
+                    } else if (item.action === 'admin-bulk-delete') {
+                        const label = item.payload.scope === 'unassigned' ? 'Unassigned students' : 'Graduate sections';
+                        await saveAdminDeletionResult(
+                            userId,
+                            item.operationId,
+                            { ...item.payload, student_number: label },
+                            result,
+                            item.payload.scope === 'unassigned'
+                                ? `Deleted ${result.deleted} unassigned student account(s)`
+                                : `Deleted ${result.deleted} students and ${result.deleted_sections} Graduate sections`
+                        );
+                            await saveAdminAccountLookups(client, userId);
                     }
                     await adminStoreRequest(adminQueueStoreName, 'readwrite', store => store.delete(item.key));
                 } catch (error) {
@@ -1208,6 +1258,8 @@
                             ? `A saved student password reset could not be applied yet: ${failureReason}`
                             : item.action === 'admin-delete'
                                 ? `A saved student deletion could not be applied yet: ${failureReason}`
+                                : item.action === 'admin-bulk-delete'
+                                    ? `A saved scoped student cleanup could not be applied yet: ${failureReason}`
                                 : `A saved ${item.role} account could not be created yet: ${failureReason}`), true, 'sync');
                     window.setTimeout(() => {
                         if (navigator.onLine && window.currentOfflineRole === 'admin') {
@@ -1269,6 +1321,7 @@
 
     window.submitAdminAccountCreation = submitAdminAccountCreation;
     window.submitAdminAccountDeletion = submitAdminAccountDeletion;
+    window.queueAdminBulkDeletion = queueAdminBulkDeletion;
     window.getAdminDeletionData = getAdminDeletionData;
     window.clearAdminDeletionResults = clearAdminDeletionResults;
     window.recordAdminLocalDeletion = recordAdminLocalDeletion;

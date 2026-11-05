@@ -5270,8 +5270,18 @@ async function refreshCurrentExplorer() {
                 .map(item => String(item.payload.major_id)));
             pending.filter(item => item.type === 'major_add' && deletedDepartments.has(String(item.payload.department_id)))
                 .forEach(item => deletedMajorIds.add(String(item.localRef)));
-            return majors.filter(major => !deletedMajorIds.has(String(major.major_id))
+            const visibleMajors = majors.filter(major => !deletedMajorIds.has(String(major.major_id))
                 && ![...departmentIds].some(id => deletedDepartments.has(id)));
+            const seenIds = new Set();
+            const seenNames = new Set();
+            return visibleMajors.filter(major => {
+                const id = String(major.major_id);
+                const name = String(major.major_name || '').trim().toLocaleLowerCase();
+                if (seenIds.has(id) || seenNames.has(name)) return false;
+                seenIds.add(id);
+                seenNames.add(name);
+                return true;
+            });
         }
 
         async function getAdminSectionOptions(majorId, yearLevel) {
@@ -9243,9 +9253,13 @@ async function renderAdminDeletions() {
     const { queued, completed } = await window.getAdminDeletionData(supabaseClient);
     const rows = [
         ...queued.filter(item => !completed.some(result => result.operationId === item.operationId)).map(item => ({
-            studentNumber: item.payload.student_number || item.payload.student_id || '',
-            name: formatName(item.payload.first_name, item.payload.middle_initial, item.payload.last_name) || 'Student',
-            status: item.lastError ? `Needs attention: ${item.lastError}` : 'Waiting for connection'
+            studentNumber: item.payload.scope ? 'Bulk cleanup' : item.payload.student_number || item.payload.student_id || '',
+            name: item.payload.scope
+                ? item.payload.scope === 'unassigned' ? 'Unassigned student accounts' : 'Graduate sections and students'
+                : formatName(item.payload.first_name, item.payload.middle_initial, item.payload.last_name) || 'Student',
+            status: item.lastError ? `Needs attention: ${item.lastError}` : item.payload.scope
+                ? 'Cleanup waiting for connection'
+                : 'Waiting for connection'
         })),
         ...completed.map(item => ({
             studentNumber: item.studentNumber || '',
@@ -10462,8 +10476,26 @@ function deleteAllGraduatedStudents() {
 
 function confirmScopedStudentDeletion(title, description, scope) {
     showConfirmModal(title, description, async () => {
-        showConfirmModal('Final Warning', 'This action cannot be undone. Continue?', async () => {
+        const offlineMessage = scope === 'unassigned'
+            ? 'The deletion will run after reconnect and will target only accounts still unassigned at sync time. Continue?'
+            : 'The deletion will run after reconnect and will target Graduate sections and their students at sync time. Continue?';
+        showConfirmModal(navigator.onLine ? 'Final Warning' : 'Queue Cleanup Offline', navigator.onLine
+            ? 'This action cannot be undone. Continue?'
+            : offlineMessage, async () => {
             try {
+                if (!navigator.onLine) {
+                    await window.queueAdminBulkDeletion(
+                        supabaseClient,
+                        scope,
+                        `${SUPABASE_URL}/functions/v1/bulk-delete-students`,
+                        SUPABASE_ANON_KEY
+                    );
+                    closeConfirmModal();
+                    await renderAdminDeletions();
+                    await renderAdminStructureQueue();
+                    showAlert('success', 'Cleanup Queued', 'The scoped cleanup is saved on this device and will run when the connection returns. It will still use the selected scope.');
+                    return;
+                }
                 const { data: { session } } = await supabaseClient.auth.getSession();
                 if (!session) throw new Error('Please sign in again as an administrator.');
                 const response = await fetch(`${SUPABASE_URL}/functions/v1/bulk-delete-students`, {
