@@ -1244,7 +1244,7 @@ table td{
                 <div class="table-responsive" style="max-height:720px;overflow:auto;">
                     <table>
                         <thead><tr><th style="position:sticky;top:0;background:#fff;z-index:1;">Role</th><th style="position:sticky;top:0;background:#fff;z-index:1;">Account ID</th><th style="position:sticky;top:0;background:#fff;z-index:1;">Name</th><th style="position:sticky;top:0;background:#fff;z-index:1;">Temporary Password</th><th style="position:sticky;top:0;background:#fff;z-index:1;">Email Status</th><th style="position:sticky;top:0;background:#fff;z-index:1;">Reset Status</th></tr></thead>
-                        <tbody id="adminPasswordResetTable"><tr><td colspan="5">No password resets on this device</td></tr></tbody>
+                        <tbody id="adminPasswordResetTable"><tr><td colspan="6">No password resets on this device</td></tr></tbody>
                     </table>
                 </div>
             </div>
@@ -9353,10 +9353,15 @@ function filterAdminDashboardRows(tableId, searchId) {
     }
 }
 
+let adminDeletionRenderGeneration = 0;
+let adminPasswordResetRenderGeneration = 0;
+
 async function renderAdminDeletions() {
+    const renderGeneration = ++adminDeletionRenderGeneration;
     const table = document.getElementById('adminDeletionTable');
     if (!table || !window.getAdminDeletionData) return;
     const { completed } = await window.getAdminDeletionData(supabaseClient);
+    if (renderGeneration !== adminDeletionRenderGeneration) return;
     const rows = completed.map(item => ({
             role: item.role === 'teacher' ? 'Teacher' : 'Student',
             studentNumber: item.studentNumber || '',
@@ -9397,9 +9402,11 @@ async function clearAdminDeletionResults() {
 }
 
 async function renderAdminPasswordResets() {
+    const renderGeneration = ++adminPasswordResetRenderGeneration;
     const table = document.getElementById('adminPasswordResetTable');
     if (!table || !window.getAdminPasswordResetData) return;
     const { completed } = await window.getAdminPasswordResetData(supabaseClient);
+    if (renderGeneration !== adminPasswordResetRenderGeneration) return;
     const rows = completed.map(item => ({
             role: item.role === 'teacher' ? 'Teacher' : 'Student',
             studentNumber: item.studentNumber,

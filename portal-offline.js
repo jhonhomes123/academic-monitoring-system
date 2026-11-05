@@ -449,6 +449,24 @@
         }));
     }
 
+    async function clearAdminUserRecords(storeName, userId) {
+        const database = await openDatabase();
+        return new Promise((resolve, reject) => {
+            const transaction = database.transaction(storeName, 'readwrite');
+            const request = transaction.objectStore(storeName).openCursor();
+            request.onsuccess = () => {
+                const cursor = request.result;
+                if (!cursor) return;
+                if (cursor.value.userId === userId) cursor.delete();
+                cursor.continue();
+            };
+            request.onerror = () => reject(request.error || new Error('Unable to clear saved admin results.'));
+            transaction.oncomplete = () => resolve();
+            transaction.onerror = () => reject(transaction.error || new Error('Unable to clear saved admin results.'));
+            transaction.onabort = () => reject(transaction.error || new Error('Clearing saved admin results was interrupted.'));
+        });
+    }
+
     async function nextAdminQueueTimestamp(userId) {
         const [accountOperations, structureOperations] = await Promise.all([
             adminStoreRequest(adminQueueStoreName, 'readonly', store => store.getAll()),
@@ -709,10 +727,7 @@
     async function clearAdminDeletionResults(client) {
         const userId = await getUserId(client);
         if (!userId) throw new Error('Sign in again before clearing deletion history.');
-        const allResults = await adminStoreRequest(adminDeletionResultsStoreName, 'readonly', store => store.getAll());
-        await Promise.all(allResults.filter(item => item.userId === userId).map(item => adminStoreRequest(
-            adminDeletionResultsStoreName, 'readwrite', store => store.delete(item.key)
-        )));
+        await clearAdminUserRecords(adminDeletionResultsStoreName, userId);
         window.dispatchEvent(new CustomEvent('admin-deletion-data-changed'));
     }
 
@@ -938,12 +953,7 @@
     async function clearAdminPasswordResetResults(client) {
         const userId = await getUserId(client);
         if (!userId) throw new Error('Sign in again before clearing saved reset results.');
-        const allResults = await adminStoreRequest(adminPasswordResetResultsStoreName, 'readonly', store => store.getAll());
-        await Promise.all(allResults.filter(item => item.userId === userId).map(item => adminStoreRequest(
-            adminPasswordResetResultsStoreName,
-            'readwrite',
-            store => store.delete(item.key)
-        )));
+        await clearAdminUserRecords(adminPasswordResetResultsStoreName, userId);
         window.dispatchEvent(new CustomEvent('admin-password-reset-data-changed'));
     }
 
