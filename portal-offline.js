@@ -271,7 +271,7 @@
         if (!currentUserId || !main) return false;
         const snapshotMain = main.cloneNode(true);
         snapshotMain.querySelectorAll('.modal,.modal-overlay,.confirm-modal-overlay,.ams-alert').forEach(element => {
-                if (!['confirmModal', 'createStudentModal', 'createTeacherModal', 'editStudentModal', 'addStudentsToSectionModal', 'unassignSelectedStudentsModal', 'departmentModal', 'majorModal', 'sectionModal', 'subjectModal', 'deleteDepartmentModal', 'deleteMajorModal', 'deleteSectionModal', 'deleteSubjectModal', 'teacherAssignModal', 'teacherSectionModal'].includes(element.id)) {
+                if (!['confirmModal', 'createStudentModal', 'createTeacherModal', 'editStudentModal', 'editTeacherModal', 'addStudentsToSectionModal', 'unassignSelectedStudentsModal', 'departmentModal', 'majorModal', 'sectionModal', 'subjectModal', 'deleteDepartmentModal', 'deleteMajorModal', 'deleteSectionModal', 'deleteSubjectModal', 'teacherAssignModal', 'teacherSectionModal'].includes(element.id)) {
                 element.remove();
                 return;
             }
@@ -339,13 +339,13 @@
                 modal.classList.remove('show');
             });
             document.querySelectorAll('input,select,textarea,button').forEach(control => {
-                const inAllowedModal = control.closest('#createStudentModal,#createTeacherModal,#editStudentModal,#addStudentsToSectionModal,#unassignSelectedStudentsModal,#departmentModal,#majorModal,#sectionModal,#subjectModal,#deleteDepartmentModal,#deleteMajorModal,#deleteSectionModal,#deleteSubjectModal,#teacherAssignModal,#teacherSectionModal');
+                const inAllowedModal = control.closest('#createStudentModal,#createTeacherModal,#editStudentModal,#editTeacherModal,#addStudentsToSectionModal,#unassignSelectedStudentsModal,#departmentModal,#majorModal,#sectionModal,#subjectModal,#deleteDepartmentModal,#deleteMajorModal,#deleteSectionModal,#deleteSubjectModal,#teacherAssignModal,#teacherSectionModal');
                 const opensAllowedModal = control.matches('button')
-                    && /openCreateStudentModal|openCreateTeacherModal|openEditStudentModal|openEditQueuedStudentAccount|openAddStudentsToSectionModal|openUnassignSelectedStudentsModal|transitionAdminSection|openDepartmentModal|openMajorModal|openSectionModal|openSubjectModal|openDeleteDepartmentModal|openDeleteMajorModal|openDeleteSectionModal|openDeleteSubjectModal|openTeacherAssignModal|openAddSectionModal/.test(control.getAttribute('onclick') || '');
+                    && /openCreateStudentModal|openCreateTeacherModal|openEditStudentModal|openEditQueuedStudentAccount|openEditTeacherModal|openEditQueuedTeacherAccount|openAddStudentsToSectionModal|openUnassignSelectedStudentsModal|transitionAdminSection|openDepartmentModal|openMajorModal|openSectionModal|openSubjectModal|openDeleteDepartmentModal|openDeleteMajorModal|openDeleteSectionModal|openDeleteSubjectModal|openTeacherAssignModal|openAddSectionModal/.test(control.getAttribute('onclick') || '');
                 const isAllowedOfflineAction = control.matches('button')
-                    && /createStudentAccount|createTeacherAccount|saveStudentEdits|resetStudentPassword|deleteStudent|deleteCreatedStudentAccount|deleteAllUnassignedStudents|deleteAllGraduatedStudents|clearAdminCreatedAccounts|clearAdminDeletionResults|loadUnassignedStudents|loadGraduatedStudents|transitionSelectedManageSection|unassignAllStudentsFromSelectedSection|unassignSelectedStudentsFromSection|assignSelectedUnassignedStudents|createTeacherAccount|addDepartment|addMajor|addSection|addSubject|setActiveSemester|deleteDepartment|deleteMajor|deleteSectionModalAction|deleteSubject|assignTeacherToSubject|removeTeacherAssignment|saveTeacherSection|closeCreateStudentModal|closeEditStudentModal|closeModal|closeDepartmentModal|closeMajorModal|closeSectionModal|closeSubjectModal|closeDeleteDepartmentModal|closeDeleteMajorModal|closeDeleteSectionModal|closeDeleteSubjectModal|closeTeacherAssignModal|closeTeacherSectionModal|loadEditStudentMajors|loadEditStudentSections|loadDepartmentDeleteOptions|loadMajorsForDelete|loadMajorsForDeleteSection|loadSectionsForDelete|loadMajorsForDeleteSubject|loadSubjectsForDelete/.test(control.getAttribute('onclick') || '');
+                    && /createStudentAccount|createTeacherAccount|saveStudentEdits|saveTeacherEdits|resetStudentPassword|resetTeacherPassword|deleteStudent|deleteTeacher|deleteCreatedStudentAccount|deleteCreatedTeacherAccount|deleteQueuedTeacherAccount|deleteAllUnassignedStudents|deleteAllGraduatedStudents|clearAdminCreatedAccounts|clearAdminDeletionResults|loadUnassignedStudents|loadGraduatedStudents|transitionSelectedManageSection|unassignAllStudentsFromSelectedSection|unassignSelectedStudentsFromSection|assignSelectedUnassignedStudents|addDepartment|addMajor|addSection|addSubject|setActiveSemester|deleteDepartment|deleteMajor|deleteSectionModalAction|deleteSubject|assignTeacherToSubject|removeTeacherAssignment|saveTeacherSection|closeCreateStudentModal|closeEditStudentModal|closeModal|closeDepartmentModal|closeMajorModal|closeSectionModal|closeSubjectModal|closeDeleteDepartmentModal|closeDeleteMajorModal|closeDeleteSectionModal|closeDeleteSubjectModal|closeTeacherAssignModal|closeTeacherSectionModal|loadEditStudentMajors|loadEditStudentSections|loadDepartmentDeleteOptions|loadMajorsForDelete|loadMajorsForDeleteSection|loadSectionsForDelete|loadMajorsForDeleteSubject|loadSubjectsForDelete/.test(control.getAttribute('onclick') || '');
                 const isAllowedOfflineStandaloneAction = control.matches('button')
-                    && /deleteStudent|deleteCreatedStudentAccount|deleteAllUnassignedStudents|deleteAllGraduatedStudents|clearAdminCreatedAccounts|clearAdminPasswordResetResults|clearAdminDeletionResults|transitionSelectedManageSection|unassignAllStudentsFromSelectedSection|openUnassignSelectedStudentsModal/.test(control.getAttribute('onclick') || '');
+                    && /deleteStudent|deleteTeacher|deleteCreatedStudentAccount|deleteCreatedTeacherAccount|deleteQueuedTeacherAccount|resetTeacherPassword|openEditTeacherModal|deleteAllUnassignedStudents|deleteAllGraduatedStudents|clearAdminCreatedAccounts|clearAdminPasswordResetResults|clearAdminDeletionResults|transitionSelectedManageSection|unassignAllStudentsFromSelectedSection|openUnassignSelectedStudentsModal/.test(control.getAttribute('onclick') || '');
                 const isSemesterPicker = control.id === 'activeSemesterSelect';
                 const isExplorerBack = control.id === 'backButton';
                 const isStudentFilter = ['manageStudentYear', 'manageStudentDepartment', 'manageStudentMajor', 'manageStudentSection'].includes(control.id);
@@ -472,7 +472,9 @@
                 first_name: payload.first_name,
                 middle_initial: payload.middle_initial,
                 last_name: payload.last_name,
-                user_id: role === 'student' ? result.student_id : null,
+                user_id: role === 'student' ? result.student_id : result.user_id || null,
+                profile_id: role === 'student' ? result.student_id : result.teacher_id || null,
+                teacher_id: role === 'teacher' ? result.teacher_id || null : null,
                 section_id: payload.section_id || result.section_id || null,
                 year_level: payload.year_level || section?.year_level || '',
                 section_name: section?.section_name || ''
@@ -484,14 +486,35 @@
         }
     }
 
-    async function removeAdminAccountResult(client, studentNumber) {
+    async function removeAdminAccountResult(client, accountNumber, role = 'student') {
         const userId = await getUserId(client);
-        if (!userId || !studentNumber) return;
+        if (!userId || !accountNumber) return;
         const allResults = await adminStoreRequest(adminResultsStoreName, 'readonly', store => store.getAll());
-        await Promise.all(allResults.filter(item => item.userId === userId && item.role === 'student'
-            && String(item.accountId) === String(studentNumber)).map(item => adminStoreRequest(
+        await Promise.all(allResults.filter(item => item.userId === userId && item.role === role
+            && String(item.accountId) === String(accountNumber)).map(item => adminStoreRequest(
             adminResultsStoreName, 'readwrite', store => store.delete(item.key)
         )));
+    }
+
+    async function updateAdminTeacherAccountResult(client, teacherId, payload) {
+        const userId = await getUserId(client);
+        if (!userId || !teacherId) return;
+        const [allResults, lookups] = await Promise.all([
+            adminStoreRequest(adminResultsStoreName, 'readonly', store => store.getAll()),
+            getAdminAccountLookups(client, userId)
+        ]);
+        const teacher = (lookups?.teachers || []).find(item => String(item.teacher_id) === String(teacherId));
+        if (!teacher) return;
+        const result = allResults.find(item => item.userId === userId && item.role === 'teacher'
+            && (String(item.payload?.teacher_id || item.payload?.profile_id || '') === String(teacherId)
+                || String(item.accountId) === String(teacher.teacher_number)));
+        if (!result) return;
+        await adminStoreRequest(adminResultsStoreName, 'readwrite', store => store.put({
+            ...result,
+            accountId: teacher.teacher_number,
+            payload: { ...result.payload, ...payload, teacher_id: teacher.teacher_id, profile_id: teacher.teacher_id,
+                user_id: teacher.user_id, first_name: teacher.first_name, middle_initial: teacher.middle_initial, last_name: teacher.last_name }
+        }));
     }
 
     async function removeAdminStudentFromLocalRosters(client, studentId, studentNumber) {
@@ -600,6 +623,7 @@
             : String(item.student_id) === String(payload.student_id));
         const record = {
             key: `${userId}:${operationId}`, userId, operationId,
+            role: 'student',
             studentId: String(payload.student_id || student?.student_id || ''),
             studentNumber: result.student_number || student?.student_number || '',
             name: student ? [student.last_name, student.first_name, student.middle_initial ? `${String(student.middle_initial).replace(/\.$/, '')}.` : ''].filter(Boolean).join(', ') : '',
@@ -614,15 +638,36 @@
         window.dispatchEvent(new CustomEvent('admin-password-reset-data-changed'));
     }
 
+    async function saveAdminTeacherPasswordResetResult(userId, operationId, payload, result) {
+        const lookups = await getAdminAccountLookups(null, userId);
+        const teacher = (lookups?.teachers || []).find(item => String(item.teacher_id) === String(payload.teacher_id)
+            || String(item.teacher_number) === String(payload.teacher_number));
+        const record = {
+            key: `${userId}:${operationId}`, userId, operationId, role: 'teacher',
+            teacherId: String(payload.teacher_id || ''), studentId: '',
+            studentNumber: result.teacher_number || teacher?.teacher_number || '',
+            name: teacher ? [teacher.last_name, teacher.first_name, teacher.middle_initial ? `${String(teacher.middle_initial).replace(/\.$/, '')}.` : ''].filter(Boolean).join(', ') : '',
+            temporaryPassword: result.temporary_password,
+            delivery: result.delivery,
+            email: result.email || '',
+            emailAvailable: Boolean(result.email),
+            emailError: result.email_error || '',
+            createdAt: new Date().toISOString()
+        };
+        await adminStoreRequest(adminPasswordResetResultsStoreName, 'readwrite', store => store.put(record));
+        window.dispatchEvent(new CustomEvent('admin-password-reset-data-changed'));
+    }
+
     async function saveAdminDeletionResult(userId, operationId, payload, result, status = 'Deleted') {
         const isBulkCleanup = Boolean(payload.scope);
         const record = {
             key: `${userId}:${operationId}`,
             userId,
             operationId,
+            role: payload.account_role === 'teacher' || result.teacher_id ? 'teacher' : 'student',
             studentNumber: isBulkCleanup
                 ? 'Bulk cleanup'
-                : String(result.student_number || payload.student_number || payload.student_id || ''),
+                : String(result.student_number || result.teacher_number || payload.student_number || payload.teacher_number || payload.student_id || payload.teacher_id || ''),
             name: isBulkCleanup
                 ? payload.scope === 'unassigned' ? 'Unassigned student accounts' : 'Graduate sections and students'
                 : [result.last_name || payload.last_name, result.first_name || payload.first_name, result.middle_initial || payload.middle_initial]
@@ -745,7 +790,7 @@
                 client.from('semesters').select('semester_id, semester_name, is_active').order('semester_id'),
                 client.from('subjects').select('subject_id, subject_code, subject_name, major_id, semester_id, year_level, semesters(semester_name)').order('subject_name'),
                 client.from('teacher_subject_assignments').select('assignment_id, teacher_id, subject_id, teachers(first_name,middle_initial,last_name,teacher_number), subjects(subject_name,subject_code,major_id,year_level)').order('assignment_id'),
-                client.from('teachers').select('teacher_id, teacher_number, first_name, middle_initial, last_name').order('last_name'),
+                client.from('teachers').select('teacher_id, user_id, teacher_number, first_name, middle_initial, last_name, users!teachers_user_id_fkey(email)').order('last_name'),
                 client.from('teacher_section_assignments').select('teacher_section_id, assignment_id, section_id, sections(section_name)')
             ]);
             const lookupError = departmentsResult.error || majorsResult.error || sectionsResult.error || semestersResult.error || subjectsResult.error || teacherAssignmentsResult.error || teachersResult.error || teacherSectionsResult.error;
@@ -788,6 +833,20 @@
         } catch (error) {
             console.warn('Could not cache admin account dropdown data.', error);
         }
+    }
+
+    async function refreshAdminTeacherLookups(client, userId = null) {
+        userId = userId || await getUserId(client);
+        if (!userId) return;
+        const { data: teachers, error } = await client.from('teachers')
+            .select('teacher_id, user_id, teacher_number, first_name, middle_initial, last_name, users!teachers_user_id_fkey(email)')
+            .order('last_name');
+        if (error) throw error;
+        const lookups = await getAdminAccountLookups(client, userId);
+        if (!lookups) return;
+        await adminStoreRequest(adminLookupStoreName, 'readwrite', store => store.put({
+            ...lookups, teachers: teachers || [], savedAt: new Date().toISOString()
+        }));
     }
 
     async function getAdminAccountLookups(client, suppliedUserId = null) {
@@ -1038,6 +1097,7 @@
         const result = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(result.error || 'Account creation failed.');
         await saveAdminAccountResult(userId, operationId, role, payload, result);
+        if (role === 'teacher') await refreshAdminTeacherLookups(client, userId);
         return result;
     }
 
@@ -1061,6 +1121,53 @@
         await removeAdminAccountResult(client, payload.student_number || result.student_number);
         await removeAdminStudentFromLocalRosters(client, result.student_id || payload.student_id, result.student_number || payload.student_number);
         window.dispatchEvent(new CustomEvent('admin-account-data-changed'));
+        return result;
+    }
+
+    async function submitAdminTeacherOperation(client, action, payload, functionUrl, anonKey) {
+        if (!['admin-edit', 'admin-reset', 'admin-delete'].includes(action)) {
+            throw new Error('This teacher account action is not supported.');
+        }
+        const userId = await getUserId(client);
+        if (!userId) throw new Error('Sign in again before changing a teacher account.');
+        const allQueued = action === 'admin-edit'
+            ? await adminStoreRequest(adminQueueStoreName, 'readonly', store => store.getAll())
+            : [];
+        const existing = allQueued.filter(item => item.userId === userId && item.role === 'teacher'
+            && item.action === action && String(item.payload.teacher_id) === String(payload.teacher_id))
+            .sort((first, second) => Date.parse(second.createdAt) - Date.parse(first.createdAt))[0];
+        const operationId = action === 'admin-edit' ? existing?.operationId || createOperationId() : createOperationId();
+        if (!navigator.onLine) {
+            if (action === 'admin-delete' && !payload.teacher_id) throw new Error('The teacher ID is required for deletion.');
+            const createdAt = existing?.createdAt || await nextAdminQueueTimestamp(userId);
+            await adminStoreRequest(adminQueueStoreName, 'readwrite', store => store.put({
+                ...(existing || {}), key: `${userId}:${operationId}`, userId, operationId,
+                role: 'teacher', action, payload, functionUrl, anonKey, createdAt,
+                updatedAt: new Date().toISOString(), lastError: null
+            }));
+            setNotice(`Teacher ${action === 'admin-edit' ? 'edit' : action === 'admin-reset' ? 'password reset' : 'deletion'} saved on this device. It will run when connected.`, true, 'sync');
+            window.dispatchEvent(new CustomEvent('admin-account-data-changed'));
+            if (action === 'admin-reset') window.dispatchEvent(new CustomEvent('admin-password-reset-data-changed'));
+            if (action === 'admin-delete') window.dispatchEvent(new CustomEvent('admin-deletion-data-changed'));
+            return { queued: true, operationId };
+        }
+
+        const { data: { session } } = await client.auth.getSession();
+        if (!session) throw new Error('Please sign in again as an administrator.');
+        const response = await fetch(functionUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', apikey: anonKey, Authorization: `Bearer ${session.access_token}` },
+            body: JSON.stringify({ action, operation_id: operationId, ...payload })
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(result.error || `Teacher ${action.replace('admin-', '')} failed.`);
+        if (action === 'admin-reset') await saveAdminTeacherPasswordResetResult(userId, operationId, payload, result);
+        if (action === 'admin-delete') {
+            await saveAdminDeletionResult(userId, operationId, payload, result);
+            await removeAdminAccountResult(client, result.teacher_number || payload.teacher_number, 'teacher');
+        }
+        if (action === 'admin-edit' || action === 'admin-delete') await refreshAdminTeacherLookups(client, userId);
+        if (action === 'admin-edit') await updateAdminTeacherAccountResult(client, payload.teacher_id, payload);
         return result;
     }
 
@@ -1125,6 +1232,42 @@
         return true;
     }
 
+    async function updateQueuedAdminTeacherCreation(client, operationId, payload) {
+        const userId = await getUserId(client);
+        if (!userId || navigator.onLine) throw new Error('Queued teacher accounts can only be edited while offline.');
+        const key = `${userId}:${operationId}`;
+        const queuedItem = await adminStoreRequest(adminQueueStoreName, 'readonly', store => store.get(key));
+        if (!queuedItem || queuedItem.role !== 'teacher' || (queuedItem.action || 'admin-create') !== 'admin-create') {
+            throw new Error('This queued teacher account could not be found.');
+        }
+        if (queuedItem.processing || queuedItem.lastError) {
+            throw new Error('This account request has started syncing. Reconnect and resolve its sync status before editing it.');
+        }
+        await adminStoreRequest(adminQueueStoreName, 'readwrite', store => store.put({
+            ...queuedItem, payload, updatedAt: new Date().toISOString()
+        }));
+        setNotice('Queued teacher details updated on this device.', true, 'sync');
+        window.dispatchEvent(new CustomEvent('admin-account-data-changed'));
+        return true;
+    }
+
+    async function queuePasswordResetForPendingTeacher(client, teacherNumber, functionUrl, anonKey) {
+        const userId = await getUserId(client);
+        if (!userId || !teacherNumber || navigator.onLine) {
+            throw new Error('This password reset can only be queued for a pending teacher while offline.');
+        }
+        const operationId = createOperationId();
+        const createdAt = await nextAdminQueueTimestamp(userId);
+        await adminStoreRequest(adminQueueStoreName, 'readwrite', store => store.put({
+            key: `${userId}:${operationId}`, userId, operationId, role: 'teacher', action: 'admin-reset',
+            payload: { teacher_number: String(teacherNumber) }, functionUrl, anonKey, createdAt, lastError: null
+        }));
+        setNotice('Teacher password reset saved on this device. It will run after the teacher account is created.', true, 'sync');
+        window.dispatchEvent(new CustomEvent('admin-account-data-changed'));
+        window.dispatchEvent(new CustomEvent('admin-password-reset-data-changed'));
+        return { queued: true, operationId };
+    }
+
     async function getAdminAccountData(client) {
         const userId = await getUserId(client);
         if (!userId) return { queued: [], completed: [] };
@@ -1146,11 +1289,13 @@
         const key = `${userId}:${operationId}`;
         const queuedItem = await adminStoreRequest(adminQueueStoreName, 'readonly', store => store.get(key));
         if (!queuedItem || queuedItem.userId !== userId) throw new Error('This saved account request was not found.');
-        const studentNumber = String(queuedItem.payload?.student_number || '');
+        const accountNumber = String(queuedItem.role === 'teacher'
+            ? queuedItem.payload?.teacher_number || ''
+            : queuedItem.payload?.student_number || '');
         const relatedStudentIds = new Set();
-        if (studentNumber && queuedItem.role === 'student') {
+        if (accountNumber && queuedItem.role === 'student') {
             const roster = await getAdminStudentRoster(client, userId);
-            (roster?.students || []).filter(student => String(student.student_number) === studentNumber)
+            (roster?.students || []).filter(student => String(student.student_number) === accountNumber)
                 .forEach(student => relatedStudentIds.add(String(student.student_id)));
         }
         const [allAccountOperations, allStructureOperations] = await Promise.all([
@@ -1159,12 +1304,13 @@
         ]);
         const relatedAccountOperations = allAccountOperations.filter(item => item.userId === userId
             && item.key !== key
-            && item.role === 'student'
+            && item.role === queuedItem.role
             && item.action === 'admin-reset'
-            && String(item.payload?.student_number || '') === studentNumber);
+            && String(item.role === 'teacher' ? item.payload?.teacher_number || '' : item.payload?.student_number || '') === accountNumber);
         const relatedStructureOperations = allStructureOperations.filter(item => {
-            if (item.userId !== userId || !['student_section_assign', 'student_section_unassign'].includes(item.type)) return false;
-            const numberMatch = (item.payload?.student_numbers || []).map(String).includes(studentNumber);
+            if (queuedItem.role !== 'student' || item.userId !== userId
+                || !['student_section_assign', 'student_section_unassign'].includes(item.type)) return false;
+            const numberMatch = (item.payload?.student_numbers || []).map(String).includes(accountNumber);
             const idMatch = (item.payload?.student_ids || []).some(studentId => relatedStudentIds.has(String(studentId)));
             return numberMatch || idMatch;
         });
@@ -1215,9 +1361,29 @@
                             payload[field] = idMap.get(value);
                         }
                     }
+                    if (item.role === 'teacher' && item.action === 'admin-reset'
+                        && !payload.teacher_id && payload.teacher_number) {
+                        const { data: teacher, error: teacherError } = await client.from('teachers')
+                            .select('teacher_id').eq('teacher_number', payload.teacher_number).maybeSingle();
+                        if (teacherError || !teacher) throw new Error(teacherError?.message || 'The queued teacher account is not available yet.');
+                        payload.teacher_id = teacher.teacher_id;
+                    }
                     let result;
-                    if (item.action === 'admin-delete') {
+                    if (item.action === 'admin-delete' && item.role === 'student') {
                         result = await performAdminStudentDeletion(client, payload, item.anonKey);
+                    } else if (item.role === 'teacher' && item.action === 'admin-delete') {
+                        const response = await fetch(item.functionUrl, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json', apikey: item.anonKey, Authorization: `Bearer ${session.access_token}` },
+                            body: JSON.stringify({
+                                action: 'admin-delete',
+                                teacher_id: Number(item.payload.teacher_id),
+                                user_id: String(item.payload.user_id || ''),
+                                teacher_number: String(item.payload.teacher_number || '')
+                            })
+                        });
+                        result = await response.json().catch(() => ({}));
+                        if (!response.ok) throw new Error(result.error || 'Teacher account deletion failed.');
                     } else if (item.action === 'admin-bulk-delete') {
                         const response = await fetch(item.functionUrl, {
                             method: 'POST',
@@ -1241,12 +1407,24 @@
                     }
                     if ((item.action || 'admin-create') === 'admin-create') {
                         await saveAdminAccountResult(userId, item.operationId, item.role, payload, result);
+                        if (item.role === 'teacher') await refreshAdminTeacherLookups(client, userId);
                     } else if (item.action === 'admin-reset') {
-                        await saveAdminPasswordResetResult(userId, item.operationId, item.payload, result);
-                    } else if (item.action === 'admin-delete') {
+                        if (item.role === 'teacher') {
+                            await saveAdminTeacherPasswordResetResult(userId, item.operationId, item.payload, result);
+                        } else {
+                            await saveAdminPasswordResetResult(userId, item.operationId, item.payload, result);
+                        }
+                    } else if (item.action === 'admin-delete' && item.role === 'student') {
                         await saveAdminDeletionResult(userId, item.operationId, item.payload, result);
                         await removeAdminAccountResult(client, item.payload.student_number || result.student_number);
                         await removeAdminStudentFromLocalRosters(client, result.student_id || item.payload.student_id, result.student_number || item.payload.student_number);
+                    } else if (item.role === 'teacher' && item.action === 'admin-delete') {
+                        await saveAdminDeletionResult(userId, item.operationId, item.payload, result);
+                        await removeAdminAccountResult(client, result.teacher_number || item.payload.teacher_number, 'teacher');
+                        await refreshAdminTeacherLookups(client, userId);
+                    } else if (item.role === 'teacher' && item.action === 'admin-edit') {
+                        await refreshAdminTeacherLookups(client, userId);
+                        await updateAdminTeacherAccountResult(client, payload.teacher_id, payload);
                     } else if (item.action === 'admin-bulk-delete') {
                         const label = item.payload.scope === 'unassigned' ? 'Unassigned students' : 'Graduate sections';
                         await saveAdminDeletionResult(
@@ -1273,14 +1451,17 @@
                     if (item.action === 'admin-reset') {
                         window.dispatchEvent(new CustomEvent('admin-password-reset-data-changed'));
                     }
+                    if (item.role === 'teacher' && item.action === 'admin-delete') {
+                        window.dispatchEvent(new CustomEvent('admin-deletion-data-changed'));
+                    }
                     setNotice(stillProcessing
                         ? (item.action === 'admin-reset'
-                            ? 'The student password reset is still processing. We’ll check again shortly.'
+                            ? `The ${item.role} password reset is still processing. We’ll check again shortly.`
                             : `The saved ${item.role} account is being created. We’ll check again shortly.`)
                         : (item.action === 'admin-reset'
-                            ? `A saved student password reset could not be applied yet: ${failureReason}`
+                            ? `A saved ${item.role} password reset could not be applied yet: ${failureReason}`
                             : item.action === 'admin-delete'
-                                ? `A saved student deletion could not be applied yet: ${failureReason}`
+                                ? `A saved ${item.role} deletion could not be applied yet: ${failureReason}`
                                 : item.action === 'admin-bulk-delete'
                                     ? `A saved scoped student cleanup could not be applied yet: ${failureReason}`
                                 : `A saved ${item.role} account could not be created yet: ${failureReason}`), true, 'sync');
@@ -1344,6 +1525,9 @@
 
     window.submitAdminAccountCreation = submitAdminAccountCreation;
     window.submitAdminAccountDeletion = submitAdminAccountDeletion;
+    window.submitAdminTeacherOperation = submitAdminTeacherOperation;
+    window.queuePasswordResetForPendingTeacher = queuePasswordResetForPendingTeacher;
+    window.updateQueuedAdminTeacherCreation = updateQueuedAdminTeacherCreation;
     window.queueAdminBulkDeletion = queueAdminBulkDeletion;
     window.getAdminDeletionData = getAdminDeletionData;
     window.clearAdminDeletionResults = clearAdminDeletionResults;
@@ -1358,6 +1542,7 @@
     window.syncAdminAccountQueue = syncAdminQueues;
     window.getAdminAccountLookups = getAdminAccountLookups;
     window.saveAdminAccountLookups = saveAdminAccountLookups;
+    window.refreshAdminTeacherLookups = refreshAdminTeacherLookups;
     window.saveAdminStudentSection = saveAdminStudentSection;
     window.getAdminStudentSection = getAdminStudentSection;
         window.getAdminStudentRoster = getAdminStudentRoster;

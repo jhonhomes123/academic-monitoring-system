@@ -1206,7 +1206,7 @@ table td{
                 </div>
                 <div class="dashboard-search-field">
                     <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
-                    <input id="adminCreatedAccountsSearch" type="search" placeholder="Search student ID, name, or section..." aria-label="Search created accounts" oninput="filterAdminDashboardRows('adminCreatedAccountsTable','adminCreatedAccountsSearch')">
+                    <input id="adminCreatedAccountsSearch" type="search" placeholder="Search account ID, name, or section..." aria-label="Search created accounts" oninput="filterAdminDashboardRows('adminCreatedAccountsTable','adminCreatedAccountsSearch')">
                 </div>
                 <div class="table-responsive" style="max-height:720px;overflow:auto;">
                     <table>
@@ -1232,18 +1232,18 @@ table td{
             <div class="table-section">
                 <div class="section-header" style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
                     <div>
-                        <h2>Student Password Resets</h2>
-                        <p>Temporary passwords and email delivery status for resets requested on this device</p>
+                        <h2>Account Password Resets</h2>
+                        <p>Completed student and teacher reset results saved on this device</p>
                     </div>
                     <button class="btn reject-btn" onclick="clearAdminPasswordResetResults()">Clear reset results</button>
                 </div>
                 <div class="dashboard-search-field">
                     <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
-                    <input id="adminPasswordResetSearch" type="search" placeholder="Search student ID or name..." aria-label="Search password reset results" oninput="filterAdminDashboardRows('adminPasswordResetTable','adminPasswordResetSearch')">
+                    <input id="adminPasswordResetSearch" type="search" placeholder="Search account ID or name..." aria-label="Search password reset results" oninput="filterAdminDashboardRows('adminPasswordResetTable','adminPasswordResetSearch')">
                 </div>
                 <div class="table-responsive" style="max-height:720px;overflow:auto;">
                     <table>
-                        <thead><tr><th style="position:sticky;top:0;background:#fff;z-index:1;">Student ID</th><th style="position:sticky;top:0;background:#fff;z-index:1;">Student</th><th style="position:sticky;top:0;background:#fff;z-index:1;">Temporary Password</th><th style="position:sticky;top:0;background:#fff;z-index:1;">Email Status</th><th style="position:sticky;top:0;background:#fff;z-index:1;">Reset Status</th></tr></thead>
+                        <thead><tr><th style="position:sticky;top:0;background:#fff;z-index:1;">Role</th><th style="position:sticky;top:0;background:#fff;z-index:1;">Account ID</th><th style="position:sticky;top:0;background:#fff;z-index:1;">Name</th><th style="position:sticky;top:0;background:#fff;z-index:1;">Temporary Password</th><th style="position:sticky;top:0;background:#fff;z-index:1;">Email Status</th><th style="position:sticky;top:0;background:#fff;z-index:1;">Reset Status</th></tr></thead>
                         <tbody id="adminPasswordResetTable"><tr><td colspan="5">No password resets on this device</td></tr></tbody>
                     </table>
                 </div>
@@ -1253,18 +1253,18 @@ table td{
                 <div class="section-header" style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
                     <div>
                         <h2>Deleted on This Device</h2>
-                        <p>Student accounts deleted online or after queued deletions sync</p>
+                        <p>Completed student and teacher deletions saved on this device</p>
                     </div>
                     <button class="btn reject-btn" onclick="clearAdminDeletionResults()">Clear deletion history</button>
                 </div>
                 <div class="dashboard-search-field">
                     <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
-                    <input id="adminDeletionSearch" type="search" placeholder="Search student ID or name..." aria-label="Search deletion history" oninput="filterAdminDashboardRows('adminDeletionTable','adminDeletionSearch')">
+                    <input id="adminDeletionSearch" type="search" placeholder="Search account ID or name..." aria-label="Search deletion history" oninput="filterAdminDashboardRows('adminDeletionTable','adminDeletionSearch')">
                 </div>
                 <div class="table-responsive" style="max-height:720px;overflow:auto;">
                     <table>
-                        <thead><tr><th style="position:sticky;top:0;background:#fff;z-index:1;">Student ID</th><th style="position:sticky;top:0;background:#fff;z-index:1;">Student Name</th><th style="position:sticky;top:0;background:#fff;z-index:1;">Deletion Status</th></tr></thead>
-                        <tbody id="adminDeletionTable"><tr><td colspan="3">No deletion history on this device</td></tr></tbody>
+                        <thead><tr><th style="position:sticky;top:0;background:#fff;z-index:1;">Role</th><th style="position:sticky;top:0;background:#fff;z-index:1;">Account ID</th><th style="position:sticky;top:0;background:#fff;z-index:1;">Name</th><th style="position:sticky;top:0;background:#fff;z-index:1;">Deletion Status</th></tr></thead>
+                        <tbody id="adminDeletionTable"><tr><td colspan="4">No deletion history on this device</td></tr></tbody>
                     </table>
                 </div>
             </div>
@@ -2823,13 +2823,16 @@ onchange="loadSubjectsForTeacherAssign()">
             if (navigator.onLine) {
                 window.adminOfflineView = false;
             } else if (window.adminOfflineView) {
+                if (sectionId === 'studentSection') {
+                    void refreshManageStudentsSelectors();
+                } else if (sectionId === 'teacherSection') {
+                    void loadTeachersManagement();
+                }
                 return;
             }
             // AUTO RELOAD DATA WHEN SWITCHING
             if (sectionId === 'dashboardSection') {
-
                 loadDashboardCounts();
-
             }
 
             if (sectionId === 'studentSection') {
@@ -8997,12 +9000,14 @@ async function renderAdminCreatedAccounts() {
         ]);
         const structurePending = structureData?.pending || [];
         const cachedStudents = new Map((roster?.students || []).map(student => [String(student.student_number), student]));
+        const cachedTeachers = new Map((lookups?.teachers || []).map(teacher => [String(teacher.teacher_number), teacher]));
         const resolveSectionId = value => {
             const id = String(value ?? '');
             return id.startsWith('local:') && structureIdMap.has(id) ? String(structureIdMap.get(id)) : id;
         };
         const liveSections = new Map();
         const liveStudents = new Map();
+        const liveTeachers = new Map();
         let liveStudentLookupSucceeded = false;
         if (navigator.onLine) {
             const queuedSectionIds = [...new Set(queued
@@ -9017,6 +9022,8 @@ async function renderAdminCreatedAccounts() {
                 .filter(item => item.role === 'student')
                 .map(item => String(item.accountId))
                 .filter(Boolean);
+            const completedTeacherNumbers = completed.filter(item => item.role === 'teacher')
+                .map(item => String(item.accountId)).filter(Boolean);
             const [sectionResult, studentResult] = await Promise.all([
                 queuedSectionIds.length
                     ? supabaseClient.from('sections').select('section_id, section_name, year_level').in('section_id', queuedSectionIds)
@@ -9027,6 +9034,11 @@ async function renderAdminCreatedAccounts() {
                         .in('student_number', completedStudentNumbers)
                     : Promise.resolve({ data: [] })
             ]);
+            const teacherResult = completedTeacherNumbers.length
+                ? await supabaseClient.from('teachers')
+                    .select('teacher_id, user_id, teacher_number, first_name, middle_initial, last_name, users!teachers_user_id_fkey(email)')
+                    .in('teacher_number', completedTeacherNumbers)
+                : { data: [] };
             (sectionResult.data || []).forEach(section => liveSections.set(String(section.section_id), section));
             if (!studentResult.error) {
                 liveStudentLookupSucceeded = true;
@@ -9034,6 +9046,7 @@ async function renderAdminCreatedAccounts() {
             } else {
                 console.warn('Unable to verify saved student accounts against the live roster.', studentResult.error);
             }
+            (teacherResult.data || []).forEach(teacher => liveTeachers.set(String(teacher.teacher_number), teacher));
         }
         const deletedSavedStudentNumbers = liveStudentLookupSucceeded
             ? completed.filter(item => item.role === 'student' && !liveStudents.has(String(item.accountId)))
@@ -9110,6 +9123,7 @@ async function renderAdminCreatedAccounts() {
             .filter(item => item.action === 'admin-delete')
             .map(item => String(item.payload.student_number || ''))
             .filter(Boolean));
+        const queuedTeacherDeletions = queued.filter(item => item.role === 'teacher' && item.action === 'admin-delete');
         table.replaceChildren();
         const rows = [
             ...queued.filter(item => (item.action || 'admin-create') === 'admin-create'
@@ -9126,6 +9140,7 @@ async function renderAdminCreatedAccounts() {
                 middleInitial: item.payload.middle_initial,
                 lastName: item.payload.last_name,
                 id: item.role === 'student' ? item.payload.student_number : item.payload.teacher_number,
+                queuedCreate: true,
                 year: item.role === 'student'
                     ? getProjectedStudentEnrollment(item.payload.student_number, null, item.payload.section_id, item.payload.year_level).year
                     : '—',
@@ -9137,21 +9152,28 @@ async function renderAdminCreatedAccounts() {
                     ? 'Being created'
                     : item.lastError
                         ? (/already has an account|already registered|duplicate key|already exists/i.test(item.lastError)
-                            ? 'Student ID already in use'
+                            ? `${item.role === 'teacher' ? 'Teacher' : 'Student'} ID already in use`
                             : `Needs attention: ${item.lastError}`)
                         : 'Waiting for connection'
             })),
-            ...completed.filter(item => !deletedSavedStudentNumbers.includes(String(item.accountId))
+            ...completed.filter(item => !(item.role === 'student' && deletedSavedStudentNumbers.includes(String(item.accountId)))
                 && !queued.some(operation => operation.action === 'admin-delete'
-                    && String(operation.payload.student_number || '') === String(item.accountId))).map(item => {
+                    && operation.role === item.role
+                    && String(operation.payload.student_number || operation.payload.teacher_number || '') === String(item.accountId))).map(item => {
                 const student = item.role === 'student' ? liveStudents.get(String(item.accountId)) : null;
                 const cachedStudent = item.role === 'student' ? cachedStudents.get(String(item.accountId)) : null;
+                const teacher = item.role === 'teacher' ? liveTeachers.get(String(item.accountId)) || cachedTeachers.get(String(item.accountId)) : null;
                 const initialSectionId = student
                     ? student.section_id
                     : cachedStudent
                         ? cachedStudent.section_id
                         : item.payload.section_id;
                 const studentId = student?.student_id || cachedStudent?.student_id;
+                const teacherEdit = item.role === 'teacher'
+                    ? queued.filter(operation => operation.role === 'teacher' && operation.action === 'admin-edit'
+                        && String(operation.payload.teacher_id) === String(teacher?.teacher_id || item.payload.teacher_id || item.payload.profile_id || '')).at(-1)
+                    : null;
+                const teacherPayload = teacherEdit?.payload || teacher || item.payload;
                 if (item.role === 'student' && targetedByPendingBulkCleanup(
                     item.accountId, studentId, initialSectionId, item.payload.year_level
                 )) return null;
@@ -9163,19 +9185,29 @@ async function renderAdminCreatedAccounts() {
                 );
                 return {
                     role: item.role,
-                    name: formatName(item.payload.first_name, item.payload.middle_initial, item.payload.last_name),
-                    firstName: item.payload.first_name,
-                    middleInitial: item.payload.middle_initial,
-                    lastName: item.payload.last_name,
-                    id: item.accountId,
+                    name: formatName(teacherPayload.first_name, teacherPayload.middle_initial, teacherPayload.last_name),
+                    firstName: teacherPayload.first_name,
+                    middleInitial: teacherPayload.middle_initial,
+                    lastName: teacherPayload.last_name,
+                    id: item.role === 'teacher' ? teacherPayload.teacher_number || teacher?.teacher_number || item.accountId : item.accountId,
                     studentNumber: item.role === 'student' ? item.accountId : null,
-                    userId: student?.user_id || cachedStudent?.user_id || item.payload.user_id || '',
+                    teacherId: teacher?.teacher_id || item.payload.teacher_id || item.payload.profile_id || '',
+                    userId: student?.user_id || cachedStudent?.user_id || teacher?.user_id || item.payload.user_id || '',
+                    queuedCreate: false,
                     year: item.role !== 'student' || !enrollment.sectionId ? '—' : enrollment.year,
                     section: item.role !== 'student' ? '—' : enrollment.name,
                     password: item.temporaryPassword,
-                    status: 'Created'
+                    status: teacherEdit ? 'Edit waiting for connection' : 'Created'
                 };
-            }).filter(Boolean)
+            }).filter(Boolean),
+            ...queuedTeacherDeletions.map(item => ({
+                operationId: item.operationId,
+                action: 'admin-delete',
+                role: 'teacher',
+                id: item.payload.teacher_number || item.payload.teacher_id,
+                name: formatName(item.payload.first_name, item.payload.middle_initial, item.payload.last_name),
+                year: '—', section: '—', password: '—', status: item.lastError ? `Needs attention: ${item.lastError}` : 'Deletion waiting for connection'
+            }))
         ];
         if (!rows.length) {
             const emptyRow = document.createElement('tr');
@@ -9199,6 +9231,29 @@ async function renderAdminCreatedAccounts() {
             const actionCell = document.createElement('td');
             if (account.action === 'admin-delete') {
                 actionCell.textContent = 'Queued for deletion';
+            } else if (account.operationId && account.queuedCreate && account.role === 'teacher') {
+                if (account.processing) {
+                    actionCell.textContent = 'Creating';
+                } else {
+                    const editButton = document.createElement('button');
+                    editButton.type = 'button';
+                    editButton.className = 'btn';
+                    editButton.textContent = 'Edit';
+                    editButton.addEventListener('click', () => openEditQueuedTeacherAccount(account.operationId));
+                    actionCell.appendChild(editButton);
+                    const resetButton = document.createElement('button');
+                    resetButton.type = 'button';
+                    resetButton.className = 'btn';
+                    resetButton.textContent = 'Reset Password';
+                    resetButton.addEventListener('click', () => resetQueuedTeacherPassword(account.operationId, account.id));
+                    actionCell.appendChild(resetButton);
+                    const deleteButton = document.createElement('button');
+                    deleteButton.type = 'button';
+                    deleteButton.className = 'btn reject-btn';
+                    deleteButton.textContent = 'Delete';
+                    deleteButton.addEventListener('click', () => deleteQueuedTeacherAccount(account.operationId));
+                    actionCell.appendChild(deleteButton);
+                }
             } else if (account.operationId) {
                 if (account.processing) {
                     actionCell.appendChild(document.createTextNode('Creating'));
@@ -9211,6 +9266,25 @@ async function renderAdminCreatedAccounts() {
                     removeButton.addEventListener('click', () => removeQueuedAdminAccount(account.operationId, account.failed));
                     actionCell.appendChild(removeButton);
                 }
+            } else if (account.role === 'teacher' && account.status === 'Created') {
+                const editButton = document.createElement('button');
+                editButton.type = 'button';
+                editButton.className = 'btn';
+                editButton.textContent = 'Edit';
+                editButton.addEventListener('click', () => openEditTeacherModal(account.teacherId));
+                actionCell.appendChild(editButton);
+                const resetButton = document.createElement('button');
+                resetButton.type = 'button';
+                resetButton.className = 'btn';
+                resetButton.textContent = 'Reset Password';
+                resetButton.addEventListener('click', () => resetTeacherPassword(account.teacherId));
+                actionCell.appendChild(resetButton);
+                const deleteButton = document.createElement('button');
+                deleteButton.type = 'button';
+                deleteButton.className = 'btn reject-btn';
+                deleteButton.textContent = 'Delete';
+                deleteButton.addEventListener('click', () => deleteTeacher(account.teacherId, account.userId));
+                actionCell.appendChild(deleteButton);
             } else {
                 actionCell.textContent = '—';
             }
@@ -9268,7 +9342,9 @@ function filterAdminDashboardRows(tableId, searchId) {
             emptyRow = table.insertRow();
             emptyRow.className = 'dashboard-search-empty';
             const cell = emptyRow.insertCell();
-            cell.colSpan = tableId === 'adminCreatedAccountsTable' ? 8 : tableId === 'adminDeletionTable' ? 3 : 5;
+            cell.colSpan = tableId === 'adminCreatedAccountsTable' ? 8
+                : tableId === 'adminDeletionTable' ? 4
+                    : tableId === 'adminPasswordResetTable' ? 6 : 5;
             cell.textContent = 'No matching records';
         }
         emptyRow.hidden = false;
@@ -9280,35 +9356,25 @@ function filterAdminDashboardRows(tableId, searchId) {
 async function renderAdminDeletions() {
     const table = document.getElementById('adminDeletionTable');
     if (!table || !window.getAdminDeletionData) return;
-    const { queued, completed } = await window.getAdminDeletionData(supabaseClient);
-    const rows = [
-        ...queued.filter(item => !completed.some(result => result.operationId === item.operationId)).map(item => ({
-            studentNumber: item.payload.scope ? 'Bulk cleanup' : item.payload.student_number || item.payload.student_id || '',
-            name: item.payload.scope
-                ? item.payload.scope === 'unassigned' ? 'Unassigned student accounts' : 'Graduate sections and students'
-                : formatName(item.payload.first_name, item.payload.middle_initial, item.payload.last_name) || 'Student',
-            status: item.lastError ? `Needs attention: ${item.lastError}` : item.payload.scope
-                ? 'Cleanup waiting for connection'
-                : 'Waiting for connection'
-        })),
-        ...completed.map(item => ({
+    const { completed } = await window.getAdminDeletionData(supabaseClient);
+    const rows = completed.map(item => ({
+            role: item.role === 'teacher' ? 'Teacher' : 'Student',
             studentNumber: item.studentNumber || '',
             name: formatStoredDashboardName(item.name || 'Student'),
             status: item.status || 'Deleted'
-        }))
-    ];
+        }));
     table.replaceChildren();
     if (!rows.length) {
         const row = table.insertRow();
         const cell = row.insertCell();
-        cell.colSpan = 3;
+        cell.colSpan = 4;
         cell.textContent = 'No deletion history on this device';
         return;
     }
     rows.forEach(item => {
         const row = table.insertRow();
         row.dataset.search = `${item.studentNumber} ${item.name}`.toLowerCase();
-        [item.studentNumber, item.name, item.status].forEach(value => {
+        [item.role, item.studentNumber, item.name, item.status].forEach(value => {
             row.insertCell().textContent = value || '';
         });
     });
@@ -9316,13 +9382,13 @@ async function renderAdminDeletions() {
 }
 
 async function clearAdminDeletionResults() {
-    showConfirmModal('Clear Deletion History', 'Clear the deletion history saved on this device? This does not undo account deletions or cancel pending deletions.', async () => {
+    showConfirmModal('Clear Deletion History', 'Clear completed deletion records saved on this device? Pending deletions remain in Pending Academic Changes and will still sync.', async () => {
         try {
             await window.clearAdminDeletionResults(supabaseClient);
             closeConfirmModal();
             await renderAdminDeletions();
             await renderAdminCreatedAccounts();
-            showAlert('success', 'Deletion History Cleared', 'Saved deletion history was removed from this device.');
+            showAlert('success', 'Deletion History Cleared', 'Completed deletion records were removed. Pending deletions remain queued.');
         } catch (error) {
             closeConfirmModal();
             showAlert('error', 'Could Not Clear Deletion History', error.message || 'Unable to clear deletion history.');
@@ -9333,28 +9399,9 @@ async function clearAdminDeletionResults() {
 async function renderAdminPasswordResets() {
     const table = document.getElementById('adminPasswordResetTable');
     if (!table || !window.getAdminPasswordResetData) return;
-    const [{ queued, completed }, roster] = await Promise.all([
-        window.getAdminPasswordResetData(supabaseClient),
-        window.getAdminStudentRoster?.(supabaseClient) || Promise.resolve(null)
-    ]);
-    const rows = [
-        ...queued.map(item => {
-            const student = roster?.students?.find(candidate => String(candidate.student_id) === String(item.payload.student_id));
-            const email = student?.users?.email || '';
-            const emailAvailable = Boolean(email && !email.endsWith('@accounts.tcc.invalid'));
-            return {
-                studentNumber: student?.student_number || String(item.payload.student_id),
-                name: student ? formatName(student.first_name, student.middle_initial, student.last_name) : 'Student',
-                password: 'Available after reset syncs',
-                emailStatus: emailAvailable ? 'Will check when connected' : 'Email not set',
-                status: item.processing
-                    ? 'Reset is processing'
-                    : item.lastError
-                        ? `Waiting to retry: ${item.lastError}`
-                        : 'Waiting for connection'
-            };
-        }),
-        ...completed.map(item => ({
+    const { completed } = await window.getAdminPasswordResetData(supabaseClient);
+    const rows = completed.map(item => ({
+            role: item.role === 'teacher' ? 'Teacher' : 'Student',
             studentNumber: item.studentNumber,
             name: formatStoredDashboardName(item.name || 'Student'),
             password: item.temporaryPassword || '',
@@ -9366,20 +9413,19 @@ async function renderAdminPasswordResets() {
                         ? 'Email not set'
                         : 'Email not sent',
             status: 'Reset complete'
-        }))
-    ];
+        }));
     table.replaceChildren();
     if (!rows.length) {
         const row = table.insertRow();
         const cell = row.insertCell();
-        cell.colSpan = 5;
+        cell.colSpan = 6;
         cell.textContent = 'No password resets on this device';
         return;
     }
     rows.forEach(item => {
         const row = table.insertRow();
         row.dataset.search = `${item.studentNumber || ''} ${item.name || ''}`.toLowerCase();
-        [item.studentNumber, item.name, item.password, item.emailStatus, item.status].forEach(value => {
+        [item.role || 'Student', item.studentNumber, item.name, item.password, item.emailStatus, item.status].forEach(value => {
             row.insertCell().textContent = value || '';
         });
     });
@@ -9472,12 +9518,12 @@ async function clearAdminCreatedAccounts() {
 }
 
 async function clearAdminPasswordResetResults() {
-    showConfirmModal('Clear Password Reset Results', 'Clear saved reset passwords and email statuses from this device? This does not undo password resets or affect student accounts.', async () => {
+    showConfirmModal('Clear Password Reset Results', 'Clear completed reset results saved on this device? Pending resets remain in Pending Academic Changes and will still sync.', async () => {
         try {
             await window.clearAdminPasswordResetResults(supabaseClient);
             closeConfirmModal();
             await renderAdminPasswordResets();
-            showAlert('success', 'Reset Results Cleared', 'Saved password reset results were removed from this device.');
+            showAlert('success', 'Reset Results Cleared', 'Completed reset results were removed. Pending resets remain queued.');
         } catch (error) {
             closeConfirmModal();
             showAlert('error', 'Could Not Clear Reset Results', error.message || 'Unable to clear saved reset results.');
@@ -9504,14 +9550,25 @@ async function renderAdminStructureQueue() {
             lastError: item.lastError,
             createdAt: item.createdAt
         }));
+    const teacherAccountPending = (accountData.queued || [])
+        .filter(item => item.role === 'teacher' && ['admin-edit', 'admin-reset', 'admin-delete'].includes(item.action))
+        .map(item => ({
+            type: item.action === 'admin-edit' ? 'teacher_account_edit'
+                : item.action === 'admin-reset' ? 'teacher_password_reset' : 'teacher_account_delete',
+            operationId: item.operationId,
+            role: item.role,
+            payload: item.payload,
+            processing: item.processing,
+            lastError: item.lastError,
+            createdAt: item.createdAt
+        }));
     const accountPending = (accountData.queued || [])
         .filter(item => (item.action || 'admin-create') === 'admin-create'
-            || item.action === 'admin-reset')
+            || (item.action === 'admin-reset' && item.role === 'student')
+            || (item.action === 'admin-delete' && item.role === 'student'))
         .map(item => ({
-            type: item.action === 'admin-reset'
-                ? 'student_password_reset'
-                : item.action === 'admin-bulk-delete'
-                    ? 'student_bulk_delete'
+            type: item.action === 'admin-reset' ? 'student_password_reset'
+                : item.action === 'admin-delete' ? 'student_account_delete'
                     : item.role === 'teacher' ? 'teacher_account_create' : 'student_account_create',
             operationId: item.operationId,
             role: item.role,
@@ -9531,7 +9588,7 @@ async function renderAdminStructureQueue() {
             lastError: item.lastError,
             createdAt: item.createdAt
         }));
-    const pending = [...structurePending, ...studentEditPending, ...accountPending, ...bulkDeletionPending]
+    const pending = [...structurePending, ...studentEditPending, ...teacherAccountPending, ...accountPending, ...bulkDeletionPending]
         .sort((first, second) => Date.parse(first.createdAt || 0) - Date.parse(second.createdAt || 0));
     table.replaceChildren();
     if (!pending.length) {
@@ -9562,6 +9619,10 @@ async function renderAdminStructureQueue() {
         student_edit: 'Edit student',
         student_account_create: 'Create student account',
         student_password_reset: 'Reset student password',
+        student_account_delete: 'Delete student account',
+        teacher_password_reset: 'Reset teacher password',
+        teacher_account_edit: 'Edit teacher account',
+        teacher_account_delete: 'Delete teacher account',
         student_bulk_delete: 'Bulk student cleanup'
     };
     const studentEditDetails = payload => {
@@ -9632,6 +9693,14 @@ async function renderAdminStructureQueue() {
                 ? `${item.payload.teacher_number} - ${formatName(item.payload.first_name, item.payload.middle_initial, item.payload.last_name)}`
             : item.type === 'student_password_reset'
                 ? `Student ID ${item.payload.student_number || item.payload.student_id}`
+            : item.type === 'student_account_delete'
+                ? `${formatName(item.payload.first_name, item.payload.middle_initial, item.payload.last_name)} (${item.payload.student_number || item.payload.student_id})`
+            : item.type === 'teacher_password_reset'
+                ? `Teacher ID ${item.payload.teacher_number || item.payload.teacher_id}`
+            : item.type === 'teacher_account_edit'
+                ? `${formatName(item.payload.first_name, item.payload.middle_initial, item.payload.last_name)} (${item.payload.teacher_number})`
+            : item.type === 'teacher_account_delete'
+                ? `${item.payload.last_name || ''}, ${item.payload.first_name || ''} (${item.payload.teacher_number || item.payload.teacher_id})`
             : item.type === 'student_bulk_delete'
                 ? item.payload.scope === 'unassigned'
                     ? 'Delete unassigned student accounts only'
@@ -10819,35 +10888,31 @@ async function loadTeachersManagement() {
 
     `;
 
-    const { data, error } =
-        await supabaseClient
-            .from('teachers')
-.select(`
-    *,
-    users (
-        email
-    )
-`)
-            .order('last_name');
+    let data;
+    if (!navigator.onLine) {
+        const [lookups, accountData] = await Promise.all([
+            window.getAdminAccountLookups(supabaseClient),
+            window.getAdminAccountData(supabaseClient)
+        ]);
+        const pending = accountData.queued.filter(item => item.role === 'teacher');
+        const deletedIds = new Set(pending.filter(item => item.action === 'admin-delete')
+            .map(item => String(item.payload.teacher_id)));
+        const edits = new Map(pending.filter(item => item.action === 'admin-edit')
+            .map(item => [String(item.payload.teacher_id), item.payload]));
+        data = (lookups?.teachers || [])
+            .filter(teacher => !deletedIds.has(String(teacher.teacher_id)))
+            .map(teacher => ({ ...teacher, ...(edits.get(String(teacher.teacher_id)) || {}) }));
+    } else {
+        const result = await supabaseClient.from('teachers').select(`*, users(email)`).order('last_name');
+        if (result.error) {
+            console.log(result.error);
+            table.innerHTML = '<tr><td colspan="4">Failed loading teachers</td></tr>';
+            return;
+        }
+        data = result.data || [];
+    }
 
-           
-    if (error) {
-
-        console.log(error);
-
-        table.innerHTML = `
-
-        <tr>
-
-            <td colspan="4">
-
-                Failed loading teachers
-
-            </td>
-
-        </tr>
-
-        `;
+    if (!data) {
 
         return;
 
@@ -10895,13 +10960,13 @@ async function loadTeachersManagement() {
 
             <td>
 
-                    ${teacher.users?.email?.endsWith('@accounts.tcc.invalid') ? 'Email not added yet' : (teacher.users?.email || 'N/A')}
+                    ${(teacher.users?.email || teacher.users?.[0]?.email)?.endsWith('@accounts.tcc.invalid') ? 'Email not added yet' : (teacher.users?.email || teacher.users?.[0]?.email || 'N/A')}
 
             </td>
 
             <td>
 
-                <button
+                ${navigator.onLine ? `<button
                 class="btn"
                 onclick="openTeacherAssignments(
                     ${teacher.teacher_id},
@@ -10910,7 +10975,7 @@ async function loadTeachersManagement() {
 
                     Open
 
-                </button>
+                </button>` : ''}
 
                 <button class="btn" onclick="openEditTeacherModal(${teacher.teacher_id})">Edit</button>
 
@@ -10938,8 +11003,10 @@ onclick="deleteTeacher(
 }
 
 const TEACHER_ACCOUNT_FUNCTION_URL = `${SUPABASE_URL}/functions/v1/manage-teacher-accounts`;
+let queuedTeacherCreateEditOperationId = null;
 
 function openCreateTeacherModal() {
+    queuedTeacherCreateEditOperationId = null;
     ['createTeacherNumber', 'createTeacherFirstName', 'createTeacherMiddleInitial', 'createTeacherLastName']
         .forEach(id => document.getElementById(id).value = '');
     document.getElementById('createTeacherError').textContent = '';
@@ -10957,6 +11024,14 @@ async function createTeacherAccount() {
             middle_initial: document.getElementById('createTeacherMiddleInitial').value.trim(),
             last_name: document.getElementById('createTeacherLastName').value.trim()
         };
+        if (queuedTeacherCreateEditOperationId) {
+            await window.updateQueuedAdminTeacherCreation(supabaseClient, queuedTeacherCreateEditOperationId, payload);
+            queuedTeacherCreateEditOperationId = null;
+            closeModal('createTeacherModal');
+            await renderAdminCreatedAccounts();
+            showAlert('success', 'Queued Teacher Updated', 'The saved teacher account details were updated on this device.');
+            return;
+        }
         const result = await window.submitAdminAccountCreation(
             supabaseClient,
             'teacher',
@@ -10983,6 +11058,69 @@ async function createTeacherAccount() {
     }
 }
 
+async function openEditQueuedTeacherAccount(operationId) {
+    const errorBox = document.getElementById('createTeacherError');
+    errorBox.textContent = '';
+    try {
+        if (navigator.onLine) throw new Error('Reconnect is active. Wait for this teacher request to sync before editing it.');
+        const { queued } = await window.getAdminAccountData(supabaseClient);
+        const item = queued.find(candidate => candidate.operationId === operationId);
+        if (!item || item.role !== 'teacher' || (item.action || 'admin-create') !== 'admin-create'
+            || item.processing || item.lastError) {
+            throw new Error('This queued teacher request has started syncing and cannot be changed offline.');
+        }
+        queuedTeacherCreateEditOperationId = operationId;
+        document.getElementById('createTeacherNumber').value = item.payload.teacher_number || '';
+        document.getElementById('createTeacherFirstName').value = item.payload.first_name || '';
+        document.getElementById('createTeacherMiddleInitial').value = item.payload.middle_initial || '';
+        document.getElementById('createTeacherLastName').value = item.payload.last_name || '';
+        document.getElementById('createdTeacherCredentials').style.display = 'none';
+        openModal('createTeacherModal');
+    } catch (error) {
+        queuedTeacherCreateEditOperationId = null;
+        showAlert('warning', 'Cannot Edit Queued Teacher', error.message);
+    }
+}
+
+async function resetQueuedTeacherPassword(operationId, teacherNumber) {
+    showConfirmModal('Reset Teacher Password', `Queue a password reset for teacher ${teacherNumber}? It will run after the teacher account syncs.`, async () => {
+        try {
+            await window.queuePasswordResetForPendingTeacher(supabaseClient, teacherNumber,
+                TEACHER_ACCOUNT_FUNCTION_URL, SUPABASE_ANON_KEY);
+            closeConfirmModal();
+            await renderAdminPasswordResets();
+            await renderAdminStructureQueue();
+            showAlert('success', 'Password Reset Queued', 'The reset will run after this teacher account is created when you reconnect.');
+        } catch (error) {
+            closeConfirmModal();
+            showAlert('error', 'Could Not Queue Reset', error.message || 'Unable to queue the password reset.');
+        }
+    });
+}
+
+async function deleteQueuedTeacherAccount(operationId) {
+    showConfirmModal('Delete Pending Teacher', 'Remove this offline teacher account request? The account has not been created on the server.', async () => {
+        try {
+            const { queued } = await window.getAdminAccountData(supabaseClient);
+            const item = queued.find(candidate => candidate.operationId === operationId);
+            if (!item || item.role !== 'teacher') throw new Error('This pending teacher request could not be found.');
+            await window.discardQueuedAdminAccountRequest(supabaseClient, operationId);
+            await window.recordAdminLocalDeletion(supabaseClient, operationId, {
+                account_role: 'teacher', student_number: item.payload.teacher_number,
+                first_name: item.payload.first_name, middle_initial: item.payload.middle_initial,
+                last_name: item.payload.last_name
+            });
+            closeConfirmModal();
+            await renderAdminCreatedAccounts();
+            await renderAdminDeletions();
+            showAlert('success', 'Pending Teacher Deleted', 'The teacher creation request was removed from this device and added to deletion history.');
+        } catch (error) {
+            closeConfirmModal();
+            showAlert('error', 'Could Not Delete Teacher', error.message || 'Unable to remove the pending teacher request.');
+        }
+    });
+}
+
 async function copyCreatedTeacherPassword() {
     const password = document.getElementById('createdTeacherPassword').textContent;
     try {
@@ -10997,16 +11135,31 @@ async function openEditTeacherModal(teacherId) {
     const errorBox = document.getElementById('editTeacherError');
     errorBox.textContent = '';
     try {
-        const { data: teacher, error } = await supabaseClient.from('teachers')
-            .select('teacher_id, teacher_number, first_name, middle_initial, last_name, users!teachers_user_id_fkey(email)')
-            .eq('teacher_id', teacherId).single();
-        if (error) throw error;
+        let teacher;
+        if (!navigator.onLine) {
+            const [lookups, accountData] = await Promise.all([
+                window.getAdminAccountLookups(supabaseClient),
+                window.getAdminAccountData(supabaseClient)
+            ]);
+            teacher = (lookups?.teachers || []).find(item => String(item.teacher_id) === String(teacherId));
+            const queuedEdit = accountData.queued.filter(item => item.role === 'teacher' && item.action === 'admin-edit'
+                && String(item.payload.teacher_id) === String(teacherId)).at(-1);
+            if (queuedEdit) teacher = { ...teacher, ...queuedEdit.payload };
+            if (!teacher) throw new Error('This teacher is not in the saved admin lookup. Open Manage Teachers while online first.');
+        } else {
+            const { data, error } = await supabaseClient.from('teachers')
+                .select('teacher_id, user_id, teacher_number, first_name, middle_initial, last_name, users!teachers_user_id_fkey(email)')
+                .eq('teacher_id', teacherId).single();
+            if (error) throw error;
+            teacher = data;
+        }
         document.getElementById('editTeacherId').value = teacher.teacher_id;
         document.getElementById('editTeacherNumber').value = teacher.teacher_number || '';
         document.getElementById('editTeacherFirstName').value = teacher.first_name || '';
         document.getElementById('editTeacherMiddleInitial').value = teacher.middle_initial || '';
         document.getElementById('editTeacherLastName').value = teacher.last_name || '';
-        document.getElementById('editTeacherEmail').value = teacher.users?.email?.endsWith('@accounts.tcc.invalid') ? '' : (teacher.users?.email || '');
+        const teacherEmail = teacher.users?.email || teacher.users?.[0]?.email || teacher.email || '';
+        document.getElementById('editTeacherEmail').value = teacherEmail.endsWith('@accounts.tcc.invalid') ? '' : teacherEmail;
         openModal('editTeacherModal');
     } catch (error) {
         errorBox.textContent = error.message;
@@ -11014,30 +11167,31 @@ async function openEditTeacherModal(teacherId) {
     }
 }
 
+async function saveTeacherEditPayload(payload) {
+    return window.submitAdminTeacherOperation(
+        supabaseClient, 'admin-edit', payload, TEACHER_ACCOUNT_FUNCTION_URL, SUPABASE_ANON_KEY
+    );
+}
+
 async function saveTeacherEdits() {
     const errorBox = document.getElementById('editTeacherError');
     errorBox.textContent = '';
     try {
-        const { data: { session } } = await supabaseClient.auth.getSession();
-        if (!session) throw new Error('Please sign in again as an administrator.');
-        const response = await fetch(TEACHER_ACCOUNT_FUNCTION_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${session.access_token}` },
-            body: JSON.stringify({
-                action: 'admin-edit',
-                teacher_id: Number(document.getElementById('editTeacherId').value),
-                teacher_number: document.getElementById('editTeacherNumber').value.trim(),
-                first_name: document.getElementById('editTeacherFirstName').value.trim(),
-                middle_initial: document.getElementById('editTeacherMiddleInitial').value.trim(),
-                last_name: document.getElementById('editTeacherLastName').value.trim(),
-                email: document.getElementById('editTeacherEmail').value.trim()
-            })
-        });
-        const result = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(result.error || 'Unable to update teacher details.');
+        const payload = {
+            teacher_id: Number(document.getElementById('editTeacherId').value),
+            teacher_number: document.getElementById('editTeacherNumber').value.trim(),
+            first_name: document.getElementById('editTeacherFirstName').value.trim(),
+            middle_initial: document.getElementById('editTeacherMiddleInitial').value.trim(),
+            last_name: document.getElementById('editTeacherLastName').value.trim(),
+            email: document.getElementById('editTeacherEmail').value.trim()
+        };
+        const result = await saveTeacherEditPayload(payload);
         closeModal('editTeacherModal');
-        showAlert('success', 'Teacher Updated', result.message || 'Teacher details updated.');
+        showAlert('success', result.queued ? 'Teacher Edit Queued' : 'Teacher Updated', result.queued
+            ? 'The teacher details will be updated when this device reconnects.'
+            : result.message || 'Teacher details updated.');
         await loadTeachersManagement();
+        await renderAdminStructureQueue();
     } catch (error) {
         errorBox.textContent = error.message;
     }
@@ -11046,15 +11200,16 @@ async function saveTeacherEdits() {
 async function resetTeacherPassword(teacherId) {
     showConfirmModal('Reset Teacher Password', 'Generate a new temporary password? It will be shown here and emailed to the saved Gmail when possible.', async () => {
         try {
-            const { data: { session } } = await supabaseClient.auth.getSession();
-            if (!session) throw new Error('Please sign in again as an administrator.');
-            const response = await fetch(TEACHER_ACCOUNT_FUNCTION_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${session.access_token}` },
-                body: JSON.stringify({ action: 'admin-reset', teacher_id: Number(teacherId) })
-            });
-            const result = await response.json().catch(() => ({}));
-            if (!response.ok) throw new Error(result.error || 'Unable to reset teacher password.');
+            const result = await window.submitAdminTeacherOperation(
+                supabaseClient, 'admin-reset', { teacher_id: Number(teacherId) },
+                TEACHER_ACCOUNT_FUNCTION_URL, SUPABASE_ANON_KEY
+            );
+            if (result.queued) {
+                closeConfirmModal();
+                await renderAdminPasswordResets();
+                showAlert('success', 'Password Reset Queued', 'The password will be reset after the device reconnects.');
+                return;
+            }
             document.getElementById('resetTeacherLoginId').textContent = result.teacher_number;
             document.getElementById('resetTeacherTemporaryPassword').textContent = result.temporary_password;
             document.getElementById('resetTeacherDeliveryNote').textContent = result.delivery === 'email-and-admin'
@@ -11066,6 +11221,7 @@ async function resetTeacherPassword(teacherId) {
                 ? 'The teacher will add Gmail and choose a new password during first-time setup.'
                 : 'The teacher must choose a new password at next sign-in.';
             openModal('resetTeacherCredentialsModal');
+            await renderAdminPasswordResets();
         } catch (error) {
             showAlert('error', 'Password Reset Failed', error.message);
         }
@@ -11139,222 +11295,31 @@ async function deleteTeacher(
     teacherId,
     userId
 ) {
-
-    /* ======================
-       CUSTOM CONFIRM MODAL
-    ====================== */
-
-    showConfirmModal(
-
-        'Delete Teacher',
-
-        'Delete this teacher account?',
-
-        async () => {
-
-            try {
-
-                /* ======================
-                   GET TEACHER INFO
-                ====================== */
-
-                const {
-
-                    data: teacherData,
-                    error: teacherError
-
-                } = await supabaseClient
-
-                    .from('teachers')
-                    .select(`
-
-                        first_name,
-                        last_name,
-                        teacher_number
-
-                    `)
-                    .eq(
-                        'teacher_id',
-                        teacherId
-                    )
-                    .single();
-
-                /* ERROR */
-
-                if (teacherError) {
-
-                    console.log(
-                        teacherError
-                    );
-
-                    showAlert(
-                        'error',
-                        'Load Failed',
-                        teacherError.message
-                    );
-
-                    return;
-
-                }
-
-                /* ======================
-                   DELETE AUTH USER
-                ====================== */
-
-                const response =
-                    await fetch(
-
-                        'https://nrqrsolfowebujogawti.supabase.co/functions/v1/delete-user',
-
-                        {
-
-                            method: 'POST',
-
-                            headers: {
-
-                                'Content-Type':
-                                    'application/json',
-
-                                'apikey':
-                                    SUPABASE_ANON_KEY,
-
-                                'Authorization':
-                                    `Bearer ${SUPABASE_ANON_KEY}`
-
-                            },
-
-                            body: JSON.stringify({
-
-                                user_id:
-                                    userId
-
-                            })
-
-                        }
-
-                    );
-
-                const result =
-                    await response.json();
-
-                /* ERROR */
-
-                if (!response.ok) {
-
-                    showAlert(
-                        'error',
-                        'Delete Failed',
-                        result.error
-                    );
-
-                    return;
-
-                }
-
-                /* ======================
-                   DELETE TEACHER TABLE
-                ====================== */
-
-                const {
-
-                    error:
-                        teacherDeleteError
-
-                } = await supabaseClient
-
-                    .from('teachers')
-                    .delete()
-                    .eq(
-                        'teacher_id',
-                        teacherId
-                    );
-
-                /* ERROR */
-
-                if (teacherDeleteError) {
-
-                    throw new Error(
-                        teacherDeleteError.message
-                    );
-
-                }
-
-                /* ======================
-                   DELETE USER TABLE
-                ====================== */
-
-                const {
-
-                    error:
-                        userDeleteError
-
-                } = await supabaseClient
-
-                    .from('users')
-                    .delete()
-                    .eq(
-                        'user_id',
-                        userId
-                    );
-
-                /* ERROR */
-
-                if (userDeleteError) {
-
-                    throw new Error(
-                        userDeleteError.message
-                    );
-
-                }
-
-                /* ======================
-                   SAVE LOG
-                ====================== */
-
-                await supabaseClient
-                    .from('activity_logs')
-                    .insert([{
-
-                        user_id: null,
-
-                      activity:
-    `Deleted teacher ${teacherData.first_name} ${teacherData.last_name} [${teacherData.teacher_number}]`
-                    }]);
-
-                /* ======================
-                   SUCCESS ALERT
-                ====================== */
-
-                showAlert(
-                    'success',
-                    'Teacher Deleted',
-                    `${teacherData.first_name} ${teacherData.last_name} deleted successfully`
-                );
-
-                /* ======================
-                   REFRESH
-                ====================== */
-
-                loadTeachersManagement();
-
-            }
-
-            catch (err) {
-
-                console.log(err);
-
-                showAlert(
-                    'error',
-                    'Delete Failed',
-                    err.message
-                );
-
-            }
-
+    showConfirmModal('Delete Teacher', 'Delete this teacher account and remove its assignments and login? This cannot be undone.', async () => {
+        try {
+            const cachedTeacher = (await window.getAdminAccountLookups(supabaseClient))?.teachers
+                ?.find(teacher => String(teacher.teacher_id) === String(teacherId));
+            const result = await window.submitAdminTeacherOperation(
+                supabaseClient,
+                'admin-delete',
+                { account_role: 'teacher', teacher_id: Number(teacherId), user_id: String(userId || ''), teacher_number: cachedTeacher?.teacher_number || '', first_name: cachedTeacher?.first_name || '', middle_initial: cachedTeacher?.middle_initial || '', last_name: cachedTeacher?.last_name || '' },
+                TEACHER_ACCOUNT_FUNCTION_URL,
+                SUPABASE_ANON_KEY
+            );
+            closeConfirmModal();
+            showAlert('success', result.queued ? 'Teacher Deletion Queued' : 'Teacher Deleted', result.queued
+                ? 'This teacher account will be deleted when the device reconnects.'
+                : 'The teacher account and its assignments were deleted.');
+            await loadTeachersManagement();
+            await renderAdminCreatedAccounts();
+            await renderAdminDeletions();
+            await renderAdminStructureQueue();
+            if (!result.queued) await window.refreshAdminTeacherLookups(supabaseClient);
+        } catch (error) {
+            closeConfirmModal();
+            showAlert('error', 'Delete Failed', error.message || 'Unable to delete teacher account.');
         }
-
-    );
-
+    });
 }
 /* =========================================================
    MANAGE TEACHERS PANEL
@@ -12446,19 +12411,8 @@ function filterLogsTable() {
         let matchesCategory = true;
 
         if (filter === "teacher") {
-
-            matchesCategory =
-
-                text.includes("teacher") ||
-
-                text.includes("subject") ||
-
-                text.includes("assignment") ||
-
-                text.includes("section assigned") ||
-
-                text.includes("removed section");
-
+            matchesCategory = text.includes("teacher") || text.includes("assignment")
+                || text.includes("section assigned") || text.includes("removed section");
         }
 
         else if (filter === "student") {
