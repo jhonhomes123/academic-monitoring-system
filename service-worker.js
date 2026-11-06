@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ams-student-shell-v150';
+const CACHE_NAME = 'ams-student-shell-v151';
 const APP_FILES = [
     './student_dashboard.html',
     './student_subjects.html',

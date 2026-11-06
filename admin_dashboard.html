@@ -11091,6 +11091,8 @@ async function loadTeachersManagement() {
             resetButton.textContent = 'Reset Password';
             resetButton.disabled = true;
             resetButton.title = 'Available after this teacher account syncs';
+            resetButton.style.opacity = '0.5';
+            resetButton.style.cursor = 'not-allowed';
             actions.appendChild(resetButton);
 
             const deleteButton = document.createElement('button');
@@ -11180,12 +11182,14 @@ async function createTeacherAccount() {
             throw error;
         }
         if (result.queued) {
-            showAlert('success', 'Teacher Account Queued', 'This account will be created automatically when the device reconnects.');
-            closeModal('createTeacherModal');
+            ['createTeacherNumber', 'createTeacherFirstName', 'createTeacherMiddleInitial', 'createTeacherLastName']
+                .forEach(id => document.getElementById(id).value = '');
+            document.getElementById('createdTeacherCredentials').style.display = 'none';
             await renderAdminCreatedAccounts();
             if (document.getElementById('teacherSection')?.classList.contains('active-section')) {
                 await loadTeachersManagement();
             }
+            showAlert('success', 'Teacher Account Queued', 'The teacher account is saved on this device and will be created when you reconnect.');
             return;
         }
         ['createTeacherNumber', 'createTeacherFirstName', 'createTeacherMiddleInitial', 'createTeacherLastName']
