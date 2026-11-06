@@ -2866,7 +2866,7 @@ onchange="loadSubjectsForTeacherAssign()">
       
     </script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
-    <script src="portal-offline.js?v=145"></script>
+    <script src="portal-offline.js?v=146"></script>
     <script>
 
         const SUPABASE_URL =
@@ -9418,12 +9418,12 @@ async function clearAdminDeletionResults() {
             const beforeClear = await window.getAdminDeletionData(supabaseClient);
             const queuedCount = beforeClear.queued.length;
             const resultCount = beforeClear.completed.length;
-            await window.clearAdminDeletionResults(supabaseClient);
+            await window.clearStoredAdminDeletionResults(supabaseClient);
             let remaining = await window.getAdminDeletionData(supabaseClient);
             for (const operation of remaining.queued) {
                 await window.discardQueuedAdminAccountRequest(supabaseClient, operation.operationId);
             }
-            if (remaining.queued.length || remaining.completed.length) await window.clearAdminDeletionResults(supabaseClient);
+            if (remaining.queued.length || remaining.completed.length) await window.clearStoredAdminDeletionResults(supabaseClient);
             remaining = await window.getAdminDeletionData(supabaseClient);
             if (remaining.queued.length || remaining.completed.length) {
                 throw new Error(`Clear verification failed: ${remaining.completed.length} saved record(s) and ${remaining.queued.length} queued deletion(s) remain on this device.`);
@@ -9605,12 +9605,12 @@ async function clearAdminPasswordResetResults() {
             const beforeClear = await window.getAdminPasswordResetData(supabaseClient);
             const queuedCount = beforeClear.queued.length;
             const resultCount = beforeClear.completed.length;
-            await window.clearAdminPasswordResetResults(supabaseClient);
+            await window.clearStoredAdminPasswordResetResults(supabaseClient);
             let remaining = await window.getAdminPasswordResetData(supabaseClient);
             for (const operation of remaining.queued) {
                 await window.discardQueuedAdminAccountRequest(supabaseClient, operation.operationId);
             }
-            if (remaining.queued.length || remaining.completed.length) await window.clearAdminPasswordResetResults(supabaseClient);
+            if (remaining.queued.length || remaining.completed.length) await window.clearStoredAdminPasswordResetResults(supabaseClient);
             remaining = await window.getAdminPasswordResetData(supabaseClient);
             if (remaining.queued.length || remaining.completed.length) {
                 throw new Error(`Clear verification failed: ${remaining.completed.length} saved result(s) and ${remaining.queued.length} queued reset(s) remain on this device.`);

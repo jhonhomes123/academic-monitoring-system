@@ -1643,7 +1643,7 @@
     window.updateQueuedAdminTeacherCreation = updateQueuedAdminTeacherCreation;
     window.queueAdminBulkDeletion = queueAdminBulkDeletion;
     window.getAdminDeletionData = getAdminDeletionData;
-    window.clearAdminDeletionResults = clearAdminDeletionResults;
+    window.clearStoredAdminDeletionResults = clearAdminDeletionResults;
     window.recordAdminLocalDeletion = recordAdminLocalDeletion;
     window.submitAdminPasswordReset = submitAdminPasswordReset;
     window.queuePasswordResetForPendingStudent = queuePasswordResetForPendingStudent;
@@ -1664,7 +1664,7 @@
     window.queueAdminStructureOperation = queueAdminStructureOperation;
     window.queueAdminStructureDelete = queueAdminStructureDelete;
     window.cancelQueuedAdminSubject = cancelQueuedAdminSubject;
-    window.clearAdminPasswordResetResults = clearAdminPasswordResetResults;
+    window.clearStoredAdminPasswordResetResults = clearAdminPasswordResetResults;
     window.discardQueuedAdminAccountOperation = discardQueuedAdminAccountOperation;
     window.cancelQueuedAdminSubject = cancelQueuedAdminSubject;
     window.getAdminStructureData = getAdminStructureData;
