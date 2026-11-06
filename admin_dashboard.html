@@ -2866,7 +2866,7 @@ onchange="loadSubjectsForTeacherAssign()">
       
     </script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
-    <script src="portal-offline.js?v=147"></script>
+    <script src="portal-offline.js?v=148"></script>
     <script>
 
         const SUPABASE_URL =
@@ -9185,6 +9185,8 @@ async function renderAdminCreatedAccounts() {
                 );
                 return {
                     role: item.role,
+                    operationId: item.failed ? item.operationId : null,
+                    failed: Boolean(item.failed),
                     name: formatName(teacherPayload.first_name, teacherPayload.middle_initial, teacherPayload.last_name),
                     firstName: teacherPayload.first_name,
                     middleInitial: teacherPayload.middle_initial,
@@ -9196,8 +9198,8 @@ async function renderAdminCreatedAccounts() {
                     queuedCreate: false,
                     year: item.role !== 'student' || !enrollment.sectionId ? '—' : enrollment.year,
                     section: item.role !== 'student' ? '—' : enrollment.name,
-                    password: item.temporaryPassword,
-                    status: teacherEdit ? 'Edit waiting for connection' : 'Created'
+                    password: item.temporaryPassword || (item.failed ? 'Not created' : ''),
+                    status: item.status || (teacherEdit ? 'Edit waiting for connection' : 'Created')
                 };
             }).filter(Boolean),
             ...queuedTeacherDeletions.map(item => ({
@@ -9243,6 +9245,14 @@ async function renderAdminCreatedAccounts() {
                     removeButton.addEventListener('click', () => removeQueuedAdminAccount(account.operationId, account.failed));
                     actionCell.appendChild(removeButton);
                 }
+            } else if (account.operationId && account.failed && !account.queuedCreate) {
+                const removeButton = document.createElement('button');
+                removeButton.type = 'button';
+                removeButton.className = 'btn reject-btn';
+                removeButton.textContent = 'Remove request';
+                removeButton.title = 'Remove this failed local account request only';
+                removeButton.addEventListener('click', () => removeFailedAdminAccountRequest(account.operationId));
+                actionCell.appendChild(removeButton);
             } else if (account.operationId) {
                 if (account.processing) {
                     actionCell.appendChild(document.createTextNode('Creating'));
@@ -9255,25 +9265,6 @@ async function renderAdminCreatedAccounts() {
                     removeButton.addEventListener('click', () => removeQueuedAdminAccount(account.operationId, account.failed));
                     actionCell.appendChild(removeButton);
                 }
-            } else if (account.role === 'teacher' && account.status === 'Created') {
-                const editButton = document.createElement('button');
-                editButton.type = 'button';
-                editButton.className = 'btn';
-                editButton.textContent = 'Edit';
-                editButton.addEventListener('click', () => openEditTeacherModal(account.teacherId));
-                actionCell.appendChild(editButton);
-                const resetButton = document.createElement('button');
-                resetButton.type = 'button';
-                resetButton.className = 'btn';
-                resetButton.textContent = 'Reset Password';
-                resetButton.addEventListener('click', () => resetTeacherPassword(account.teacherId));
-                actionCell.appendChild(resetButton);
-                const deleteButton = document.createElement('button');
-                deleteButton.type = 'button';
-                deleteButton.className = 'btn reject-btn';
-                deleteButton.textContent = 'Delete';
-                deleteButton.addEventListener('click', () => deleteTeacher(account.teacherId, account.userId));
-                actionCell.appendChild(deleteButton);
             } else {
                 actionCell.textContent = '—';
             }
@@ -9287,6 +9278,20 @@ async function renderAdminCreatedAccounts() {
 }
 
 window.renderAdminCreatedAccounts = renderAdminCreatedAccounts;
+
+async function removeFailedAdminAccountRequest(operationId) {
+    showConfirmModal('Remove Failed Account Request', 'Remove this failed account request from this device? No account will be created or deleted.', async () => {
+        try {
+            await window.discardAdminAccountResult(supabaseClient, operationId);
+            closeConfirmModal();
+            await renderAdminCreatedAccounts();
+            showAlert('success', 'Request Removed', 'The failed account request was removed from this device.');
+        } catch (error) {
+            closeConfirmModal();
+            showAlert('error', 'Could Not Remove Request', error.message || 'Unable to remove the failed request.');
+        }
+    });
+}
 
 function deleteCreatedStudentAccount(studentNumber, studentName = 'this student', userId = '', firstName = '', middleInitial = '', lastName = '') {
     showConfirmModal('Delete Student Account', `Delete ${studentName} and remove the student profile, login, and related academic records? This cannot be undone.`, async () => {
@@ -11126,13 +11131,22 @@ async function createTeacherAccount() {
             showAlert('success', 'Queued Teacher Updated', 'The saved teacher account details were updated on this device.');
             return;
         }
-        const result = await window.submitAdminAccountCreation(
-            supabaseClient,
-            'teacher',
-            payload,
-            TEACHER_ACCOUNT_FUNCTION_URL,
-            SUPABASE_ANON_KEY
-        );
+        let result;
+        try {
+            result = await window.submitAdminAccountCreation(
+                supabaseClient,
+                'teacher',
+                payload,
+                TEACHER_ACCOUNT_FUNCTION_URL,
+                SUPABASE_ANON_KEY
+            );
+        } catch (error) {
+            if (navigator.onLine) {
+                await window.recordAdminAccountCreationFailure(supabaseClient, 'teacher', payload, error.message);
+                await renderAdminCreatedAccounts();
+            }
+            throw error;
+        }
         if (result.queued) {
             showAlert('success', 'Teacher Account Queued', 'This account will be created automatically when the device reconnects.');
             closeModal('createTeacherModal');

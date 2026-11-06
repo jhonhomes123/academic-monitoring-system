@@ -575,6 +575,40 @@
         }
     }
 
+    async function recordAdminAccountCreationFailure(client, role, payload, errorMessage) {
+        const userId = await getUserId(client);
+        if (!userId) throw new Error('Sign in again before saving this account request.');
+        const operationId = createOperationId();
+        const accountId = role === 'teacher' ? payload.teacher_number : payload.student_number;
+        const record = {
+            key: `${userId}:${operationId}`,
+            userId,
+            operationId,
+            role,
+            accountId: String(accountId || ''),
+            createdAt: new Date().toISOString(),
+            status: `Needs attention: ${errorMessage || 'Account creation failed.'}`,
+            failed: true,
+            payload: { ...payload }
+        };
+        await adminStoreRequest(adminResultsStoreName, 'readwrite', store => store.put(record));
+        window.dispatchEvent(new CustomEvent('admin-account-data-changed'));
+        return operationId;
+    }
+
+    async function discardAdminAccountResult(client, operationId) {
+        const userId = await getUserId(client);
+        if (!userId) throw new Error('Sign in again before removing this saved request.');
+        const key = `${userId}:${operationId}`;
+        const record = await adminStoreRequest(adminResultsStoreName, 'readonly', store => store.get(key));
+        if (!record || record.userId !== userId || !record.failed) {
+            throw new Error('This failed account request was not found.');
+        }
+        await adminStoreRequest(adminResultsStoreName, 'readwrite', store => store.delete(key));
+        window.dispatchEvent(new CustomEvent('admin-account-data-changed'));
+        return true;
+    }
+
     async function removeAdminAccountResult(client, accountNumber, role = 'student') {
         const userId = await getUserId(client);
         if (!userId || !accountNumber) return;
@@ -1637,6 +1671,8 @@
     }
 
     window.submitAdminAccountCreation = submitAdminAccountCreation;
+    window.recordAdminAccountCreationFailure = recordAdminAccountCreationFailure;
+    window.discardAdminAccountResult = discardAdminAccountResult;
     window.submitAdminAccountDeletion = submitAdminAccountDeletion;
     window.submitAdminTeacherOperation = submitAdminTeacherOperation;
     window.queuePasswordResetForPendingTeacher = queuePasswordResetForPendingTeacher;
