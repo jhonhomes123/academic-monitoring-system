@@ -2866,7 +2866,7 @@ onchange="loadSubjectsForTeacherAssign()">
       
     </script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
-    <script src="portal-offline.js"></script>
+    <script src="portal-offline.js?v=144"></script>
     <script>
 
         const SUPABASE_URL =
@@ -9415,7 +9415,19 @@ async function renderAdminDeletions() {
 async function clearAdminDeletionResults() {
     showConfirmModal('Clear Deletion History', 'Permanently remove saved deletion records and cancel any queued student or teacher deletions on this device? Cleared queued deletions will not sync.', async () => {
         try {
-            const cleared = await window.clearAdminDeletionResults(supabaseClient);
+            const beforeClear = await window.getAdminDeletionData(supabaseClient);
+            const queuedCount = beforeClear.queued.length;
+            const resultCount = beforeClear.completed.length;
+            await window.clearAdminDeletionResults(supabaseClient);
+            let remaining = await window.getAdminDeletionData(supabaseClient);
+            for (const operation of remaining.queued) {
+                await window.discardQueuedAdminAccountRequest(supabaseClient, operation.operationId);
+            }
+            if (remaining.queued.length || remaining.completed.length) await window.clearAdminDeletionResults(supabaseClient);
+            remaining = await window.getAdminDeletionData(supabaseClient);
+            if (remaining.queued.length || remaining.completed.length) {
+                throw new Error(`Clear verification failed: ${remaining.completed.length} saved record(s) and ${remaining.queued.length} queued deletion(s) remain on this device.`);
+            }
             adminDeletionRenderGeneration += 1;
             const table = document.getElementById('adminDeletionTable');
             const search = document.getElementById('adminDeletionSearch');
@@ -9430,7 +9442,7 @@ async function clearAdminDeletionResults() {
             closeConfirmModal();
             await renderAdminCreatedAccounts();
             await renderAdminStructureQueue();
-            showAlert('success', 'Deletion History Cleared', `${cleared.resultCount} saved record(s) and ${cleared.queuedCount} queued deletion(s) were removed from this device.`);
+            showAlert('success', 'Deletion History Cleared', `${resultCount} saved record(s) and ${queuedCount} queued deletion(s) were removed from this device.`);
         } catch (error) {
             closeConfirmModal();
             showAlert('error', 'Could Not Clear Deletion History', error.message || 'Unable to clear deletion history.');
@@ -9590,7 +9602,19 @@ async function clearAdminCreatedAccounts() {
 async function clearAdminPasswordResetResults() {
     showConfirmModal('Clear Password Reset Results', 'Permanently remove saved reset results and cancel any queued student or teacher password resets on this device? Cleared queued resets will not sync.', async () => {
         try {
-            const cleared = await window.clearAdminPasswordResetResults(supabaseClient);
+            const beforeClear = await window.getAdminPasswordResetData(supabaseClient);
+            const queuedCount = beforeClear.queued.length;
+            const resultCount = beforeClear.completed.length;
+            await window.clearAdminPasswordResetResults(supabaseClient);
+            let remaining = await window.getAdminPasswordResetData(supabaseClient);
+            for (const operation of remaining.queued) {
+                await window.discardQueuedAdminAccountRequest(supabaseClient, operation.operationId);
+            }
+            if (remaining.queued.length || remaining.completed.length) await window.clearAdminPasswordResetResults(supabaseClient);
+            remaining = await window.getAdminPasswordResetData(supabaseClient);
+            if (remaining.queued.length || remaining.completed.length) {
+                throw new Error(`Clear verification failed: ${remaining.completed.length} saved result(s) and ${remaining.queued.length} queued reset(s) remain on this device.`);
+            }
             adminPasswordResetRenderGeneration += 1;
             const table = document.getElementById('adminPasswordResetTable');
             const search = document.getElementById('adminPasswordResetSearch');
@@ -9604,7 +9628,7 @@ async function clearAdminPasswordResetResults() {
             }
             closeConfirmModal();
             await renderAdminStructureQueue();
-            showAlert('success', 'Reset Results Cleared', `${cleared.resultCount} saved result(s) and ${cleared.queuedCount} queued reset(s) were removed from this device.`);
+            showAlert('success', 'Reset Results Cleared', `${resultCount} saved result(s) and ${queuedCount} queued reset(s) were removed from this device.`);
         } catch (error) {
             closeConfirmModal();
             showAlert('error', 'Could Not Clear Reset Results', error.message || 'Unable to clear saved reset results.');
