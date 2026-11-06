@@ -11067,7 +11067,13 @@ async function loadTeachersManagement() {
                 ? 'Email not added yet' : teacher.users?.email || teacher.users?.[0]?.email || 'N/A')]
             .forEach(value => row.insertCell().textContent = value || '');
         const actions = row.insertCell();
+        actions.style.minWidth = '300px';
+        actions.style.whiteSpace = 'normal';
         if (teacher.pendingCreate) {
+            actions.style.display = 'flex';
+            actions.style.flexWrap = 'wrap';
+            actions.style.alignItems = 'center';
+            actions.style.gap = '6px';
             const openButton = document.createElement('button');
             openButton.type = 'button';
             openButton.className = 'btn';
@@ -11105,6 +11111,10 @@ async function loadTeachersManagement() {
             actions.appendChild(deleteButton);
             return;
         }
+        actions.style.display = 'flex';
+        actions.style.flexWrap = 'wrap';
+        actions.style.alignItems = 'center';
+        actions.style.gap = '6px';
         if (navigator.onLine) {
             const openButton = document.createElement('button');
             openButton.type = 'button';
