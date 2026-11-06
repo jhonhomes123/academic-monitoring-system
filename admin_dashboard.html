@@ -2866,7 +2866,7 @@ onchange="loadSubjectsForTeacherAssign()">
       
     </script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
-    <script src="portal-offline.js?v=148"></script>
+    <script src="portal-offline.js?v=149"></script>
     <script>
 
         const SUPABASE_URL =
@@ -9859,6 +9859,9 @@ window.addEventListener('admin-account-data-changed', () => {
     void renderAdminCreatedAccounts();
     void renderAdminDeletions();
     void renderAdminStructureQueue();
+    if (document.getElementById('teacherSection')?.classList.contains('active-section')) {
+        void loadTeachersManagement();
+    }
     if (document.getElementById('studentSection')?.classList.contains('active-section')
         && document.getElementById('manageStudentYear')?.value) {
         void loadStudentsBySection();
@@ -11001,6 +11004,22 @@ async function loadTeachersManagement() {
         data = (lookups?.teachers || [])
             .filter(teacher => !deletedIds.has(String(teacher.teacher_id)))
             .map(teacher => ({ ...teacher, ...(edits.get(String(teacher.teacher_id)) || {}) }));
+        pending.filter(item => (item.action || 'admin-create') === 'admin-create')
+            .forEach(item => {
+                if (data.some(teacher => String(teacher.teacher_number) === String(item.payload.teacher_number))) return;
+                data.push({
+                    teacher_id: `queued:${item.operationId}`,
+                    teacher_number: item.payload.teacher_number,
+                    first_name: item.payload.first_name,
+                    middle_initial: item.payload.middle_initial,
+                    last_name: item.payload.last_name,
+                    users: { email: 'Waiting to sync' },
+                    pendingCreate: true,
+                    operationId: item.operationId,
+                    processing: Boolean(item.processing),
+                    lastError: item.lastError
+                });
+            });
     } else {
         const result = await supabaseClient.from('teachers').select(`*, users(email)`).order('last_name');
         if (result.error) {
@@ -11040,63 +11059,51 @@ async function loadTeachersManagement() {
     table.innerHTML = '';
 
     data.forEach(teacher => {
-
-        table.innerHTML += `
-
-        <tr>
-
-            <td>
-
-                ${teacher.teacher_number}
-
-            </td>
-
-            <td>
-
-                ${formatName(teacher.first_name, teacher.middle_initial, teacher.last_name)}
-
-            </td>
-
-            <td>
-
-                    ${(teacher.users?.email || teacher.users?.[0]?.email)?.endsWith('@accounts.tcc.invalid') ? 'Email not added yet' : (teacher.users?.email || teacher.users?.[0]?.email || 'N/A')}
-
-            </td>
-
-            <td>
-
-                ${navigator.onLine ? `<button
-                class="btn"
-                onclick="openTeacherAssignments(
-                    ${teacher.teacher_id},
-                    '${formatName(teacher.first_name, teacher.middle_initial, teacher.last_name)}'
-                )">
-
-                    Open
-
-                </button>` : ''}
-
-                <button class="btn" onclick="openEditTeacherModal(${teacher.teacher_id})">Edit</button>
-
-                <button class="btn" onclick="resetTeacherPassword(${teacher.teacher_id})">Reset Password</button>
-
-                <button
-class="btn reject-btn"
-onclick="deleteTeacher(
-    '${teacher.teacher_id}',
-    '${teacher.user_id}'
-)">
-
-                    Delete
-
-                </button>
-
-            </td>
-
-        </tr>
-
-        `;
-
+        const row = table.insertRow();
+        const name = formatName(teacher.first_name, teacher.middle_initial, teacher.last_name);
+        [teacher.teacher_number, name, teacher.pendingCreate
+            ? teacher.lastError ? `Needs attention: ${teacher.lastError}` : teacher.processing ? 'Creating' : 'Waiting to sync'
+            : ((teacher.users?.email || teacher.users?.[0]?.email)?.endsWith('@accounts.tcc.invalid')
+                ? 'Email not added yet' : teacher.users?.email || teacher.users?.[0]?.email || 'N/A')]
+            .forEach(value => row.insertCell().textContent = value || '');
+        const actions = row.insertCell();
+        if (teacher.pendingCreate) {
+            const removeButton = document.createElement('button');
+            removeButton.type = 'button';
+            removeButton.className = 'btn reject-btn';
+            removeButton.textContent = 'Remove request';
+            removeButton.disabled = teacher.processing;
+            removeButton.title = 'Remove this queued teacher account request from this device';
+            removeButton.addEventListener('click', () => removeQueuedAdminAccount(teacher.operationId, Boolean(teacher.lastError)));
+            actions.appendChild(removeButton);
+            return;
+        }
+        if (navigator.onLine) {
+            const openButton = document.createElement('button');
+            openButton.type = 'button';
+            openButton.className = 'btn';
+            openButton.textContent = 'Open';
+            openButton.addEventListener('click', () => openTeacherAssignments(teacher.teacher_id, name));
+            actions.appendChild(openButton);
+        }
+        const editButton = document.createElement('button');
+        editButton.type = 'button';
+        editButton.className = 'btn';
+        editButton.textContent = 'Edit';
+        editButton.addEventListener('click', () => openEditTeacherModal(teacher.teacher_id));
+        actions.appendChild(editButton);
+        const resetButton = document.createElement('button');
+        resetButton.type = 'button';
+        resetButton.className = 'btn';
+        resetButton.textContent = 'Reset Password';
+        resetButton.addEventListener('click', () => resetTeacherPassword(teacher.teacher_id));
+        actions.appendChild(resetButton);
+        const deleteButton = document.createElement('button');
+        deleteButton.type = 'button';
+        deleteButton.className = 'btn reject-btn';
+        deleteButton.textContent = 'Delete';
+        deleteButton.addEventListener('click', () => deleteTeacher(teacher.teacher_id, teacher.user_id));
+        actions.appendChild(deleteButton);
     });
 
 }
@@ -11151,6 +11158,9 @@ async function createTeacherAccount() {
             showAlert('success', 'Teacher Account Queued', 'This account will be created automatically when the device reconnects.');
             closeModal('createTeacherModal');
             await renderAdminCreatedAccounts();
+            if (document.getElementById('teacherSection')?.classList.contains('active-section')) {
+                await loadTeachersManagement();
+            }
             return;
         }
         ['createTeacherNumber', 'createTeacherFirstName', 'createTeacherMiddleInitial', 'createTeacherLastName']
