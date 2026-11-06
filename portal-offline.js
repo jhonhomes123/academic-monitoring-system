@@ -456,7 +456,7 @@
         window.adminHistoryClearInProgress = true;
         try {
             const database = await openDatabase();
-            await new Promise((resolve, reject) => {
+            const cleared = await new Promise((resolve, reject) => {
                 const transaction = database.transaction([storeName, adminQueueStoreName], 'readwrite');
                 const resultStore = transaction.objectStore(storeName);
                 const queueStore = transaction.objectStore(adminQueueStoreName);
@@ -464,21 +464,37 @@
                 const queueRequest = queueStore.getAll();
                 let resultReady = false;
                 let queueReady = false;
+                let resultCount = 0;
+                let queuedCount = 0;
                 const finishClear = () => {
                     if (!resultReady || !queueReady) return;
-                    resultRequest.result.filter(item => item.userId === userId)
-                        .forEach(item => resultStore.delete(item.key));
-                    queueRequest.result.filter(item => item.userId === userId && queueActions.includes(item.action))
-                        .forEach(item => queueStore.delete(item.key));
+                    resultRequest.result.filter(item => item.userId === userId).forEach(item => {
+                        if (item.recordType !== 'clear-marker') resultCount += 1;
+                        resultStore.delete(item.key);
+                    });
+                    queueRequest.result.filter(item => item.userId === userId && queueActions.includes(item.action)).forEach(item => {
+                        queuedCount += 1;
+                        queueStore.delete(item.key);
+                    });
                 };
                 resultRequest.onsuccess = () => { resultReady = true; finishClear(); };
                 queueRequest.onsuccess = () => { queueReady = true; finishClear(); };
                 resultRequest.onerror = () => reject(resultRequest.error || new Error('Unable to read saved admin results.'));
                 queueRequest.onerror = () => reject(queueRequest.error || new Error('Unable to read pending admin operations.'));
-                transaction.oncomplete = () => resolve();
+                transaction.oncomplete = () => resolve({ resultCount, queuedCount });
                 transaction.onerror = () => reject(transaction.error || new Error('Unable to clear saved admin results.'));
                 transaction.onabort = () => reject(transaction.error || new Error('Clearing saved admin results was interrupted.'));
             });
+            const [remainingResults, remainingQueue] = await Promise.all([
+                adminStoreRequest(storeName, 'readonly', store => store.getAll()),
+                adminStoreRequest(adminQueueStoreName, 'readonly', store => store.getAll())
+            ]);
+            const resultsLeft = remainingResults.filter(item => item.userId === userId).length;
+            const queuedLeft = remainingQueue.filter(item => item.userId === userId && queueActions.includes(item.action)).length;
+            if (resultsLeft || queuedLeft) {
+                throw new Error(`Local clear verification failed: ${resultsLeft} saved result(s) and ${queuedLeft} queued operation(s) remain.`);
+            }
+            return cleared;
         } finally {
             window.adminHistoryClearInProgress = false;
             window.dispatchEvent(new CustomEvent('admin-history-clear-finished'));
@@ -746,9 +762,10 @@
     async function clearAdminDeletionResults(client) {
         const userId = await getUserId(client);
         if (!userId) throw new Error('Sign in again before clearing deletion history.');
-        await clearAdminHistory(adminDeletionResultsStoreName, userId, ['admin-delete', 'admin-bulk-delete']);
+        const cleared = await clearAdminHistory(adminDeletionResultsStoreName, userId, ['admin-delete', 'admin-bulk-delete']);
         window.dispatchEvent(new CustomEvent('admin-account-data-changed'));
         window.dispatchEvent(new CustomEvent('admin-deletion-data-changed'));
+        return cleared;
     }
 
     async function submitAdminPasswordReset(client, studentId, functionUrl, anonKey) {
@@ -974,9 +991,10 @@
     async function clearAdminPasswordResetResults(client) {
         const userId = await getUserId(client);
         if (!userId) throw new Error('Sign in again before clearing saved reset results.');
-        await clearAdminHistory(adminPasswordResetResultsStoreName, userId, ['admin-reset']);
+        const cleared = await clearAdminHistory(adminPasswordResetResultsStoreName, userId, ['admin-reset']);
         window.dispatchEvent(new CustomEvent('admin-account-data-changed'));
         window.dispatchEvent(new CustomEvent('admin-password-reset-data-changed'));
+        return cleared;
     }
 
     async function discardQueuedAdminAccountOperation(client, operationId) {
