@@ -9413,7 +9413,7 @@ async function renderAdminDeletions() {
 }
 
 async function clearAdminDeletionResults() {
-    showConfirmModal('Clear Deletion History', 'Clear completed deletion records saved on this device? Pending deletions remain in Pending Academic Changes and will still sync.', async () => {
+    showConfirmModal('Clear Deletion History', 'Permanently remove saved deletion records and cancel any queued student or teacher deletions on this device? Cleared queued deletions will not sync.', async () => {
         try {
             await window.clearAdminDeletionResults(supabaseClient);
             adminDeletionRenderGeneration += 1;
@@ -9429,7 +9429,8 @@ async function clearAdminDeletionResults() {
             }
             closeConfirmModal();
             await renderAdminCreatedAccounts();
-            showAlert('success', 'Deletion History Cleared', 'Completed deletion records were removed. Pending deletions remain queued.');
+            await renderAdminStructureQueue();
+            showAlert('success', 'Deletion History Cleared', 'Saved deletion records and queued deletions were removed from this device.');
         } catch (error) {
             closeConfirmModal();
             showAlert('error', 'Could Not Clear Deletion History', error.message || 'Unable to clear deletion history.');
@@ -9587,7 +9588,7 @@ async function clearAdminCreatedAccounts() {
 }
 
 async function clearAdminPasswordResetResults() {
-    showConfirmModal('Clear Password Reset Results', 'Clear completed reset results saved on this device? Pending resets remain in Pending Academic Changes and will still sync.', async () => {
+    showConfirmModal('Clear Password Reset Results', 'Permanently remove saved reset results and cancel any queued student or teacher password resets on this device? Cleared queued resets will not sync.', async () => {
         try {
             await window.clearAdminPasswordResetResults(supabaseClient);
             adminPasswordResetRenderGeneration += 1;
@@ -9602,7 +9603,8 @@ async function clearAdminPasswordResetResults() {
                 cell.textContent = 'No password resets on this device';
             }
             closeConfirmModal();
-            showAlert('success', 'Reset Results Cleared', 'Completed reset results were removed. Pending resets remain queued.');
+            await renderAdminStructureQueue();
+            showAlert('success', 'Reset Results Cleared', 'Saved reset results and queued resets were removed from this device.');
         } catch (error) {
             closeConfirmModal();
             showAlert('error', 'Could Not Clear Reset Results', error.message || 'Unable to clear saved reset results.');

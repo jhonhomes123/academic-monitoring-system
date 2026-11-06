@@ -461,22 +461,10 @@
             let queueReady = false;
             const finishClear = () => {
                 if (!resultReady || !queueReady) return;
-                const results = resultRequest.result.filter(item => item.userId === userId);
-                const existingMarker = results.find(item => item.recordType === 'clear-marker');
-                const hiddenOperationIds = new Set(existingMarker?.hiddenOperationIds || []);
-                results.forEach(item => {
-                    if (item.operationId) hiddenOperationIds.add(item.operationId);
-                    if (item.recordType !== 'clear-marker') resultStore.delete(item.key);
-                });
+                resultRequest.result.filter(item => item.userId === userId)
+                    .forEach(item => resultStore.delete(item.key));
                 queueRequest.result.filter(item => item.userId === userId && queueActions.includes(item.action))
-                    .forEach(item => hiddenOperationIds.add(item.operationId));
-                resultStore.put({
-                    key: `${userId}:__clear_marker__`,
-                    userId,
-                    recordType: 'clear-marker',
-                    hiddenOperationIds: [...hiddenOperationIds],
-                    clearedAt: new Date().toISOString()
-                });
+                    .forEach(item => queueStore.delete(item.key));
             };
             resultRequest.onsuccess = () => { resultReady = true; finishClear(); };
             queueRequest.onsuccess = () => { queueReady = true; finishClear(); };
@@ -737,15 +725,11 @@
             adminStoreRequest(adminDeletionResultsStoreName, 'readonly', store => store.getAll())
         ]);
         const userResults = allCompleted.filter(item => item.userId === userId);
-        const clearMarker = userResults.find(item => item.recordType === 'clear-marker');
-        const hiddenOperationIds = new Set(clearMarker?.hiddenOperationIds || []);
         return {
             queued: allQueued.filter(item => item.userId === userId
-                && ['admin-delete', 'admin-bulk-delete'].includes(item.action)
-                && !hiddenOperationIds.has(item.operationId))
+                && ['admin-delete', 'admin-bulk-delete'].includes(item.action))
                 .sort((first, second) => Date.parse(first.createdAt) - Date.parse(second.createdAt)),
-            completed: userResults.filter(item => item.recordType !== 'clear-marker'
-                && !hiddenOperationIds.has(item.operationId))
+            completed: userResults
                 .sort((first, second) => Date.parse(second.deletedAt) - Date.parse(first.deletedAt))
         };
     }
@@ -754,6 +738,7 @@
         const userId = await getUserId(client);
         if (!userId) throw new Error('Sign in again before clearing deletion history.');
         await clearAdminHistory(adminDeletionResultsStoreName, userId, ['admin-delete', 'admin-bulk-delete']);
+        window.dispatchEvent(new CustomEvent('admin-account-data-changed'));
         window.dispatchEvent(new CustomEvent('admin-deletion-data-changed'));
     }
 
@@ -813,14 +798,10 @@
             adminStoreRequest(adminPasswordResetResultsStoreName, 'readonly', store => store.getAll())
         ]);
         const userResults = allCompleted.filter(item => item.userId === userId);
-        const clearMarker = userResults.find(item => item.recordType === 'clear-marker');
-        const hiddenOperationIds = new Set(clearMarker?.hiddenOperationIds || []);
         return {
-            queued: allQueued.filter(item => item.userId === userId && item.action === 'admin-reset'
-                && !hiddenOperationIds.has(item.operationId))
+            queued: allQueued.filter(item => item.userId === userId && item.action === 'admin-reset')
                 .sort((first, second) => Date.parse(first.createdAt) - Date.parse(second.createdAt)),
-            completed: userResults.filter(item => item.recordType !== 'clear-marker'
-                && !hiddenOperationIds.has(item.operationId))
+            completed: userResults
                 .sort((first, second) => Date.parse(second.createdAt) - Date.parse(first.createdAt))
         };
     }
@@ -985,6 +966,7 @@
         const userId = await getUserId(client);
         if (!userId) throw new Error('Sign in again before clearing saved reset results.');
         await clearAdminHistory(adminPasswordResetResultsStoreName, userId, ['admin-reset']);
+        window.dispatchEvent(new CustomEvent('admin-account-data-changed'));
         window.dispatchEvent(new CustomEvent('admin-password-reset-data-changed'));
     }
 
