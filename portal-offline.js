@@ -450,30 +450,39 @@
     }
 
     async function clearAdminHistory(storeName, userId, queueActions) {
-        const database = await openDatabase();
-        return new Promise((resolve, reject) => {
-            const transaction = database.transaction([storeName, adminQueueStoreName], 'readwrite');
-            const resultStore = transaction.objectStore(storeName);
-            const queueStore = transaction.objectStore(adminQueueStoreName);
-            const resultRequest = resultStore.getAll();
-            const queueRequest = queueStore.getAll();
-            let resultReady = false;
-            let queueReady = false;
-            const finishClear = () => {
-                if (!resultReady || !queueReady) return;
-                resultRequest.result.filter(item => item.userId === userId)
-                    .forEach(item => resultStore.delete(item.key));
-                queueRequest.result.filter(item => item.userId === userId && queueActions.includes(item.action))
-                    .forEach(item => queueStore.delete(item.key));
-            };
-            resultRequest.onsuccess = () => { resultReady = true; finishClear(); };
-            queueRequest.onsuccess = () => { queueReady = true; finishClear(); };
-            resultRequest.onerror = () => reject(resultRequest.error || new Error('Unable to read saved admin results.'));
-            queueRequest.onerror = () => reject(queueRequest.error || new Error('Unable to read pending admin operations.'));
-            transaction.oncomplete = () => resolve();
-            transaction.onerror = () => reject(transaction.error || new Error('Unable to clear saved admin results.'));
-            transaction.onabort = () => reject(transaction.error || new Error('Clearing saved admin results was interrupted.'));
-        });
+        while (window.adminAccountSyncInProgress) {
+            await new Promise(resolve => window.addEventListener('admin-account-sync-finished', resolve, { once: true }));
+        }
+        window.adminHistoryClearInProgress = true;
+        try {
+            const database = await openDatabase();
+            await new Promise((resolve, reject) => {
+                const transaction = database.transaction([storeName, adminQueueStoreName], 'readwrite');
+                const resultStore = transaction.objectStore(storeName);
+                const queueStore = transaction.objectStore(adminQueueStoreName);
+                const resultRequest = resultStore.getAll();
+                const queueRequest = queueStore.getAll();
+                let resultReady = false;
+                let queueReady = false;
+                const finishClear = () => {
+                    if (!resultReady || !queueReady) return;
+                    resultRequest.result.filter(item => item.userId === userId)
+                        .forEach(item => resultStore.delete(item.key));
+                    queueRequest.result.filter(item => item.userId === userId && queueActions.includes(item.action))
+                        .forEach(item => queueStore.delete(item.key));
+                };
+                resultRequest.onsuccess = () => { resultReady = true; finishClear(); };
+                queueRequest.onsuccess = () => { queueReady = true; finishClear(); };
+                resultRequest.onerror = () => reject(resultRequest.error || new Error('Unable to read saved admin results.'));
+                queueRequest.onerror = () => reject(queueRequest.error || new Error('Unable to read pending admin operations.'));
+                transaction.oncomplete = () => resolve();
+                transaction.onerror = () => reject(transaction.error || new Error('Unable to clear saved admin results.'));
+                transaction.onabort = () => reject(transaction.error || new Error('Clearing saved admin results was interrupted.'));
+            });
+        } finally {
+            window.adminHistoryClearInProgress = false;
+            window.dispatchEvent(new CustomEvent('admin-history-clear-finished'));
+        }
     }
 
     async function nextAdminQueueTimestamp(userId) {
@@ -729,7 +738,7 @@
             queued: allQueued.filter(item => item.userId === userId
                 && ['admin-delete', 'admin-bulk-delete'].includes(item.action))
                 .sort((first, second) => Date.parse(first.createdAt) - Date.parse(second.createdAt)),
-            completed: userResults
+            completed: userResults.filter(item => item.recordType !== 'clear-marker')
                 .sort((first, second) => Date.parse(second.deletedAt) - Date.parse(first.deletedAt))
         };
     }
@@ -801,7 +810,7 @@
         return {
             queued: allQueued.filter(item => item.userId === userId && item.action === 'admin-reset')
                 .sort((first, second) => Date.parse(first.createdAt) - Date.parse(second.createdAt)),
-            completed: userResults
+            completed: userResults.filter(item => item.recordType !== 'clear-marker')
                 .sort((first, second) => Date.parse(second.createdAt) - Date.parse(first.createdAt))
         };
     }
@@ -1362,7 +1371,7 @@
     }
 
     async function syncAdminAccountQueue(client, operationId = null) {
-        if (!navigator.onLine || window.adminAccountSyncInProgress) return;
+        if (!navigator.onLine || window.adminAccountSyncInProgress || window.adminHistoryClearInProgress) return;
         window.adminAccountSyncInProgress = true;
         try {
             const userId = await getUserId(client);
@@ -1506,6 +1515,7 @@
             console.warn('Unable to sync queued admin account creations.', error);
         } finally {
             window.adminAccountSyncInProgress = false;
+            window.dispatchEvent(new CustomEvent('admin-account-sync-finished'));
         }
     }
 
