@@ -11124,14 +11124,12 @@ async function loadTeachersManagement() {
         actions.style.alignItems = 'center';
         actions.style.gap = '6px';
         actions.style.whiteSpace = 'nowrap';
-        if (navigator.onLine) {
-            const openButton = document.createElement('button');
-            openButton.type = 'button';
-            openButton.className = 'btn';
-            openButton.textContent = 'Open';
-            openButton.addEventListener('click', () => openTeacherAssignments(teacher.teacher_id, name));
-            actions.appendChild(openButton);
-        }
+        const openButton = document.createElement('button');
+        openButton.type = 'button';
+        openButton.className = 'btn';
+        openButton.textContent = 'Open';
+        openButton.addEventListener('click', () => openTeacherAssignments(teacher.teacher_id, name));
+        actions.appendChild(openButton);
         const editButton = document.createElement('button');
         editButton.type = 'button';
         editButton.className = 'btn';
