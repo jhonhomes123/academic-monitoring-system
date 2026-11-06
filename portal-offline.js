@@ -1553,7 +1553,15 @@
                     }
                     if ((item.action || 'admin-create') === 'admin-create') {
                         await saveAdminAccountResult(userId, item.operationId, item.role, payload, result);
-                        if (item.role === 'teacher') await refreshAdminTeacherLookups(client, userId);
+                        if (item.role === 'teacher') {
+                            await refreshAdminTeacherLookups(client, userId);
+                            if (result.teacher_id) {
+                                const localRef = `local:${item.operationId}`;
+                                await adminStoreRequest(adminStructureMapStoreName, 'readwrite', store => store.put({
+                                    key: `${userId}:${localRef}`, userId, localRef, realId: result.teacher_id
+                                }));
+                            }
+                        }
                     } else if (item.action === 'admin-reset') {
                         if (item.role === 'teacher') {
                             await saveAdminTeacherPasswordResetResult(userId, item.operationId, item.payload, result);

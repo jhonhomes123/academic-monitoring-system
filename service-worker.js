@@ -13,7 +13,7 @@ const APP_FILES = [
     './admin_dashboard.html',
     './auth-session.js',
     './portal-offline.js',
-    './portal-offline.js?v=150',
+    './portal-offline.js?v=152',
     './mobile_fix.css',
     './school_logo.png'
 ];

@@ -2866,7 +2866,7 @@ onchange="loadSubjectsForTeacherAssign()">
       
     </script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
-    <script src="portal-offline.js?v=150"></script>
+    <script src="portal-offline.js?v=152"></script>
     <script>
 
         const SUPABASE_URL =
@@ -7252,18 +7252,26 @@ async function loadSubjectsForDelete() {
                 if (result.error) { console.log(result.error); return; }
                 data = result.data || [];
             }
-
-            data.forEach(teacher => {
-
-                select.innerHTML += `
-        
-        <option value="${teacher.teacher_id}">
-            ${formatName(teacher.first_name, teacher.middle_initial, teacher.last_name)}
-        </option>
-        
-        `;
-
+            const { queued: accountQueue = [] } = await window.getAdminAccountData(supabaseClient);
+            const deletedTeacherIds = new Set(accountQueue.filter(item => item.role === 'teacher' && item.action === 'admin-delete')
+                .map(item => String(item.payload.teacher_id)));
+            const visibleTeachers = data.filter(teacher => !deletedTeacherIds.has(String(teacher.teacher_id)));
+            visibleTeachers.forEach(teacher => {
+                select.add(new Option(
+                    formatName(teacher.first_name, teacher.middle_initial, teacher.last_name),
+                    String(teacher.teacher_id)
+                ));
             });
+            accountQueue.filter(item => item.role === 'teacher'
+                && (item.action || 'admin-create') === 'admin-create'
+                && !item.lastError
+                && !visibleTeachers.some(teacher => String(teacher.teacher_number) === String(item.payload.teacher_number)))
+                .forEach(item => {
+                    select.add(new Option(
+                        `${formatName(item.payload.first_name, item.payload.middle_initial, item.payload.last_name)} (${item.payload.teacher_number}, waiting to sync)`,
+                        `local:${item.operationId}`
+                    ));
+                });
 
         }
 
@@ -7371,7 +7379,7 @@ async function assignTeacherToSubject() {
 
     }
 
-    if (!navigator.onLine) {
+    if (!navigator.onLine || String(teacherId).startsWith('local:')) {
         try {
             const { lookups, pending } = await window.getAdminStructureData(supabaseClient);
             const duplicate = (lookups?.teacherAssignments || []).some(item =>
@@ -7386,7 +7394,7 @@ async function assignTeacherToSubject() {
             await window.queueAdminStructureOperation(supabaseClient, 'teacher_subject_assign', {
                 teacher_id: String(teacherId), subject_id: String(subjectId)
             });
-            showAlert('success', 'Teacher Assignment Queued', 'This teacher will be assigned when you are online.');
+            showAlert('success', 'Teacher Assignment Queued', 'This teacher will be assigned after the account and assignment sync.');
             closeTeacherAssignModal();
         } catch (error) {
             showAlert('error', 'Assignment Failed', error.message);
