@@ -449,6 +449,27 @@
         }));
     }
 
+    async function writeAdminHistoryRecord(storeName, record) {
+        const database = await openDatabase();
+        return new Promise((resolve, reject) => {
+            const transaction = database.transaction(storeName, 'readwrite');
+            const store = transaction.objectStore(storeName);
+            const markerRequest = store.get(`${record.userId}:__clear_marker__`);
+            let saved = false;
+            markerRequest.onsuccess = () => {
+                const hiddenOperationIds = new Set(markerRequest.result?.hiddenOperationIds || []);
+                if (!hiddenOperationIds.has(record.operationId)) {
+                    store.put(record);
+                    saved = true;
+                }
+            };
+            markerRequest.onerror = () => reject(markerRequest.error || new Error('Unable to verify cleared history.'));
+            transaction.oncomplete = () => resolve(saved);
+            transaction.onerror = () => reject(transaction.error || new Error('Unable to save admin history.'));
+            transaction.onabort = () => reject(transaction.error || new Error('Saving admin history was interrupted.'));
+        });
+    }
+
     async function clearAdminHistory(storeName, userId, queueActions) {
         while (window.adminAccountSyncInProgress) {
             await new Promise(resolve => window.addEventListener('admin-account-sync-finished', resolve, { once: true }));
@@ -468,13 +489,25 @@
                 let queuedCount = 0;
                 const finishClear = () => {
                     if (!resultReady || !queueReady) return;
-                    resultRequest.result.filter(item => item.userId === userId).forEach(item => {
+                    const userResults = resultRequest.result.filter(item => item.userId === userId);
+                    const marker = userResults.find(item => item.recordType === 'clear-marker');
+                    const hiddenOperationIds = new Set(marker?.hiddenOperationIds || []);
+                    userResults.forEach(item => {
                         if (item.recordType !== 'clear-marker') resultCount += 1;
+                        if (item.operationId) hiddenOperationIds.add(item.operationId);
                         resultStore.delete(item.key);
                     });
                     queueRequest.result.filter(item => item.userId === userId && queueActions.includes(item.action)).forEach(item => {
                         queuedCount += 1;
+                        hiddenOperationIds.add(item.operationId);
                         queueStore.delete(item.key);
+                    });
+                    resultStore.put({
+                        key: `${userId}:__clear_marker__`,
+                        userId,
+                        recordType: 'clear-marker',
+                        hiddenOperationIds: [...hiddenOperationIds],
+                        clearedAt: new Date().toISOString()
                     });
                 };
                 resultRequest.onsuccess = () => { resultReady = true; finishClear(); };
@@ -489,8 +522,12 @@
                 adminStoreRequest(storeName, 'readonly', store => store.getAll()),
                 adminStoreRequest(adminQueueStoreName, 'readonly', store => store.getAll())
             ]);
-            const resultsLeft = remainingResults.filter(item => item.userId === userId).length;
-            const queuedLeft = remainingQueue.filter(item => item.userId === userId && queueActions.includes(item.action)).length;
+            const marker = remainingResults.find(item => item.userId === userId && item.recordType === 'clear-marker');
+            const hiddenOperationIds = new Set(marker?.hiddenOperationIds || []);
+            const resultsLeft = remainingResults.filter(item => item.userId === userId
+                && item.recordType !== 'clear-marker' && !hiddenOperationIds.has(item.operationId)).length;
+            const queuedLeft = remainingQueue.filter(item => item.userId === userId
+                && queueActions.includes(item.action) && !hiddenOperationIds.has(item.operationId)).length;
             if (resultsLeft || queuedLeft) {
                 throw new Error(`Local clear verification failed: ${resultsLeft} saved result(s) and ${queuedLeft} queued operation(s) remain.`);
             }
@@ -686,7 +723,7 @@
             emailError: result.email_error || '',
             createdAt: new Date().toISOString()
         };
-        await adminStoreRequest(adminPasswordResetResultsStoreName, 'readwrite', store => store.put(record));
+        await writeAdminHistoryRecord(adminPasswordResetResultsStoreName, record);
         window.dispatchEvent(new CustomEvent('admin-password-reset-data-changed'));
     }
 
@@ -706,7 +743,7 @@
             emailError: result.email_error || '',
             createdAt: new Date().toISOString()
         };
-        await adminStoreRequest(adminPasswordResetResultsStoreName, 'readwrite', store => store.put(record));
+        await writeAdminHistoryRecord(adminPasswordResetResultsStoreName, record);
         window.dispatchEvent(new CustomEvent('admin-password-reset-data-changed'));
     }
 
@@ -727,7 +764,7 @@
             status,
             deletedAt: new Date().toISOString()
         };
-        await adminStoreRequest(adminDeletionResultsStoreName, 'readwrite', store => store.put(record));
+        await writeAdminHistoryRecord(adminDeletionResultsStoreName, record);
         window.dispatchEvent(new CustomEvent('admin-deletion-data-changed'));
     }
 
@@ -750,11 +787,24 @@
             adminStoreRequest(adminDeletionResultsStoreName, 'readonly', store => store.getAll())
         ]);
         const userResults = allCompleted.filter(item => item.userId === userId);
+        const clearMarker = userResults.find(item => item.recordType === 'clear-marker');
+        const hiddenOperationIds = new Set(clearMarker?.hiddenOperationIds || []);
+        const hiddenResults = userResults.filter(item => item.recordType !== 'clear-marker'
+            && hiddenOperationIds.has(item.operationId));
+        const hiddenQueue = allQueued.filter(item => item.userId === userId
+            && ['admin-delete', 'admin-bulk-delete'].includes(item.action)
+            && hiddenOperationIds.has(item.operationId));
+        await Promise.all([
+            ...hiddenResults.map(item => adminStoreRequest(adminDeletionResultsStoreName, 'readwrite', store => store.delete(item.key))),
+            ...hiddenQueue.map(item => adminStoreRequest(adminQueueStoreName, 'readwrite', store => store.delete(item.key)))
+        ]);
         return {
             queued: allQueued.filter(item => item.userId === userId
-                && ['admin-delete', 'admin-bulk-delete'].includes(item.action))
+                && ['admin-delete', 'admin-bulk-delete'].includes(item.action)
+                && !hiddenOperationIds.has(item.operationId))
                 .sort((first, second) => Date.parse(first.createdAt) - Date.parse(second.createdAt)),
-            completed: userResults.filter(item => item.recordType !== 'clear-marker')
+            completed: userResults.filter(item => item.recordType !== 'clear-marker'
+                && !hiddenOperationIds.has(item.operationId))
                 .sort((first, second) => Date.parse(second.deletedAt) - Date.parse(first.deletedAt))
         };
     }
@@ -824,10 +874,22 @@
             adminStoreRequest(adminPasswordResetResultsStoreName, 'readonly', store => store.getAll())
         ]);
         const userResults = allCompleted.filter(item => item.userId === userId);
+        const clearMarker = userResults.find(item => item.recordType === 'clear-marker');
+        const hiddenOperationIds = new Set(clearMarker?.hiddenOperationIds || []);
+        const hiddenResults = userResults.filter(item => item.recordType !== 'clear-marker'
+            && hiddenOperationIds.has(item.operationId));
+        const hiddenQueue = allQueued.filter(item => item.userId === userId && item.action === 'admin-reset'
+            && hiddenOperationIds.has(item.operationId));
+        await Promise.all([
+            ...hiddenResults.map(item => adminStoreRequest(adminPasswordResetResultsStoreName, 'readwrite', store => store.delete(item.key))),
+            ...hiddenQueue.map(item => adminStoreRequest(adminQueueStoreName, 'readwrite', store => store.delete(item.key)))
+        ]);
         return {
-            queued: allQueued.filter(item => item.userId === userId && item.action === 'admin-reset')
+            queued: allQueued.filter(item => item.userId === userId && item.action === 'admin-reset'
+                && !hiddenOperationIds.has(item.operationId))
                 .sort((first, second) => Date.parse(first.createdAt) - Date.parse(second.createdAt)),
-            completed: userResults.filter(item => item.recordType !== 'clear-marker')
+            completed: userResults.filter(item => item.recordType !== 'clear-marker'
+                && !hiddenOperationIds.has(item.operationId))
                 .sort((first, second) => Date.parse(second.createdAt) - Date.parse(first.createdAt))
         };
     }
