@@ -2866,7 +2866,7 @@ onchange="loadSubjectsForTeacherAssign()">
       
     </script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
-    <script src="portal-offline.js?v=149"></script>
+    <script src="portal-offline.js?v=150"></script>
     <script>
 
         const SUPABASE_URL =
@@ -11068,14 +11068,39 @@ async function loadTeachersManagement() {
             .forEach(value => row.insertCell().textContent = value || '');
         const actions = row.insertCell();
         if (teacher.pendingCreate) {
-            const removeButton = document.createElement('button');
-            removeButton.type = 'button';
-            removeButton.className = 'btn reject-btn';
-            removeButton.textContent = 'Remove request';
-            removeButton.disabled = teacher.processing;
-            removeButton.title = 'Remove this queued teacher account request from this device';
-            removeButton.addEventListener('click', () => removeQueuedAdminAccount(teacher.operationId, Boolean(teacher.lastError)));
-            actions.appendChild(removeButton);
+            const openButton = document.createElement('button');
+            openButton.type = 'button';
+            openButton.className = 'btn';
+            openButton.textContent = 'Open';
+            openButton.disabled = true;
+            openButton.title = 'Assignments are available after this teacher account syncs';
+            actions.appendChild(openButton);
+
+            const editButton = document.createElement('button');
+            editButton.type = 'button';
+            editButton.className = 'btn';
+            editButton.textContent = 'Edit';
+            editButton.disabled = teacher.processing || Boolean(teacher.lastError);
+            editButton.title = 'Edit the queued teacher account details';
+            editButton.addEventListener('click', () => openEditQueuedTeacherAccount(teacher.operationId));
+            actions.appendChild(editButton);
+
+            const resetButton = document.createElement('button');
+            resetButton.type = 'button';
+            resetButton.className = 'btn';
+            resetButton.textContent = 'Reset Password';
+            resetButton.disabled = true;
+            resetButton.title = 'Available after this teacher account syncs';
+            actions.appendChild(resetButton);
+
+            const deleteButton = document.createElement('button');
+            deleteButton.type = 'button';
+            deleteButton.className = 'btn reject-btn';
+            deleteButton.textContent = 'Delete';
+            deleteButton.disabled = teacher.processing;
+            deleteButton.title = 'Discard this teacher account request from this device';
+            deleteButton.addEventListener('click', () => deleteQueuedTeacherAccount(teacher.operationId));
+            actions.appendChild(deleteButton);
             return;
         }
         if (navigator.onLine) {
