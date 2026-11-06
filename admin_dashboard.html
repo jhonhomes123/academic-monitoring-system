@@ -11120,9 +11120,10 @@ async function loadTeachersManagement() {
             return;
         }
         actions.style.display = 'flex';
-        actions.style.flexWrap = 'wrap';
+        actions.style.flexWrap = 'nowrap';
         actions.style.alignItems = 'center';
         actions.style.gap = '6px';
+        actions.style.whiteSpace = 'nowrap';
         if (navigator.onLine) {
             const openButton = document.createElement('button');
             openButton.type = 'button';
