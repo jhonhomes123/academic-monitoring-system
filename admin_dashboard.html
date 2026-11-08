@@ -9862,6 +9862,82 @@ async function renderAdminStructureQueue() {
         const sectionName = section?.section_name || `Section ${sectionId || 'unknown'}`;
         return removing ? `Remove ${sectionName} from ${context}` : `${context} → ${sectionName}`;
     };
+    const resolveId = value => String(structureIdMap.get(String(value)) || value || '');
+    const findSection = value => {
+        const rawId = String(value || '');
+        const realId = resolveId(rawId);
+        return (lookups?.sections || []).find(record => String(record.section_id) === realId || String(record.section_id) === rawId)
+            || structurePending.find(record => record.type === 'section_add' && String(record.localRef) === rawId)?.payload
+            || null;
+    };
+    const sectionDetails = value => {
+        const section = findSection(value);
+        if (!section) return `Section ${resolveId(value) || 'unknown'}`;
+        const majorId = resolveId(section.major_id);
+        const major = (lookups?.majors || []).find(record => String(record.major_id) === majorId || String(record.major_id) === String(section.major_id))
+            || structurePending.find(record => record.type === 'major_add' && String(record.localRef) === String(section.major_id))?.payload;
+        const departmentId = resolveId(major?.department_id);
+        const department = (lookups?.departments || []).find(record => String(record.department_id) === departmentId || String(record.department_id) === String(major?.department_id))
+            || structurePending.find(record => record.type === 'department_add' && String(record.localRef) === String(major?.department_id))?.payload;
+        const context = [department?.department_name, major?.major_name, section.year_level].filter(Boolean).join(' · ');
+        return `${section.section_name || `Section ${resolveId(value)}`}${context ? ` (${context})` : ''}`;
+    };
+    const majorDetails = value => {
+        const rawId = String(value || '');
+        const major = (lookups?.majors || []).find(record => String(record.major_id) === resolveId(rawId) || String(record.major_id) === rawId)
+            || structurePending.find(record => record.type === 'major_add' && String(record.localRef) === rawId)?.payload;
+        if (!major) return `Major ${resolveId(value) || 'unknown'}`;
+        const department = (lookups?.departments || []).find(record => String(record.department_id) === resolveId(major.department_id))
+            || structurePending.find(record => record.type === 'department_add' && String(record.localRef) === String(major.department_id))?.payload;
+        return `${major.major_name || `Major ${resolveId(value)}`}${department?.department_name ? ` under ${department.department_name}` : ''}`;
+    };
+    const subjectDetails = value => {
+        const rawId = String(value || '');
+        const subject = (lookups?.subjects || []).find(record => String(record.subject_id) === resolveId(rawId) || String(record.subject_id) === rawId)
+            || structurePending.find(record => record.type === 'subject_add' && String(record.localRef) === rawId)?.payload;
+        if (!subject) return `Subject ${resolveId(value) || 'unknown'}`;
+        const academicContext = [majorDetails(subject.major_id), subject.year_level].filter(Boolean).join(' · ');
+        return `${subject.subject_code ? `${subject.subject_code} - ` : ''}${subject.subject_name || `Subject ${resolveId(value)}`}${academicContext ? ` (${academicContext})` : ''}`;
+    };
+    const studentSelectionDetails = payload => {
+        const students = roster?.students || [];
+        const selected = [];
+        (payload.student_ids || []).forEach(id => {
+            const student = students.find(record => String(record.student_id) === String(id));
+            selected.push(student
+                ? `${formatName(student.first_name, student.middle_initial, student.last_name)} (${student.student_number})`
+                : `Student ID ${id}`);
+        });
+        (payload.student_numbers || []).forEach(number => {
+            const student = students.find(record => String(record.student_number) === String(number));
+            selected.push(student
+                ? `${formatName(student.first_name, student.middle_initial, student.last_name)} (${student.student_number})`
+                : `Student ${number}`);
+        });
+        const unique = [...new Set(selected)];
+        if (!unique.length) return 'No student details available';
+        const preview = unique.slice(0, 4).join(', ');
+        return unique.length > 4 ? `${preview}, and ${unique.length - 4} more` : preview;
+    };
+    const studentAccountDetails = (studentNumber, studentId) => {
+        const student = (roster?.students || []).find(record => String(record.student_number) === String(studentNumber || '')
+            || (studentId && String(record.student_id) === String(studentId)));
+        const identity = student
+            ? `${formatName(student.first_name, student.middle_initial, student.last_name)} (${student.student_number})`
+            : studentNumber ? `Student ${studentNumber}` : `Student ID ${studentId || 'unknown'}`;
+        return identity;
+    };
+    const teacherAccountDetails = payload => {
+        const teacher = (lookups?.teachers || []).find(record =>
+            String(record.teacher_id) === String(payload.teacher_id || '')
+            || String(record.teacher_number) === String(payload.teacher_number || ''));
+        const firstName = payload.first_name || teacher?.first_name;
+        const middleInitial = payload.middle_initial || teacher?.middle_initial;
+        const lastName = payload.last_name || teacher?.last_name;
+        const name = firstName || lastName ? formatName(firstName, middleInitial, lastName) : 'Teacher';
+        const number = payload.teacher_number || teacher?.teacher_number || payload.teacher_id || 'unknown ID';
+        return `${name} (${number})`;
+    };
 
     pending.forEach(item => {
         const semester = item.type === 'semester_set'
@@ -9872,35 +9948,31 @@ async function renderAdminStructureQueue() {
             : item.type === 'department_delete'
                 ? (lookups?.departments || []).find(record => String(record.department_id) === String(item.payload.department_id))?.department_name
                     || structurePending.find(record => record.type === 'department_add' && String(record.localRef) === String(item.payload.department_id))?.payload.department_name
-                    || `Department ${item.payload.department_id}`
+                    || `Department ${resolveId(item.payload.department_id) || 'unknown'}`
             : item.type === 'major_delete'
-                ? (lookups?.majors || []).find(record => String(record.major_id) === String(item.payload.major_id))?.major_name
-                    || structurePending.find(record => record.type === 'major_add' && String(record.localRef) === String(item.payload.major_id))?.payload.major_name
-                    || `Major ${item.payload.major_id}`
+                ? majorDetails(item.payload.major_id)
             : item.type === 'section_delete'
-                ? (lookups?.sections || []).find(record => String(record.section_id) === String(item.payload.section_id))?.section_name
-                    || structurePending.find(record => record.type === 'section_add' && String(record.localRef) === String(item.payload.section_id))?.payload.section_name
-                    || `Section ${item.payload.section_id}`
+                ? sectionDetails(item.payload.section_id)
             : item.type === 'subject_delete'
-                ? (lookups?.subjects || []).find(record => String(record.subject_id) === String(item.payload.subject_id))?.subject_name
-                    || structurePending.find(record => record.type === 'subject_add' && String(record.localRef) === String(item.payload.subject_id))?.payload.subject_name
-                    || `Subject ${item.payload.subject_id}`
+                ? subjectDetails(item.payload.subject_id)
             : item.type === 'subject_add'
-                ? `${item.payload.subject_code} - ${item.payload.subject_name}, ${item.payload.year_level}`
+                ? `${item.payload.subject_code} - ${item.payload.subject_name} (${majorDetails(item.payload.major_id)} · ${item.payload.year_level})`
             : item.type === 'student_account_create'
                 ? `${item.payload.student_number} - ${formatName(item.payload.first_name, item.payload.middle_initial, item.payload.last_name)}`
             : item.type === 'teacher_account_create'
                 ? `${item.payload.teacher_number} - ${formatName(item.payload.first_name, item.payload.middle_initial, item.payload.last_name)}`
             : item.type === 'student_password_reset'
-                ? `Student ID ${item.payload.student_number || item.payload.student_id}`
+                ? `Reset password for ${studentAccountDetails(item.payload.student_number, item.payload.student_id)}`
             : item.type === 'student_account_delete'
-                ? `${formatName(item.payload.first_name, item.payload.middle_initial, item.payload.last_name)} (${item.payload.student_number || item.payload.student_id})`
+                ? `Delete ${item.payload.first_name || item.payload.last_name
+                    ? `${formatName(item.payload.first_name, item.payload.middle_initial, item.payload.last_name)} (${item.payload.student_number || item.payload.student_id})`
+                    : studentAccountDetails(item.payload.student_number, item.payload.student_id)}`
             : item.type === 'teacher_password_reset'
-                ? `Teacher ID ${item.payload.teacher_number || item.payload.teacher_id}`
+                ? `Reset password for ${teacherAccountDetails(item.payload)}`
             : item.type === 'teacher_account_edit'
-                ? `${formatName(item.payload.first_name, item.payload.middle_initial, item.payload.last_name)} (${item.payload.teacher_number})`
+                ? `Update ${teacherAccountDetails(item.payload)}`
             : item.type === 'teacher_account_delete'
-                ? `${item.payload.last_name || ''}, ${item.payload.first_name || ''} (${item.payload.teacher_number || item.payload.teacher_id})`
+                ? `Delete ${teacherAccountDetails(item.payload)}`
             : item.type === 'teacher_subject_assign'
                 ? teacherAssignmentDetails(item.localRef, item.payload)
             : item.type === 'teacher_section_assign'
@@ -9916,33 +9988,23 @@ async function renderAdminStructureQueue() {
                         ? 'Delete Graduate sections and their student accounts'
                         : 'Invalid cleanup scope'
             : item.type === 'student_section_assign'
-                ? `Section ${(lookups?.sections || []).find(section => String(section.section_id) === String(item.payload.section_id))?.section_name
-                    || structurePending.find(section => section.type === 'section_add' && String(section.localRef) === String(item.payload.section_id))?.payload.section_name
-                    || item.payload.section_id}; ${(item.payload.student_ids?.length || 0) + (item.payload.student_numbers?.length || 0)} student(s)`
+                ? `Assign ${studentSelectionDetails(item.payload)} to ${sectionDetails(item.payload.section_id)}`
             : item.type === 'section_transition'
-                ? `Section ${(lookups?.sections || []).find(section => String(section.section_id) === String(item.payload.section_id))?.section_name
-                    || structurePending.find(section => section.type === 'section_add' && String(section.localRef) === String(item.payload.section_id))?.payload.section_name
-                    || item.payload.section_id}: ${item.payload.direction}`
+                ? `${item.payload.direction === 'promote' ? 'Promote' : 'Demote'} ${sectionDetails(item.payload.section_id)}`
             : item.type === 'section_unassign_all'
-                ? `Section ${(lookups?.sections || []).find(section => String(section.section_id) === String(item.payload.section_id))?.section_name
-                    || structurePending.find(section => section.type === 'section_add' && String(section.localRef) === String(item.payload.section_id))?.payload.section_name
-                    || item.payload.section_id}`
+                ? `Unassign all students from ${sectionDetails(item.payload.section_id)}`
             : item.type === 'student_section_unassign'
-                ? `${(item.payload.student_ids?.length || 0) + (item.payload.student_numbers?.length || 0)} student(s) from ${(lookups?.sections || []).find(section => String(section.section_id) === String(item.payload.section_id))?.section_name
-                    || structurePending.find(section => section.type === 'section_add' && String(section.localRef) === String(item.payload.section_id))?.payload.section_name
-                    || item.payload.section_id}`
+                ? `Remove ${studentSelectionDetails(item.payload)} from ${sectionDetails(item.payload.section_id)}`
             : item.type === 'semester_set'
             ? (semester?.semester_name || `Unknown semester (${item.payload.semester_id})`)
             : item.type === 'department_add'
-                ? item.payload.department_name
+                ? `Add department: ${item.payload.department_name}`
                 : item.type === 'major_add'
-                    ? item.payload.major_name
+                    ? `Add ${majorDetails(item.localRef || item.payload.major_id)}`
                     : item.type === 'section_add'
-                        ? `${item.payload.section_name}, ${item.payload.year_level}`
+                        ? `Add ${sectionDetails(item.localRef || item.payload.section_id)}`
                         : item.type === 'subject_add'
-                            ? `${item.payload.subject_code} - ${item.payload.subject_name}, ${item.payload.year_level}`
-                            : item.type === 'teacher_subject_unassign'
-                                ? `Assignment ${item.payload.assignment_id}`
+                            ? `${item.payload.subject_code} - ${item.payload.subject_name} (${majorDetails(item.payload.major_id)} · ${item.payload.year_level})`
                             : `${item.type.replace('_delete', '')} ID ${item.payload[`${item.type.replace('_delete', '')}_id`]}`;
         const row = document.createElement('tr');
         const duplicateStudentId = item.type === 'student_account_create'
@@ -12139,12 +12201,24 @@ async function saveTeacherSection() {
     if (!navigator.onLine) {
         try {
             const { lookups, pending } = await window.getAdminStructureData(supabaseClient);
-            const duplicate = (lookups?.teacherSections || []).some(item =>
-                String(item.assignment_id) === String(currentTeacherAssignmentId)
-                && String(item.section_id) === String(sectionId))
-                || pending.some(item => item.type === 'teacher_section_assign'
-                    && String(item.payload.assignment_id) === String(currentTeacherAssignmentId)
-                    && String(item.payload.section_id) === String(sectionId));
+            const idMap = await window.getAdminStructureLocalIdMap?.(supabaseClient) || new Map();
+            const resolveId = value => String(idMap.get(String(value)) || value || '');
+            const targetAssignmentId = resolveId(currentTeacherAssignmentId);
+            const targetSectionId = resolveId(sectionId);
+            const pendingRemovals = (pending || [])
+                .filter(item => item.type === 'teacher_section_unassign')
+                .map(item => ({ rawId: String(item.payload?.teacher_section_id || ''), resolvedId: resolveId(item.payload?.teacher_section_id) }));
+            const isPendingRemoval = assignmentId => pendingRemovals.some(removal =>
+                removal.rawId === String(assignmentId) || removal.resolvedId === resolveId(assignmentId));
+            const existingAssignment = (lookups?.teacherSections || []).some(item =>
+                resolveId(item.assignment_id) === targetAssignmentId
+                && resolveId(item.section_id) === targetSectionId
+                && !isPendingRemoval(item.teacher_section_id));
+            const queuedAssignment = (pending || []).some(item => item.type === 'teacher_section_assign'
+                && resolveId(item.payload.assignment_id) === targetAssignmentId
+                && resolveId(item.payload.section_id) === targetSectionId
+                && !isPendingRemoval(item.localRef || `local:${item.operationId}`));
+            const duplicate = existingAssignment || queuedAssignment;
             if (duplicate) {
                 showAlert('warning', 'Duplicate Assignment', 'This section is already assigned or already queued.');
                 return;
