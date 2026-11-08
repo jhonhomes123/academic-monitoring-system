@@ -2082,7 +2082,6 @@ onchange="loadSubjectsForTeacherAssign()">
     <button class="btn" onclick="openCreateStudentModal()" style="margin-bottom:12px;">
         Create Student Account
     </button>
-
     <input
     type="text"
     id="studentSearchInput"
@@ -9813,8 +9812,10 @@ async function renderAdminStructureQueue() {
         return fields.length ? `${identity}; ${fields.join('; ')}` : identity;
     };
     const teacherAssignmentDetails = (assignmentId, payload = {}) => {
+        const resolvedAssignmentId = String(structureIdMap.get(String(assignmentId)) || assignmentId);
         const assignment = (lookups?.teacherAssignments || []).find(item =>
-            String(item.assignment_id) === String(assignmentId));
+            String(item.assignment_id) === resolvedAssignmentId
+            || String(item.assignment_id) === String(assignmentId));
         const queuedAssignment = structurePending.find(item => item.type === 'teacher_subject_assign'
             && String(item.localRef) === String(assignmentId));
         const source = queuedAssignment?.payload || payload;
@@ -9837,6 +9838,29 @@ async function renderAdminStructureQueue() {
             ? `${subject.subject_code ? `${subject.subject_code} - ` : ''}${subject.subject_name}`
             : `Subject ${subjectId || 'unknown'}`;
         return `${teacherName} → ${subjectName}`;
+    };
+    const teacherSectionDetails = (item, removing = false) => {
+        const rawSectionAssignmentId = String(item.payload.teacher_section_id || '');
+        const mappedSectionAssignmentId = String(structureIdMap.get(rawSectionAssignmentId) || rawSectionAssignmentId);
+        const cachedSectionAssignment = (lookups?.teacherSections || []).find(record =>
+            String(record.teacher_section_id) === mappedSectionAssignmentId
+            || String(record.teacher_section_id) === rawSectionAssignmentId);
+        const queuedSectionAssignment = structurePending.find(record => record.type === 'teacher_section_assign'
+            && (String(record.localRef) === rawSectionAssignmentId
+                || String(structureIdMap.get(String(record.localRef)) || record.localRef) === mappedSectionAssignmentId));
+        const assignmentId = item.payload.assignment_id
+            || cachedSectionAssignment?.assignment_id
+            || queuedSectionAssignment?.payload.assignment_id;
+        const rawSectionId = String(item.payload.section_id
+            || cachedSectionAssignment?.section_id
+            || queuedSectionAssignment?.payload.section_id
+            || '');
+        const sectionId = String(structureIdMap.get(rawSectionId) || rawSectionId);
+        const section = (lookups?.sections || []).find(record => String(record.section_id) === sectionId)
+            || structurePending.find(record => record.type === 'section_add' && String(record.localRef) === rawSectionId)?.payload;
+        const context = assignmentId ? teacherAssignmentDetails(assignmentId) : 'Teacher assignment';
+        const sectionName = section?.section_name || `Section ${sectionId || 'unknown'}`;
+        return removing ? `Remove ${sectionName} from ${context}` : `${context} → ${sectionName}`;
     };
 
     pending.forEach(item => {
@@ -9880,24 +9904,11 @@ async function renderAdminStructureQueue() {
             : item.type === 'teacher_subject_assign'
                 ? teacherAssignmentDetails(item.localRef, item.payload)
             : item.type === 'teacher_section_assign'
-                ? (() => {
-                    const section = (lookups?.sections || []).find(record => String(record.section_id) === String(item.payload.section_id))
-                        || structurePending.find(record => record.type === 'section_add' && String(record.localRef) === String(item.payload.section_id))?.payload;
-                    const subjectAssignment = (lookups?.teacherAssignments || []).find(record => String(record.assignment_id) === String(item.payload.assignment_id))
-                        || structurePending.find(record => record.type === 'teacher_subject_assign' && String(record.localRef) === String(item.payload.assignment_id));
-                    const subject = (lookups?.subjects || []).find(record => String(record.subject_id) === String(subjectAssignment?.payload?.subject_id || subjectAssignment?.subject_id || item.payload.subject_id))
-                        || structurePending.find(record => record.type === 'subject_add' && String(record.localRef) === String(subjectAssignment?.payload?.subject_id || subjectAssignment?.subject_id || item.payload.subject_id))?.payload;
-                    const teacher = (lookups?.teachers || []).find(record => String(record.teacher_id) === String(subjectAssignment?.teacher_id || subjectAssignment?.payload?.teacher_id || ''))
-                        || (accountData.queued || []).find(record => record.role === 'teacher' && (record.action || 'admin-create') === 'admin-create' && `local:${record.operationId}` === String(subjectAssignment?.payload?.teacher_id || subjectAssignment?.teacher_id || ''))?.payload;
-                    const teacherName = teacher ? formatName(teacher.first_name, teacher.middle_initial, teacher.last_name) : 'Teacher';
-                    const subjectName = subject ? `${subject.subject_code ? `${subject.subject_code} - ` : ''}${subject.subject_name}` : `Assignment ${item.payload.assignment_id}`;
-                    const sectionName = section?.section_name || `Section ${item.payload.section_id}`;
-                    return `${teacherName} → ${subjectName} → ${sectionName}`;
-                })()
+                ? teacherSectionDetails(item)
             : item.type === 'teacher_subject_unassign'
                 ? teacherAssignmentDetails(item.payload.assignment_id)
             : item.type === 'teacher_section_unassign'
-                ? `Remove section ${item.payload.teacher_section_id || item.payload.section_id || 'assignment'}`
+                ? teacherSectionDetails(item, true)
             : item.type === 'student_bulk_delete'
                 ? item.payload.scope === 'unassigned'
                     ? 'Delete unassigned student accounts only'
@@ -11637,7 +11648,7 @@ async function openTeacherAssignments(
     const { lookups, pending } = await window.getAdminStructureData(supabaseClient);
     const pendingUnassignRefs = new Set((pending || [])
         .filter(item => item.type === 'teacher_subject_unassign')
-        .map(item => String(item.payload?.assignment_id || ''))
+        .map(item => String(structureIdMap.get(String(item.payload?.assignment_id || '')) || item.payload?.assignment_id || ''))
         .filter(Boolean));
 
     data = (lookups?.teacherAssignments || []).filter(item => {
@@ -11684,9 +11695,8 @@ async function openTeacherAssignments(
                     resolvedTeacherId
                 );
             if (!result.error && Array.isArray(result.data)) {
-                if (result.data.length || !data.length) {
-                    data = result.data;
-                }
+                const queuedAssignments = data.filter(item => item.pending);
+                data = [...result.data, ...queuedAssignments];
             } else if (result.error && !data.length) {
                 error = result.error;
             }
@@ -11719,26 +11729,11 @@ async function openTeacherAssignments(
 
     }
 
-    /* NO ASSIGNMENTS */
+    data = data.filter(item => !pendingUnassignRefs.has(String(item.assignment_id || '')));
 
     if (!data.length) {
-
-        table.innerHTML = `
-
-        <tr>
-
-            <td colspan="3">
-
-                No assignments found
-
-            </td>
-
-        </tr>
-
-        `;
-
+        table.innerHTML = '<tr><td colspan="3">No assignments found</td></tr>';
         return;
-
     }
 
     /* BETTER TABLE HEADER */
@@ -11775,23 +11770,15 @@ async function openTeacherAssignments(
 
         /* LOAD SECTIONS */
 
-        let sections;
-        if (!navigator.onLine) {
-            const { lookups, pending } = await window.getAdminStructureData(supabaseClient);
-            sections = (lookups?.teacherSections || [])
-                .filter(item => String(item.assignment_id) === String(assign.assignment_id));
-            pending.filter(item => item.type === 'teacher_section_assign'
-                && String(item.payload.assignment_id) === String(assign.assignment_id))
-                .forEach(item => {
-                    const section = (lookups?.sections || []).find(candidate => String(candidate.section_id) === String(item.payload.section_id));
-                    sections.push({ teacher_section_id: item.localRef || item.operationId, assignment_id: item.payload.assignment_id, section_id: item.payload.section_id, sections: section, pending: true });
-                });
-        } else {
+        let sections = [];
+        if (navigator.onLine) {
             const result = await supabaseClient
                 .from('teacher_section_assignments')
                 .select(`
 
                 teacher_section_id,
+                assignment_id,
+                section_id,
 
                 sections (
 
@@ -11805,7 +11792,35 @@ async function openTeacherAssignments(
                 assign.assignment_id
             );
             sections = result.data || [];
+        } else {
+            sections = (lookups?.teacherSections || [])
+                .filter(item => String(item.assignment_id) === String(assign.assignment_id));
         }
+        const sectionRemovals = (pending || [])
+            .filter(item => item.type === 'teacher_section_unassign')
+            .map(item => String(structureIdMap.get(String(item.payload?.teacher_section_id || '')) || item.payload?.teacher_section_id || ''));
+        const removedSectionIds = new Set(sectionRemovals);
+        sections = sections.filter(section => !removedSectionIds.has(String(section.teacher_section_id)));
+        (pending || []).filter(item => item.type === 'teacher_section_assign'
+            && String(structureIdMap.get(String(item.payload.assignment_id)) || item.payload.assignment_id) === String(assign.assignment_id))
+            .forEach(item => {
+                const sectionId = String(structureIdMap.get(String(item.payload.section_id)) || item.payload.section_id);
+                const section = (lookups?.sections || []).find(candidate => String(candidate.section_id) === sectionId)
+                    || (pending || []).find(candidate => candidate.type === 'section_add'
+                        && String(candidate.localRef) === String(item.payload.section_id))?.payload;
+                const localSectionAssignmentId = item.localRef || `local:${item.operationId}`;
+                const mappedSectionAssignmentId = String(structureIdMap.get(localSectionAssignmentId) || localSectionAssignmentId);
+                if (removedSectionIds.has(localSectionAssignmentId)
+                    || removedSectionIds.has(mappedSectionAssignmentId)
+                    || sections.some(existing => String(existing.section_id) === sectionId)) return;
+                sections.push({
+                    teacher_section_id: mappedSectionAssignmentId,
+                    assignment_id: assign.assignment_id,
+                    section_id: sectionId,
+                    sections: section,
+                    pending: true
+                });
+            });
 
         /* SECTION HTML */
 
@@ -11846,23 +11861,21 @@ async function openTeacherAssignments(
 
                     <span>
 
-                        ${sec.sections?.section_name || ''}
+                        ${sec.sections?.section_name || `Section ${sec.section_id || ''}`}${sec.pending ? ' (waiting to sync)' : ''}
 
                     </span>
 
-                    ${sec.pending ? '<span>Waiting to sync</span>' : `<button
+                        <button
                     class="btn reject-btn"
                     style="
                         padding:4px 10px;
                         font-size:12px;
                     "
-                    onclick="deleteTeacherSection(
-                        ${sec.teacher_section_id}
-                    )">
+                        onclick="deleteTeacherSection('${String(sec.teacher_section_id)}')">
 
                         Delete
 
-                        </button>`}
+                        </button>
 
                 </div>
 

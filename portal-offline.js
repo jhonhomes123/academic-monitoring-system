@@ -1038,7 +1038,7 @@
         if (!userId) throw new Error('Sign in while connected before making offline admin changes.');
         const createdAt = await nextAdminQueueTimestamp(userId);
         const operationId = createOperationId();
-        const localRef = ['department_add', 'major_add', 'section_add', 'subject_add', 'teacher_subject_assign', 'teacher_section_assign', 'teacher_section_unassign'].includes(type)
+        const localRef = ['department_add', 'major_add', 'section_add', 'subject_add', 'teacher_subject_assign', 'teacher_section_assign'].includes(type)
             ? `local:${operationId}`
             : null;
         await adminStoreRequest(adminStructureQueueStoreName, 'readwrite', store => store.put({
