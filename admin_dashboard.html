@@ -7408,11 +7408,21 @@ async function assignTeacherToSubject() {
     if (!navigator.onLine || String(teacherId).startsWith('local:')) {
         try {
             const { lookups, pending } = await window.getAdminStructureData(supabaseClient);
-            const duplicate = (lookups?.teacherAssignments || []).some(item =>
-                String(item.teacher_id) === String(teacherId) && String(item.subject_id) === String(subjectId))
-                || pending.some(item => item.type === 'teacher_subject_assign'
-                    && String(item.payload.teacher_id) === String(teacherId)
-                    && String(item.payload.subject_id) === String(subjectId));
+            const pendingUnassignRefs = new Set((pending || [])
+                .filter(item => item.type === 'teacher_subject_unassign')
+                .map(item => String(item.payload?.assignment_id || ''))
+                .filter(Boolean));
+            const liveAssignments = (lookups?.teacherAssignments || []).filter(item => {
+                const assignmentId = String(item.assignment_id || '');
+                if (pendingUnassignRefs.has(assignmentId)) return false;
+                return String(item.teacher_id) === String(teacherId)
+                    && String(item.subject_id) === String(subjectId);
+            });
+            const queuedAssigns = (pending || []).filter(item => item.type === 'teacher_subject_assign'
+                && !pendingUnassignRefs.has(String(item.localRef || ''))
+                && String(item.payload.teacher_id) === String(teacherId)
+                && String(item.payload.subject_id) === String(subjectId));
+            const duplicate = liveAssignments.length > 0 || queuedAssigns.length > 0;
             if (duplicate) {
                 showAlert('warning', 'Duplicate Assignment', 'Teacher is already assigned to this subject or it is already queued.');
                 return;
