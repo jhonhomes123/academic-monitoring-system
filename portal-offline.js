@@ -1096,6 +1096,7 @@
                 recordType: 'system-log-cache-state',
                 lastLogId: String(state.lastLogId || '0'),
                 completed: Boolean(state.completed),
+                totalCount: Number.isFinite(Number(state.totalCount)) ? Number(state.totalCount) : null,
                 updatedAt: new Date().toISOString()
             })
         );
