@@ -9761,8 +9761,10 @@ async function renderAdminStructureQueue() {
         student_section_unassign: 'Unassign selected students',
         subject_delete: 'Delete subject',
         teacher_subject_assign: 'Assign teacher to subject',
+        teacher_section_assign: 'Assign section to teacher',
         teacher_account_create: 'Create teacher account',
         teacher_subject_unassign: 'Remove teacher assignment',
+        teacher_section_unassign: 'Remove teacher section assignment',
         student_section_assign: 'Assign students to section',
         student_edit: 'Edit student',
         student_account_create: 'Create student account',
@@ -9877,8 +9879,25 @@ async function renderAdminStructureQueue() {
                 ? `${item.payload.last_name || ''}, ${item.payload.first_name || ''} (${item.payload.teacher_number || item.payload.teacher_id})`
             : item.type === 'teacher_subject_assign'
                 ? teacherAssignmentDetails(item.localRef, item.payload)
+            : item.type === 'teacher_section_assign'
+                ? (() => {
+                    const section = (lookups?.sections || []).find(record => String(record.section_id) === String(item.payload.section_id))
+                        || structurePending.find(record => record.type === 'section_add' && String(record.localRef) === String(item.payload.section_id))?.payload;
+                    const subjectAssignment = (lookups?.teacherAssignments || []).find(record => String(record.assignment_id) === String(item.payload.assignment_id))
+                        || structurePending.find(record => record.type === 'teacher_subject_assign' && String(record.localRef) === String(item.payload.assignment_id));
+                    const subject = (lookups?.subjects || []).find(record => String(record.subject_id) === String(subjectAssignment?.payload?.subject_id || subjectAssignment?.subject_id || item.payload.subject_id))
+                        || structurePending.find(record => record.type === 'subject_add' && String(record.localRef) === String(subjectAssignment?.payload?.subject_id || subjectAssignment?.subject_id || item.payload.subject_id))?.payload;
+                    const teacher = (lookups?.teachers || []).find(record => String(record.teacher_id) === String(subjectAssignment?.teacher_id || subjectAssignment?.payload?.teacher_id || ''))
+                        || (accountData.queued || []).find(record => record.role === 'teacher' && (record.action || 'admin-create') === 'admin-create' && `local:${record.operationId}` === String(subjectAssignment?.payload?.teacher_id || subjectAssignment?.teacher_id || ''))?.payload;
+                    const teacherName = teacher ? formatName(teacher.first_name, teacher.middle_initial, teacher.last_name) : 'Teacher';
+                    const subjectName = subject ? `${subject.subject_code ? `${subject.subject_code} - ` : ''}${subject.subject_name}` : `Assignment ${item.payload.assignment_id}`;
+                    const sectionName = section?.section_name || `Section ${item.payload.section_id}`;
+                    return `${teacherName} → ${subjectName} → ${sectionName}`;
+                })()
             : item.type === 'teacher_subject_unassign'
                 ? teacherAssignmentDetails(item.payload.assignment_id)
+            : item.type === 'teacher_section_unassign'
+                ? `Remove section ${item.payload.teacher_section_id || item.payload.section_id || 'assignment'}`
             : item.type === 'student_bulk_delete'
                 ? item.payload.scope === 'unassigned'
                     ? 'Delete unassigned student accounts only'
@@ -11664,13 +11683,15 @@ async function openTeacherAssignments(
                     'teacher_id',
                     resolvedTeacherId
                 );
-            if (!result.error && Array.isArray(result.data) && result.data.length) {
-                data = result.data;
-            } else if (result.error) {
+            if (!result.error && Array.isArray(result.data)) {
+                if (result.data.length || !data.length) {
+                    data = result.data;
+                }
+            } else if (result.error && !data.length) {
                 error = result.error;
             }
         } catch (onlineError) {
-            error = onlineError;
+            if (!data.length) error = onlineError;
         }
     }
 
@@ -11763,7 +11784,7 @@ async function openTeacherAssignments(
                 && String(item.payload.assignment_id) === String(assign.assignment_id))
                 .forEach(item => {
                     const section = (lookups?.sections || []).find(candidate => String(candidate.section_id) === String(item.payload.section_id));
-                    sections.push({ teacher_section_id: item.operationId, assignment_id: item.payload.assignment_id, section_id: item.payload.section_id, sections: section, pending: true });
+                    sections.push({ teacher_section_id: item.localRef || item.operationId, assignment_id: item.payload.assignment_id, section_id: item.payload.section_id, sections: section, pending: true });
                 });
         } else {
             const result = await supabaseClient
@@ -12314,6 +12335,15 @@ async function deleteTeacherSection(id) {
         async () => {
 
             try {
+                if (!navigator.onLine || String(id).startsWith('local:')) {
+                    await window.queueAdminStructureOperation(supabaseClient, 'teacher_section_unassign', {
+                        teacher_section_id: String(id)
+                    });
+                    closeConfirmModal();
+                    showAlert('success', 'Section Removal Queued', 'This section assignment will be removed after the device reconnects.');
+                    await openTeacherAssignments(currentManageTeacherId, document.getElementById('teacherAssignmentTitle').innerText.replace('Assignments - ', ''));
+                    return;
+                }
 
                 /* ======================
                    GET SECTION + TEACHER + SUBJECT INFO

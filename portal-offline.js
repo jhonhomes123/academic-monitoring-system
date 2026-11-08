@@ -1038,7 +1038,7 @@
         if (!userId) throw new Error('Sign in while connected before making offline admin changes.');
         const createdAt = await nextAdminQueueTimestamp(userId);
         const operationId = createOperationId();
-        const localRef = ['department_add', 'major_add', 'section_add', 'subject_add', 'teacher_subject_assign'].includes(type)
+        const localRef = ['department_add', 'major_add', 'section_add', 'subject_add', 'teacher_subject_assign', 'teacher_section_assign', 'teacher_section_unassign'].includes(type)
             ? `local:${operationId}`
             : null;
         await adminStoreRequest(adminStructureQueueStoreName, 'readwrite', store => store.put({
@@ -1152,7 +1152,7 @@
                 if (!navigator.onLine) break;
                 currentOperation = operation;
                 const payload = { ...operation.payload, type: operation.type };
-                for (const field of ['department_id', 'major_id', 'semester_id', 'teacher_id', 'subject_id', 'section_id', 'assignment_id']) {
+                for (const field of ['department_id', 'major_id', 'semester_id', 'teacher_id', 'subject_id', 'section_id', 'assignment_id', 'teacher_section_id']) {
                     const value = payload[field];
                     if (typeof value === 'string' && value.startsWith('local:')) {
                         if (!idMap.has(value)) throw new Error(`An earlier queued ${field.replace('_id', '')} is still waiting to sync.`);
