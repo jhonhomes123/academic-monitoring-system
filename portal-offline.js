@@ -2554,7 +2554,11 @@
             if (error || !admin) return;
             await saveAdminAccountLookups(client, userId);
             await syncAdminQueues(client);
-            if (wasOfflineView) window.location.reload();
+            if (wasOfflineView) {
+                window.location.reload();
+                return;
+            }
+            window.scheduleSystemLogsOfflineSync?.();
         } catch (error) {
             console.warn('Unable to resume admin data after reconnect.', error);
         }

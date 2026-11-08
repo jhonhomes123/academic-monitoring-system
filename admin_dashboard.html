@@ -1179,9 +1179,6 @@ table td{
                 </div>
             </div>
 
-            <p id="adminOfflineLogsCacheStatus" role="status" aria-live="polite" style="margin:0 0 20px;color:#475569;font-size:14px;">
-                Offline log history sync will start automatically while connected.
-            </p>
             <!-- DASHBOARD CARDS -->
             <div class="dashboard-grid">
 
@@ -2929,7 +2926,7 @@ onchange="loadSubjectsForTeacherAssign()">
       
     </script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
-    <script src="portal-offline.js?v=161"></script>
+    <script src="portal-offline.js?v=162"></script>
     <script>
 
         const SUPABASE_URL =
@@ -12763,9 +12760,7 @@ function cancelSystemLogsOfflinePreparation() {
 }
 
 function setSystemLogsCacheStatus(message) {
-    const dashboardStatus = document.getElementById('adminOfflineLogsCacheStatus');
     const logsStatus = document.getElementById('offlineLogsPreparationStatus');
-    if (dashboardStatus) dashboardStatus.textContent = message;
     if (logsStatus) logsStatus.textContent = message;
 }
 
@@ -13061,6 +13056,22 @@ async function loadSystemLogs() {
     systemLogsCachedResults = null;
     loadOlderButton.style.display = 'none';
     table.innerHTML = `<tr><td colspan="3">Searching ${search || category ? 'matching' : 'recent'} logs...</td></tr>`;
+
+    if (!navigator.onLine && typeof window.getCachedSystemLogs === 'function') {
+        try {
+            const cachedLogs = await window.getCachedSystemLogs(supabaseClient);
+            if (requestId !== systemLogsRequestId) return;
+            systemLogsCachedResults = cachedLogs.filter(log => matchesSystemLogFilters(log, search, category));
+            const firstPage = systemLogsCachedResults.slice(0, SYSTEM_LOG_PAGE_SIZE);
+            systemLogsHasMore = systemLogsCachedResults.length > firstPage.length;
+            systemLogsOffset = firstPage.length;
+            loadOlderButton.style.display = systemLogsHasMore ? '' : 'none';
+            renderActivityLogs(firstPage);
+            return;
+        } catch (cacheError) {
+            console.warn('Could not read cached activity logs while offline.', cacheError);
+        }
+    }
 
     try {
         const { data, error } = await createSystemLogsQuery(
