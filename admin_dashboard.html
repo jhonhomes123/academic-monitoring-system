@@ -2881,10 +2881,7 @@ onchange="loadSubjectsForTeacherAssign()">
             });
 
             element.classList.add('active');
-            if (navigator.onLine && window.adminOfflineView) {
-                window.location.reload();
-                return;
-            } else if (!navigator.onLine && window.adminOfflineView) {
+            if (!navigator.onLine && window.adminOfflineView) {
                 if (sectionId === 'studentSection') {
                     void refreshManageStudentsSelectors();
                 } else if (sectionId === 'teacherSection') {
@@ -2928,7 +2925,7 @@ onchange="loadSubjectsForTeacherAssign()">
       
     </script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
-    <script src="portal-offline.js?v=156"></script>
+    <script src="portal-offline.js?v=157"></script>
     <script>
 
         const SUPABASE_URL =

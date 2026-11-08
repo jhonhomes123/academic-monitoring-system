@@ -370,16 +370,6 @@
                     const sectionActions = main.querySelector('#manageSectionActions');
                     if (sectionActions) sectionActions.style.display = 'none';
             window.adminOfflineView = true;
-                    if (!main.dataset.adminReconnectGuardAttached) {
-                        main.addEventListener('click', event => {
-                            if (!navigator.onLine || !window.adminOfflineView) return;
-                            event.preventDefault();
-                            event.stopImmediatePropagation();
-                            setNotice('Connection restored. Refreshing saved admin data...', true, 'sync');
-                            window.location.reload();
-                        }, true);
-                        main.dataset.adminReconnectGuardAttached = 'true';
-                    }
             setNotice(`Offline view: admin data saved ${new Date(snapshot.savedAt).toLocaleString()}. Only saved admin data is available.`, true);
             return true;
         } catch (error) {
@@ -2556,12 +2546,13 @@
 
     async function resumeAdminOnline(client) {
         try {
+            const wasOfflineView = Boolean(window.adminOfflineView);
             const userId = await getUserId(client);
             const { data: admin, error } = await client.from('admins').select('id').eq('auth_user_id', userId).maybeSingle();
             if (error || !admin) return;
             await saveAdminAccountLookups(client, userId);
             await syncAdminQueues(client);
-            if (window.adminOfflineView) window.location.reload();
+            if (wasOfflineView) window.location.reload();
         } catch (error) {
             console.warn('Unable to resume admin data after reconnect.', error);
         }
