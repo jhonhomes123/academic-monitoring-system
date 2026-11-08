@@ -2866,7 +2866,7 @@ onchange="loadSubjectsForTeacherAssign()">
       
     </script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
-    <script src="portal-offline.js?v=153"></script>
+    <script src="portal-offline.js?v=154"></script>
     <script>
 
         const SUPABASE_URL =
@@ -4688,6 +4688,9 @@ async function refreshManageStudentsAfterSectionTransition(sectionId, yearLevel)
             let data;
             let error = null;
             let lookups = null;
+            const queuedTeacherRef = String(teacherId).startsWith('queued:')
+                ? `local:${String(teacherId).slice('queued:'.length)}`
+                : String(teacherId).startsWith('local:') ? String(teacherId) : null;
             const [{ queued: queuedAccountOperations = [] }, teacherIdMap] = await Promise.all([
                 window.getAdminAccountData(supabaseClient),
                 window.getAdminStructureLocalIdMap?.(supabaseClient) || Promise.resolve(new Map())
@@ -4698,10 +4701,13 @@ async function refreshManageStudentsAfterSectionTransition(sectionId, yearLevel)
                 const cachedTeacher = (lookups?.teachers || []).find(candidate =>
                     String(candidate.teacher_id) === realId || String(candidate.teacher_id) === requestedId);
                 if (cachedTeacher) return cachedTeacher;
-                const queuedTeacher = requestedId.startsWith('local:')
+                const localRef = requestedId.startsWith('queued:')
+                    ? `local:${requestedId.slice('queued:'.length)}`
+                    : requestedId;
+                const queuedTeacher = localRef.startsWith('local:')
                     ? queuedAccountOperations.find(operation => operation.role === 'teacher'
                         && (operation.action || 'admin-create') === 'admin-create'
-                        && `local:${operation.operationId}` === requestedId)
+                        && `local:${operation.operationId}` === localRef)
                     : null;
                 return queuedTeacher ? {
                     teacher_id: requestedId,
@@ -4711,37 +4717,38 @@ async function refreshManageStudentsAfterSectionTransition(sectionId, yearLevel)
                     last_name: queuedTeacher.payload.last_name
                 } : null;
             };
-            if (!navigator.onLine) {
-                const offlineRecords = await getAdminExplorerRecords();
-                lookups = offlineRecords.lookups;
-                data = (offlineRecords.lookups?.teacherAssignments || []).filter(item => String(item.subject_id) === String(subjectId));
-                (offlineRecords.pending || []).filter(item => item.type === 'teacher_subject_assign' && String(item.payload.subject_id) === String(subjectId))
+            const teacherRefs = new Set([String(teacherId)]);
+            if (queuedTeacherRef) teacherRefs.add(queuedTeacherRef);
+            const resolvedTeacherId = queuedTeacherRef
+                ? String(teacherIdMap.get(queuedTeacherRef) || teacherId)
+                : String(teacherId);
+            teacherRefs.add(resolvedTeacherId);
+
+            if (!navigator.onLine || queuedTeacherRef) {
+                const structure = await window.getAdminStructureData(supabaseClient);
+                lookups = structure.lookups || lookups;
+                data = (lookups?.teacherAssignments || []).filter(item =>
+                    teacherRefs.has(String(item.teacher_id)));
+                structure.pending.filter(item => item.type === 'teacher_subject_assign'
+                    && teacherRefs.has(String(item.payload.teacher_id)))
                     .forEach(item => {
                         const teacher = getTeacherRecord(item.payload.teacher_id);
                         data.push({ assignment_id: item.localRef, teacher_id: item.payload.teacher_id, teachers: teacher, pending: true });
                     });
             } else {
-                const result = await supabaseClient
-                    .from('teacher_subject_assignments')
-                    .select(`
-                assignment_id,
-                teachers (
-                    first_name,
-                    middle_initial,
-                    last_name
-                )
-            `)
-                    .eq('subject_id', subjectId);
+                const result = await supabaseClient.from('teacher_subject_assignments')
+                    .select(`assignment_id, teachers(first_name, middle_initial, last_name)`)
+                    .eq('teacher_id', resolvedTeacherId);
                 data = result.data || [];
                 error = result.error;
                 if (!error && window.getAdminStructureData) {
                     const structure = await window.getAdminStructureData(supabaseClient);
                     lookups = structure.lookups;
-                    const { pending } = structure;
-                    pending.filter(item => item.type === 'teacher_subject_assign' && String(item.payload.subject_id) === String(subjectId))
+                    structure.pending.filter(item => item.type === 'teacher_subject_assign'
+                        && teacherRefs.has(String(item.payload.teacher_id)))
                         .forEach(item => {
                             const teacher = getTeacherRecord(item.payload.teacher_id);
-                            data.push({ assignment_id: item.localRef, teacher_id: item.payload.teacher_id, teachers: teacher, pending: true });
+                            data.push({ assignment_id: item.localRef, teacher_id: item.payload.teacher_id, subjects: teacher, pending: true });
                         });
                 }
             }
@@ -4808,7 +4815,7 @@ async function refreshManageStudentsAfterSectionTransition(sectionId, yearLevel)
 
             <td>
 
-                ${assign.teachers ? formatName(assign.teachers.first_name, assign.teachers.middle_initial, assign.teachers.last_name) : `Teacher ${assign.teacher_id || ''}`}${assign.pending ? ' (waiting to sync)' : ''}
+                ${assign.teachers || assign.subjects ? formatName((assign.teachers || assign.subjects).first_name, (assign.teachers || assign.subjects).middle_initial, (assign.teachers || assign.subjects).last_name) : `Teacher ${assign.teacher_id || ''}`}${assign.pending ? ' (waiting to sync)' : ''}
 
             </td>
 
@@ -7119,15 +7126,32 @@ async function loadSubjectsForDelete() {
 
     if (!majorId || !yearLevel) return;
 
+    const requestedMajorId = String(majorId);
+    const resolvedMajorId = await resolveAdminStructureLocalId(requestedMajorId);
+    const structure = await window.getAdminStructureData(supabaseClient);
+    const pending = structure.pending || [];
     let data;
-    if (!navigator.onLine) {
+    if (!navigator.onLine || resolvedMajorId.startsWith('local:')) {
         const offlineRecords = await getAdminExplorerRecords();
-        data = (offlineRecords?.subjects || []).filter(subject => String(subject.major_id) === String(majorId) && subject.year_level === yearLevel);
+        data = (offlineRecords?.subjects || []).filter(subject =>
+            [requestedMajorId, resolvedMajorId].includes(String(subject.major_id))
+            && subject.year_level === yearLevel);
     } else {
-        const result = await supabaseClient.from('subjects').select('*').eq('major_id', majorId).eq('year_level', yearLevel).order('subject_name');
+        const result = await supabaseClient.from('subjects').select('*')
+            .eq('major_id', resolvedMajorId).eq('year_level', yearLevel).order('subject_name');
         if (result.error) { console.log(result.error); return; }
         data = result.data || [];
     }
+    pending.filter(item => item.type === 'subject_add'
+        && [requestedMajorId, resolvedMajorId].includes(String(item.payload.major_id))
+        && item.payload.year_level === yearLevel)
+        .forEach(item => {
+            const deleted = pending.some(candidate => candidate.type === 'subject_delete'
+                && String(candidate.payload.subject_id) === String(item.localRef));
+            const duplicate = data.some(subject => String(subject.subject_code || '').toLowerCase()
+                === String(item.payload.subject_code || '').toLowerCase());
+            if (!deleted && !duplicate) data.push({ ...item.payload, subject_id: item.localRef, pending: true });
+        });
 
     if (!data.length) {
 
@@ -7148,7 +7172,7 @@ async function loadSubjectsForDelete() {
         subjectSelect.innerHTML += `
 
         <option value="${subject.subject_id}">
-            ${subject.subject_code} - ${subject.subject_name}
+            ${subject.subject_code} - ${subject.subject_name}${subject.pending ? ' (waiting to sync)' : ''}
         </option>
 
         `;
@@ -9671,12 +9695,13 @@ async function clearAdminPasswordResetResults() {
 async function renderAdminStructureQueue() {
     const table = document.getElementById('adminStructureQueueTable');
     if (!table || !window.getAdminStructureData) return;
-    const [{ pending: structurePending }, accountData, deletionData, lookups, roster] = await Promise.all([
+    const [{ pending: structurePending }, accountData, deletionData, lookups, roster, structureIdMap] = await Promise.all([
         window.getAdminStructureData(supabaseClient),
         window.getAdminAccountData?.(supabaseClient) || Promise.resolve({ queued: [] }),
         window.getAdminDeletionData?.(supabaseClient) || Promise.resolve({ queued: [] }),
         window.getAdminAccountLookups?.(supabaseClient) || Promise.resolve(null),
-        window.getAdminStudentRoster?.(supabaseClient) || Promise.resolve(null)
+        window.getAdminStudentRoster?.(supabaseClient) || Promise.resolve(null),
+        window.getAdminStructureLocalIdMap?.(supabaseClient) || Promise.resolve(new Map())
     ]);
     const studentEditPending = (accountData.queued || [])
         .filter(item => item.action === 'admin-edit' && item.role === 'student')
@@ -9750,6 +9775,7 @@ async function renderAdminStructureQueue() {
         section_unassign_all: 'Unassign all students from section',
         student_section_unassign: 'Unassign selected students',
         subject_delete: 'Delete subject',
+        teacher_subject_assign: 'Assign teacher to subject',
         teacher_account_create: 'Create teacher account',
         teacher_subject_unassign: 'Remove teacher assignment',
         student_section_assign: 'Assign students to section',
@@ -9799,6 +9825,32 @@ async function renderAdminStructureQueue() {
             : `${newName} (${newId})`;
         return fields.length ? `${identity}; ${fields.join('; ')}` : identity;
     };
+    const teacherAssignmentDetails = (assignmentId, payload = {}) => {
+        const assignment = (lookups?.teacherAssignments || []).find(item =>
+            String(item.assignment_id) === String(assignmentId));
+        const queuedAssignment = structurePending.find(item => item.type === 'teacher_subject_assign'
+            && String(item.localRef) === String(assignmentId));
+        const source = queuedAssignment?.payload || payload;
+        const rawTeacherId = String(source.teacher_id || assignment?.teacher_id || '');
+        const teacherId = String(structureIdMap.get(rawTeacherId) ?? rawTeacherId);
+        const teacher = (lookups?.teachers || []).find(item => String(item.teacher_id) === teacherId)
+            || (accountData.queued || []).find(item => item.role === 'teacher'
+                && (item.action || 'admin-create') === 'admin-create'
+                && `local:${item.operationId}` === rawTeacherId)?.payload;
+        const rawSubjectId = String(source.subject_id || assignment?.subject_id || '');
+        const subjectId = String(structureIdMap.get(rawSubjectId) ?? rawSubjectId);
+        const queuedSubject = structurePending.find(item => item.type === 'subject_add'
+            && String(item.localRef) === rawSubjectId)?.payload;
+        const subject = (lookups?.subjects || []).find(item => String(item.subject_id) === subjectId)
+            || queuedSubject;
+        const teacherName = teacher
+            ? `${formatName(teacher.first_name, teacher.middle_initial, teacher.last_name)}${teacher.teacher_number ? ` (${teacher.teacher_number})` : ''}`
+            : `Teacher ${teacherId || 'unknown'}`;
+        const subjectName = subject
+            ? `${subject.subject_code ? `${subject.subject_code} - ` : ''}${subject.subject_name}`
+            : `Subject ${subjectId || 'unknown'}`;
+        return `${teacherName} → ${subjectName}`;
+    };
 
     pending.forEach(item => {
         const semester = item.type === 'semester_set'
@@ -9838,6 +9890,10 @@ async function renderAdminStructureQueue() {
                 ? `${formatName(item.payload.first_name, item.payload.middle_initial, item.payload.last_name)} (${item.payload.teacher_number})`
             : item.type === 'teacher_account_delete'
                 ? `${item.payload.last_name || ''}, ${item.payload.first_name || ''} (${item.payload.teacher_number || item.payload.teacher_id})`
+            : item.type === 'teacher_subject_assign'
+                ? teacherAssignmentDetails(item.localRef, item.payload)
+            : item.type === 'teacher_subject_unassign'
+                ? teacherAssignmentDetails(item.payload.assignment_id)
             : item.type === 'student_bulk_delete'
                 ? item.payload.scope === 'unassigned'
                     ? 'Delete unassigned student accounts only'
@@ -11116,8 +11172,8 @@ async function loadTeachersManagement() {
             openButton.type = 'button';
             openButton.className = 'btn';
             openButton.textContent = 'Open';
-            openButton.disabled = true;
-            openButton.title = 'Assignments are available after this teacher account syncs';
+            openButton.title = 'View saved and queued subject assignments';
+            openButton.addEventListener('click', () => openTeacherAssignments(teacher.teacher_id, name));
             actions.appendChild(openButton);
 
             const editButton = document.createElement('button');
@@ -11566,10 +11622,15 @@ async function openTeacherAssignments(
 
     let data;
     let error = null;
-    if (!navigator.onLine) {
+    if (!navigator.onLine || queuedTeacherRef) {
         const { lookups, pending } = await window.getAdminStructureData(supabaseClient);
-        data = (lookups?.teacherAssignments || []).filter(item => String(item.teacher_id) === String(teacherId));
-        pending.filter(item => item.type === 'teacher_subject_assign' && String(item.payload.teacher_id) === String(teacherId))
+        const lookupTeacherId = String(teacherIdMap.get(queuedTeacherRef || String(teacherId)) ?? teacherId);
+        data = (lookups?.teacherAssignments || []).filter(item =>
+            String(item.teacher_id) === lookupTeacherId || String(item.teacher_id) === String(teacherId));
+        pending.filter(item => item.type === 'teacher_subject_assign'
+            && (String(item.payload.teacher_id) === String(teacherId)
+                || String(item.payload.teacher_id) === String(queuedTeacherRef)
+                || String(item.payload.teacher_id) === lookupTeacherId))
             .forEach(item => {
                 const subject = (lookups?.subjects || []).find(candidate => String(candidate.subject_id) === String(item.payload.subject_id))
                     || pending.find(candidate => candidate.type === 'subject_add' && candidate.localRef === item.payload.subject_id)?.payload;
@@ -11598,7 +11659,10 @@ async function openTeacherAssignments(
         error = result.error;
         if (window.getAdminStructureData) {
             const { lookups, pending } = await window.getAdminStructureData(supabaseClient);
-            pending.filter(item => item.type === 'teacher_subject_assign' && String(item.payload.teacher_id) === String(teacherId))
+            const lookupTeacherId = String(teacherIdMap.get(String(teacherId)) ?? teacherId);
+            pending.filter(item => item.type === 'teacher_subject_assign'
+                && (String(item.payload.teacher_id) === String(teacherId)
+                    || String(item.payload.teacher_id) === lookupTeacherId))
                 .forEach(item => {
                     const subject = (lookups?.subjects || []).find(candidate => String(candidate.subject_id) === String(item.payload.subject_id))
                         || pending.find(candidate => candidate.type === 'subject_add' && candidate.localRef === item.payload.subject_id)?.payload;
