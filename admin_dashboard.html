@@ -2928,7 +2928,7 @@ onchange="loadSubjectsForTeacherAssign()">
       
     </script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
-    <script src="portal-offline.js?v=164"></script>
+    <script src="portal-offline.js?v=166"></script>
     <script>
 
         const SUPABASE_URL =
@@ -2952,6 +2952,7 @@ onchange="loadSubjectsForTeacherAssign()">
                 void renderAdminStructureQueue();
                 return;
             }
+            startSystemLogsRealtimeSync();
             scheduleSystemLogsOfflineSync();
             loadDashboardCounts();
             void renderAdminCreatedAccounts();
@@ -12724,6 +12725,7 @@ let systemLogsSearchTimer = null;
 let systemLogsOfflinePreparation = null;
 let systemLogsAutoSyncScheduled = false;
 let systemLogsRetryTimer = null;
+let systemLogsRealtimeChannel = null;
 
 const SYSTEM_LOG_CATEGORY_TERMS = {
     student: ['student', 'grade', 'enrollment'],
@@ -12782,6 +12784,27 @@ function yieldDuringLogPreparation() {
             window.setTimeout(resolve, 25);
         }
     });
+}
+
+function startSystemLogsRealtimeSync() {
+    if (!navigator.onLine || systemLogsRealtimeChannel || !supabaseClient?.channel) return;
+    systemLogsRealtimeChannel = supabaseClient
+        .channel('admin-activity-log-cache')
+        .on('postgres_changes', {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'activity_logs'
+        }, () => {
+            scheduleSystemLogsOfflineSync();
+        })
+        .subscribe(status => {
+            if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+                systemLogsRealtimeChannel = null;
+                if (navigator.onLine) {
+                    systemLogsRetryTimer = window.setTimeout(startSystemLogsRealtimeSync, 10000);
+                }
+            }
+        });
 }
 
 function scheduleSystemLogsOfflineSync() {
@@ -12876,15 +12899,17 @@ async function prepareSystemLogsOffline(isAutomatic = false) {
             return /^\d+$/.test(value) && BigInt(value) > maximum ? BigInt(value) : maximum;
         }, 0n).toString();
         const hasSavedProgress = cacheState
-            && Number(cacheState.totalCount) === expectedCount
+            && Number.isFinite(Number(cacheState.totalCount))
+            && Number(cacheState.totalCount) <= expectedCount
             && Number(cacheState.cachedCount) === cachedServerLogCount
-            && cachedMaxLogId === String(cacheState.lastLogId || '0');
+            && cachedMaxLogId === String(cacheState.lastLogId || '0')
+            && BigInt(String(cacheState.lastLogId || '0')) <= BigInt(latestServerLogId);
         const completeCacheIsValid = hasSavedProgress
             && cacheState.completed
+            && Number(cacheState.totalCount) === expectedCount
             && cachedServerLogCount === expectedCount
             && cachedMaxLogId === latestServerLogId;
         const partialCacheIsResumable = hasSavedProgress
-            && !cacheState.completed
             && cachedServerLogCount <= expectedCount;
 
         if (completeCacheIsValid) {
@@ -13306,14 +13331,20 @@ async function deleteAllLogs() {
            INITIAL LOAD
         ========================================================= */
 
-        window.addEventListener('online', scheduleSystemLogsOfflineSync);
+        window.addEventListener('online', () => {
+            startSystemLogsRealtimeSync();
+            scheduleSystemLogsOfflineSync();
+        });
         window.addEventListener('online', updateSystemLogsAvailabilityNote);
         window.addEventListener('offline', updateSystemLogsAvailabilityNote);
         document.addEventListener('visibilitychange', () => {
             if (document.visibilityState === 'visible') scheduleSystemLogsOfflineSync();
         });
         supabaseClient.auth.onAuthStateChange((_event, session) => {
-            if (session) scheduleSystemLogsOfflineSync();
+            if (session) {
+                startSystemLogsRealtimeSync();
+                scheduleSystemLogsOfflineSync();
+            }
         });
 
         loadDepartmentExplorer();

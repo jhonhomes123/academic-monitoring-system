@@ -1039,13 +1039,6 @@
         return await adminStoreRequest(adminLookupStoreName, 'readonly', store => store.get(`${userId}:all-students`)) || null;
     }
 
-    function getQueuedAdminActivityLabel(type, payload = {}) {
-        const cleanType = String(type || '').replace(/_/g, ' ');
-        const title = cleanType.split(' ').map(part => part ? part.charAt(0).toUpperCase() + part.slice(1) : '').join(' ');
-        if (!title) return 'Queued admin change';
-        return `Queued admin change: ${title}`;
-    }
-
     async function cacheSystemLogEntries(client, logs) {
         const userId = await getUserId(client);
         if (!userId || !Array.isArray(logs) || !logs.length) return [];
@@ -1073,6 +1066,7 @@
         const records = await adminStoreRequest(adminSystemLogStoreName, 'readonly', store => store.getAll());
         return (records || []).filter(record => record.userId === userId)
             .filter(record => record.recordType !== 'system-log-cache-state')
+            .filter(record => !String(record.log_id || '').startsWith('pending:'))
             .sort((first, second) => Date.parse(second.created_at || 0) - Date.parse(first.created_at || 0));
     }
 
@@ -1131,12 +1125,6 @@
             key: `${userId}:${operationId}`, userId, operationId, localRef, type, payload,
             createdAt, lastError: null
         }));
-        await cacheSystemLogEntries(client, [{
-            log_id: `pending:${operationId}`,
-            activity: getQueuedAdminActivityLabel(type, payload),
-            created_at: createdAt,
-            users: { email: 'Admin' }
-        }]);
         setNotice('Admin change saved on this device. It will apply when connected.', true, 'sync');
         window.dispatchEvent(new CustomEvent('admin-structure-data-changed'));
         return { operationId, localRef };
@@ -2562,6 +2550,7 @@
                 window.location.reload();
                 return;
             }
+            window.startSystemLogsRealtimeSync?.();
             window.scheduleSystemLogsOfflineSync?.();
         } catch (error) {
             console.warn('Unable to resume admin data after reconnect.', error);
