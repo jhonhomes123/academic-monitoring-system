@@ -12634,68 +12634,14 @@ function closeTeacherSectionModal() {
    LOAD SYSTEM LOGS
 ========================================================= */
 
-async function loadSystemLogs() {
+function renderActivityLogs(logs) {
 
     const table =
         document.getElementById(
             'logsTable'
         );
 
-    table.innerHTML = `
-
-    <tr>
-
-        <td colspan="4">
-
-            Loading logs...
-
-        </td>
-
-    </tr>
-
-    `;
-
-    const { data, error } =
-        await supabaseClient
-            .from('activity_logs')
-            .select(`
-
-                *,
-                users (
-                    email
-                )
-
-            `)
-            .order(
-                'created_at',
-                {
-                    ascending: false
-                }
-            );
-
-    if (error) {
-
-        console.log(error);
-
-        table.innerHTML = `
-
-        <tr>
-
-            <td colspan="4">
-
-                Failed loading logs
-
-            </td>
-
-        </tr>
-
-        `;
-
-        return;
-
-    }
-
-    if (!data.length) {
+    if (!logs || !logs.length) {
 
         table.innerHTML = `
 
@@ -12717,11 +12663,11 @@ async function loadSystemLogs() {
 
     table.innerHTML = '';
 
-    data.forEach(log => {
+    logs.forEach(log => {
 
         const date =
             new Date(
-                log.created_at
+                log.created_at || Date.now()
             ).toLocaleString();
 
         table.innerHTML += `
@@ -12730,13 +12676,13 @@ async function loadSystemLogs() {
 
             <td>
 
-                ${log.log_id}
+                ${log.log_id || 'Pending'}
 
             </td>
 
             <td>
 
-                ${log.users?.email || 'Admin'}
+                ${log.users?.email || log.user_email || 'Admin'}
 
             </td>
 
@@ -12757,6 +12703,144 @@ async function loadSystemLogs() {
         `;
 
     });
+
+}
+
+async function loadSystemLogs() {
+
+    const table =
+        document.getElementById(
+            'logsTable'
+        );
+
+    table.innerHTML = `
+
+    <tr>
+
+        <td colspan="4">
+
+            Loading logs...
+
+        </td>
+
+    </tr>
+
+    `;
+
+    try {
+
+        const { data, error } =
+            await supabaseClient
+                .from('activity_logs')
+                .select(`
+
+                    *,
+                    users (
+                        email
+                    )
+
+                `)
+                .order(
+                    'created_at',
+                    {
+                        ascending: false
+                    }
+                );
+
+        if (!error && Array.isArray(data)) {
+
+            if (data.length) {
+                if (typeof window.cacheSystemLogEntries === 'function') {
+                    await window.cacheSystemLogEntries(supabaseClient, data);
+                }
+                renderActivityLogs(data);
+                return;
+            }
+
+            if (typeof window.getCachedSystemLogs === 'function') {
+                const cachedLogs = await window.getCachedSystemLogs(supabaseClient);
+                if (cachedLogs.length) {
+                    renderActivityLogs(cachedLogs);
+                    return;
+                }
+            }
+
+            table.innerHTML = `
+
+            <tr>
+
+                <td colspan="4">
+
+                    No activity logs found
+
+                </td>
+
+            </tr>
+
+            `;
+            return;
+
+        }
+
+        if (error && !navigator.onLine) {
+            console.warn('Using cached activity logs because the app is offline.', error);
+        }
+
+        if (typeof window.getCachedSystemLogs === 'function') {
+
+            const cachedLogs = await window.getCachedSystemLogs(supabaseClient);
+            if (cachedLogs.length) {
+                renderActivityLogs(cachedLogs);
+                return;
+            }
+
+        }
+
+        if (error) {
+            console.log(error);
+        }
+
+        table.innerHTML = `
+
+        <tr>
+
+            <td colspan="4">
+
+                Failed loading logs
+
+            </td>
+
+        </tr>
+
+        `;
+
+    } catch (error) {
+
+        console.log(error);
+
+        if (typeof window.getCachedSystemLogs === 'function') {
+            const cachedLogs = await window.getCachedSystemLogs(supabaseClient);
+            if (cachedLogs.length) {
+                renderActivityLogs(cachedLogs);
+                return;
+            }
+        }
+
+        table.innerHTML = `
+
+        <tr>
+
+            <td colspan="4">
+
+                Failed loading logs
+
+            </td>
+
+        </tr>
+
+        `;
+
+    }
 
 }
 

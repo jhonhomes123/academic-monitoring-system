@@ -9,6 +9,7 @@
     const adminLookupStoreName = 'admin-account-lookups';
     const adminStructureQueueStoreName = 'admin-structure-write-queue';
     const adminStructureMapStoreName = 'admin-structure-id-map';
+    const adminSystemLogStoreName = 'admin-system-logs';
     const serviceWorkerPath = './service-worker.js';
     const studentPages = [
         { key: 'dashboard', file: 'student_dashboard.html' },
@@ -70,6 +71,9 @@
                 }
                 if (!database.objectStoreNames.contains(adminStructureMapStoreName)) {
                     database.createObjectStore(adminStructureMapStoreName, { keyPath: 'key' });
+                }
+                if (!database.objectStoreNames.contains(adminSystemLogStoreName)) {
+                    database.createObjectStore(adminSystemLogStoreName, { keyPath: 'key' });
                 }
             };
             request.onsuccess = () => resolve(request.result);
@@ -1033,6 +1037,40 @@
         return await adminStoreRequest(adminLookupStoreName, 'readonly', store => store.get(`${userId}:all-students`)) || null;
     }
 
+    function getQueuedAdminActivityLabel(type, payload = {}) {
+        const cleanType = String(type || '').replace(/_/g, ' ');
+        const title = cleanType.split(' ').map(part => part ? part.charAt(0).toUpperCase() + part.slice(1) : '').join(' ');
+        if (!title) return 'Queued admin change';
+        return `Queued admin change: ${title}`;
+    }
+
+    async function cacheSystemLogEntries(client, logs) {
+        const userId = await getUserId(client);
+        if (!userId || !Array.isArray(logs) || !logs.length) return [];
+        const records = logs.map(log => ({
+            key: `${userId}:${log.log_id || log.id || `${Date.now()}-${Math.random().toString(16).slice(2)}`}:${log.created_at || new Date().toISOString()}`,
+            userId,
+            log_id: log.log_id || log.id || null,
+            activity: log.activity || 'System activity',
+            created_at: log.created_at || new Date().toISOString(),
+            users: log.users || { email: 'Admin' }
+        }));
+        await Promise.all(records.map(record => adminStoreRequest(
+            adminSystemLogStoreName,
+            'readwrite',
+            store => store.put(record)
+        )));
+        return records;
+    }
+
+    async function getCachedSystemLogs(client) {
+        const userId = await getUserId(client);
+        if (!userId) return [];
+        const records = await adminStoreRequest(adminSystemLogStoreName, 'readonly', store => store.getAll());
+        return (records || []).filter(record => record.userId === userId)
+            .sort((first, second) => Date.parse(second.created_at || 0) - Date.parse(first.created_at || 0));
+    }
+
     async function queueAdminStructureOperation(client, type, payload) {
         const userId = await getUserId(client);
         if (!userId) throw new Error('Sign in while connected before making offline admin changes.');
@@ -1045,6 +1083,12 @@
             key: `${userId}:${operationId}`, userId, operationId, localRef, type, payload,
             createdAt, lastError: null
         }));
+        await cacheSystemLogEntries(client, [{
+            log_id: `pending:${operationId}`,
+            activity: getQueuedAdminActivityLabel(type, payload),
+            created_at: createdAt,
+            users: { email: 'Admin' }
+        }]);
         setNotice('Admin change saved on this device. It will apply when connected.', true, 'sync');
         window.dispatchEvent(new CustomEvent('admin-structure-data-changed'));
         return { operationId, localRef };
@@ -1707,6 +1751,8 @@
         window.updateQueuedAdminStudentCreation = updateQueuedAdminStudentCreation;
     window.queueAdminStructureOperation = queueAdminStructureOperation;
     window.queueAdminStructureDelete = queueAdminStructureDelete;
+    window.cacheSystemLogEntries = cacheSystemLogEntries;
+    window.getCachedSystemLogs = getCachedSystemLogs;
     window.cancelQueuedAdminSubject = cancelQueuedAdminSubject;
     window.clearStoredAdminPasswordResetResults = clearAdminPasswordResetResults;
     window.discardQueuedAdminAccountOperation = discardQueuedAdminAccountOperation;
