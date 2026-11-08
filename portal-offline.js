@@ -370,6 +370,16 @@
                     const sectionActions = main.querySelector('#manageSectionActions');
                     if (sectionActions) sectionActions.style.display = 'none';
             window.adminOfflineView = true;
+                    if (!main.dataset.adminReconnectGuardAttached) {
+                        main.addEventListener('click', event => {
+                            if (!navigator.onLine || !window.adminOfflineView) return;
+                            event.preventDefault();
+                            event.stopImmediatePropagation();
+                            setNotice('Connection restored. Refreshing saved admin data...', true, 'sync');
+                            window.location.reload();
+                        }, true);
+                        main.dataset.adminReconnectGuardAttached = 'true';
+                    }
             setNotice(`Offline view: admin data saved ${new Date(snapshot.savedAt).toLocaleString()}. Only saved admin data is available.`, true);
             return true;
         } catch (error) {

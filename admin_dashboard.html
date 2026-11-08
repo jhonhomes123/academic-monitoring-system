@@ -2881,9 +2881,10 @@ onchange="loadSubjectsForTeacherAssign()">
             });
 
             element.classList.add('active');
-            if (navigator.onLine) {
-                window.adminOfflineView = false;
-            } else if (window.adminOfflineView) {
+            if (navigator.onLine && window.adminOfflineView) {
+                window.location.reload();
+                return;
+            } else if (!navigator.onLine && window.adminOfflineView) {
                 if (sectionId === 'studentSection') {
                     void refreshManageStudentsSelectors();
                 } else if (sectionId === 'teacherSection') {
