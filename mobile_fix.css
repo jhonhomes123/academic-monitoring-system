@@ -32,7 +32,7 @@ FOR ADMIN + TEACHER
     }
 
     /* =========================================
-    SIDEBAR -> HORIZONTAL NAVIGATION
+    SIDEBAR -> COMPACT MOBILE NAVIGATION
     ========================================= */
 
     .sidebar{
@@ -44,7 +44,7 @@ FOR ADMIN + TEACHER
 
         padding:18px 15px;
 
-        overflow:hidden;
+        overflow:visible;
 
         z-index:1000;
 
@@ -74,58 +74,37 @@ FOR ADMIN + TEACHER
 
     .menu{
 
-        display:flex;
-
-        flex-direction:row;
-
-        overflow-x:auto;
-        overflow-y:hidden;
-        overscroll-behavior-x:contain;
-        scrollbar-width:thin;
-        scrollbar-color:rgba(255,255,255,.55) rgba(255,255,255,.12);
-
-        gap:10px;
-
-        padding-bottom:9px;
-
-    }
-
-    .menu::-webkit-scrollbar{
-        display:block;
-        height:6px;
-
-    }
-
-    .menu::-webkit-scrollbar-track{
-        background:rgba(255,255,255,.12);
-        border-radius:6px;
-
-    }
-
-    .menu::-webkit-scrollbar-thumb{
-        background:rgba(255,255,255,.55);
-        border-radius:6px;
+        display:grid;
+        grid-template-columns:repeat(2,minmax(0,1fr));
+        gap:8px;
+        overflow:visible;
+        padding-bottom:0;
 
     }
 
     .menu a{
 
-        flex-shrink:0;
-
-        white-space:nowrap;
-
-        padding:12px 16px;
+        min-width:0;
+        min-height:40px;
+        white-space:normal;
+        padding:9px 8px;
 
         border-radius:12px;
 
-        font-size:14px;
+        font-size:12px;
 
         display:flex;
 
         align-items:center;
 
-        gap:8px;
+        gap:6px;
 
+    }
+
+    .menu a i{
+        flex:0 0 16px;
+        width:16px;
+        text-align:center;
     }
 
     /* =========================================

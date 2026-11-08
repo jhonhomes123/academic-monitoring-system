@@ -1052,14 +1052,16 @@
             userId,
             log_id: log.log_id || log.id || null,
             activity: log.activity || 'System activity',
-            created_at: log.created_at || new Date().toISOString(),
-            users: log.users || { email: 'Admin' }
+            created_at: log.created_at || new Date().toISOString()
         }));
-        await Promise.all(records.map(record => adminStoreRequest(
-            adminSystemLogStoreName,
-            'readwrite',
-            store => store.put(record)
-        )));
+        await adminStoreRequest(adminSystemLogStoreName, 'readwrite', store => {
+            let firstRequest = null;
+            records.forEach(record => {
+                const request = store.put(record);
+                if (!firstRequest) firstRequest = request;
+            });
+            return firstRequest;
+        });
         return records;
     }
 
@@ -1068,7 +1070,49 @@
         if (!userId) return [];
         const records = await adminStoreRequest(adminSystemLogStoreName, 'readonly', store => store.getAll());
         return (records || []).filter(record => record.userId === userId)
+            .filter(record => record.recordType !== 'system-log-cache-state')
             .sort((first, second) => Date.parse(second.created_at || 0) - Date.parse(first.created_at || 0));
+    }
+
+    async function getSystemLogCacheState(client) {
+        const userId = await getUserId(client);
+        if (!userId) return null;
+        return await adminStoreRequest(
+            adminSystemLogStoreName,
+            'readonly',
+            store => store.get(`${userId}:__sync_state__`)
+        ) || null;
+    }
+
+    async function saveSystemLogCacheState(client, state) {
+        const userId = await getUserId(client);
+        if (!userId) throw new Error('Sign in before saving the offline log sync checkpoint.');
+        return await adminStoreRequest(
+            adminSystemLogStoreName,
+            'readwrite',
+            store => store.put({
+                key: `${userId}:__sync_state__`,
+                userId,
+                recordType: 'system-log-cache-state',
+                lastLogId: String(state.lastLogId || '0'),
+                completed: Boolean(state.completed),
+                updatedAt: new Date().toISOString()
+            })
+        );
+    }
+
+    async function clearCachedSystemLogs(client) {
+        const userId = await getUserId(client);
+        if (!userId) return false;
+        const records = await adminStoreRequest(adminSystemLogStoreName, 'readonly', store => store.getAll());
+        const keysToDelete = (records || []).filter(record => record.userId === userId
+            && (record.recordType === 'system-log-cache-state' || !String(record.log_id || '').startsWith('pending:')))
+            .map(record => record.key);
+        await adminStoreRequest(adminSystemLogStoreName, 'readwrite', store => {
+            keysToDelete.forEach(key => store.delete(key));
+            return null;
+        });
+        return true;
     }
 
     async function queueAdminStructureOperation(client, type, payload) {
@@ -1753,6 +1797,9 @@
     window.queueAdminStructureDelete = queueAdminStructureDelete;
     window.cacheSystemLogEntries = cacheSystemLogEntries;
     window.getCachedSystemLogs = getCachedSystemLogs;
+    window.getSystemLogCacheState = getSystemLogCacheState;
+    window.saveSystemLogCacheState = saveSystemLogCacheState;
+    window.clearCachedSystemLogs = clearCachedSystemLogs;
     window.cancelQueuedAdminSubject = cancelQueuedAdminSubject;
     window.clearStoredAdminPasswordResetResults = clearAdminPasswordResetResults;
     window.discardQueuedAdminAccountOperation = discardQueuedAdminAccountOperation;

@@ -122,6 +122,14 @@
             padding: 30px;
         }
 
+        .content-section {
+            display: none;
+        }
+
+        .content-section.active-section {
+            display: block;
+        }
+
         .dashboard-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -2189,6 +2197,7 @@ onchange="loadSubjectsForTeacherAssign()">
                     <tr>
 
                         <td colspan="4">
+                            <td colspan="3">
 
                             No students loaded
 
@@ -2580,6 +2589,8 @@ onchange="loadSubjectsForTeacherAssign()">
 
         </div>
 
+        <p id="systemLogsAvailabilityNote" role="status" aria-live="polite" style="margin-bottom:16px;color:#475569;font-size:14px;"></p>
+
         <!-- SEARCH BAR -->
 
         <div style="
@@ -2592,8 +2603,8 @@ onchange="loadSubjectsForTeacherAssign()">
             <input
             type="text"
             id="logSearchInput"
-            placeholder="Search activity..."
-            onkeyup="filterLogsTable()"
+            placeholder="Search all activity logs..."
+            oninput="filterLogsTable()"
             style="
                 flex:1;
                 min-width:250px;
@@ -2639,6 +2650,13 @@ onchange="loadSubjectsForTeacherAssign()">
             </select>
 
         </div>
+
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px;">
+            <button type="button" id="cancelOfflineLogsButton" class="btn" onclick="cancelSystemLogsOfflinePreparation()" hidden>
+                Cancel
+            </button>
+            <span id="offlineLogsPreparationStatus" role="status" aria-live="polite"></span>
+        </div>
         
 
 
@@ -2658,10 +2676,6 @@ onchange="loadSubjectsForTeacherAssign()">
                         </th>
 
                         <th>
-                            User Email
-                        </th>
-
-                        <th>
                             Activity
                         </th>
 
@@ -2677,7 +2691,7 @@ onchange="loadSubjectsForTeacherAssign()">
 
                     <tr>
 
-                        <td colspan="4">
+                        <td colspan="3">
 
                             Loading logs...
 
@@ -2937,6 +2951,7 @@ onchange="loadSubjectsForTeacherAssign()">
                 void renderAdminStructureQueue();
                 return;
             }
+            scheduleSystemLogsOfflineSync();
             loadDashboardCounts();
             void renderAdminCreatedAccounts();
             void renderAdminPasswordResets();
@@ -2944,6 +2959,7 @@ onchange="loadSubjectsForTeacherAssign()">
             void renderAdminStructureQueue();
         }).catch(error => {
             console.warn('Offline admin view could not be prepared.', error);
+            scheduleSystemLogsOfflineSync();
             loadDashboardCounts();
         });
         // LOAD DASHBOARD COUNTS
@@ -3169,7 +3185,7 @@ onchange="loadSubjectsForTeacherAssign()">
 
                 table.innerHTML = `
         <tr>
-            <td colspan="4">
+            <td colspan="3">
                 Failed loading users
             </td>
         </tr>
@@ -3182,7 +3198,7 @@ onchange="loadSubjectsForTeacherAssign()">
 
                 table.innerHTML = `
         <tr>
-            <td colspan="4">
+            <td colspan="3">
                 No approved users
             </td>
         </tr>
@@ -8456,7 +8472,7 @@ async function loadStudentsBySection() {
 
         <tr>
 
-            <td colspan="4">
+            <td colspan="3">
 
                 No section selected
 
@@ -8544,7 +8560,7 @@ async function loadStudentsBySection() {
 
         <tr>
 
-            <td colspan="4">
+            <td colspan="3">
 
                 Failed loading students
 
@@ -9502,7 +9518,7 @@ async function renderAdminDeletions() {
     if (!rows.length) {
         const row = table.insertRow();
         const cell = row.insertCell();
-        cell.colSpan = 4;
+        cell.colSpan = 3;
         cell.textContent = 'No deletion history on this device';
         return;
     }
@@ -12702,6 +12718,183 @@ const SYSTEM_LOG_PAGE_SIZE = 100;
 let systemLogsOffset = 0;
 let systemLogsLoading = false;
 let systemLogsHasMore = true;
+let systemLogsCachedResults = null;
+let systemLogsRequestId = 0;
+let systemLogsSearchTimer = null;
+let systemLogsOfflinePreparation = null;
+let systemLogsAutoSyncScheduled = false;
+
+const SYSTEM_LOG_CATEGORY_TERMS = {
+    student: ['student', 'grade', 'enrollment'],
+    teacher: ['teacher', 'assignment', 'section assigned', 'removed section'],
+    admin: ['department', 'major', 'section', 'subject created', 'approved account', 'admin']
+};
+
+function matchesSystemLogFilters(log, search, category) {
+    const text = `${log.activity || ''} ${log.log_id || ''}`.toLowerCase();
+    if (search && !text.includes(search.toLowerCase())) return false;
+    const terms = SYSTEM_LOG_CATEGORY_TERMS[category] || [];
+    return !terms.length || terms.some(term => text.includes(term));
+}
+
+function createSystemLogsQuery(search, category, start, end) {
+    let query = supabaseClient
+        .from('activity_logs')
+        .select('log_id, activity, created_at');
+
+    const categoryTerms = SYSTEM_LOG_CATEGORY_TERMS[category] || [];
+    if (categoryTerms.length) {
+        query = query.or(categoryTerms.map(term => `activity.ilike.%${term}%`).join(','));
+    }
+    if (search) query = query.ilike('activity', `%${search}%`);
+
+    return query
+        .order('created_at', { ascending: false })
+        .order('log_id', { ascending: false })
+        .range(start, end);
+}
+
+function cancelSystemLogsOfflinePreparation() {
+    if (!systemLogsOfflinePreparation) return;
+    systemLogsOfflinePreparation.cancelled = true;
+    document.getElementById('offlineLogsPreparationStatus').textContent = 'Stopping after the current page...';
+}
+
+function updateSystemLogsAvailabilityNote() {
+    const note = document.getElementById('systemLogsAvailabilityNote');
+    if (!note) return;
+    note.textContent = navigator.onLine
+        ? 'Online: full log history is searchable. Offline copies sync automatically while connected.'
+        : 'Offline: only logs cached on this device are shown. Full log history is available online; uncached logs will not appear.';
+}
+
+function yieldDuringLogPreparation() {
+    return new Promise(resolve => {
+        if (typeof window.requestIdleCallback === 'function') {
+            window.requestIdleCallback(resolve, { timeout: 500 });
+        } else {
+            window.setTimeout(resolve, 25);
+        }
+    });
+}
+
+function scheduleSystemLogsOfflineSync() {
+    if (!navigator.onLine || systemLogsOfflinePreparation || systemLogsAutoSyncScheduled) return;
+    systemLogsAutoSyncScheduled = true;
+    const startSync = () => {
+        systemLogsAutoSyncScheduled = false;
+        void prepareSystemLogsOffline(true);
+    };
+    if (typeof window.requestIdleCallback === 'function') {
+        window.requestIdleCallback(startSync, { timeout: 3000 });
+    } else {
+        window.setTimeout(startSync, 1000);
+    }
+}
+
+async function prepareSystemLogsOffline(isAutomatic = false) {
+    const cancelButton = document.getElementById('cancelOfflineLogsButton');
+    const status = document.getElementById('offlineLogsPreparationStatus');
+    if (systemLogsOfflinePreparation) return;
+    if (!navigator.onLine) {
+        if (!isAutomatic) status.textContent = 'Connect to the internet before syncing the offline log cache.';
+        return;
+    }
+    let sessionData;
+    try {
+        const { data, error } = await supabaseClient.auth.getSession();
+        if (error) throw error;
+        sessionData = data;
+    } catch (error) {
+        if (!isAutomatic) status.textContent = error.message || 'Unable to verify the administrator session.';
+        return;
+    }
+    const adminUserId = sessionData.session?.user?.id;
+    if (!adminUserId) {
+        if (!isAutomatic) status.textContent = 'Sign in as an administrator before syncing offline logs.';
+        return;
+    }
+    try {
+        const { data: admin, error } = await supabaseClient.from('admins')
+            .select('id')
+            .eq('auth_user_id', adminUserId)
+            .maybeSingle();
+        if (error) throw error;
+        if (!admin) {
+            if (!isAutomatic) status.textContent = 'Administrator access is required to cache activity logs.';
+            return;
+        }
+    } catch (error) {
+        if (!isAutomatic) status.textContent = error.message || 'Unable to verify administrator access.';
+        return;
+    }
+    if (typeof window.cacheSystemLogEntries !== 'function') {
+        if (!isAutomatic) status.textContent = 'Offline log storage is unavailable in this browser.';
+        return;
+    }
+
+    const preparation = { cancelled: false };
+    systemLogsOfflinePreparation = preparation;
+    cancelButton.hidden = false;
+    status.textContent = 'Syncing offline log cache...';
+    let cachedCount = 0;
+    let lastLogId = '0';
+    let wasComplete = false;
+
+    try {
+        const cacheState = await window.getSystemLogCacheState(supabaseClient);
+        lastLogId = cacheState?.lastLogId || '0';
+        wasComplete = Boolean(cacheState?.completed);
+        while (!preparation.cancelled) {
+            if (!navigator.onLine) throw new Error('Connection lost. Some logs may already be available offline.');
+            const { data, error } = await supabaseClient
+                .from('activity_logs')
+                .select('log_id, activity, created_at')
+                .gt('log_id', lastLogId)
+                .order('log_id', { ascending: true })
+                .range(0, SYSTEM_LOG_PAGE_SIZE - 1);
+            if (error) throw error;
+            if (!data.length) {
+                await window.saveSystemLogCacheState(supabaseClient, { lastLogId, completed: true });
+                break;
+            }
+
+            const savedRecords = await window.cacheSystemLogEntries(supabaseClient, data);
+            if (savedRecords.length !== data.length) {
+                throw new Error('Could not confirm all logs were saved to this account on this device.');
+            }
+            cachedCount += data.length;
+            lastLogId = String(data[data.length - 1].log_id);
+            await window.saveSystemLogCacheState(supabaseClient, { lastLogId, completed: false });
+            status.textContent = `Syncing offline log cache: ${cachedCount.toLocaleString()} new logs saved...`;
+            if (data.length < SYSTEM_LOG_PAGE_SIZE) {
+                await window.saveSystemLogCacheState(supabaseClient, { lastLogId, completed: true });
+                break;
+            }
+            await yieldDuringLogPreparation();
+        }
+
+        if (preparation.cancelled) {
+            await window.saveSystemLogCacheState(supabaseClient, { lastLogId, completed: false });
+            status.textContent = `Sync paused. ${cachedCount.toLocaleString()} new logs saved; reload or refresh the cache to resume.`;
+        } else if (wasComplete && cachedCount === 0) {
+            status.textContent = 'Offline log cache is up to date.';
+        } else if (wasComplete) {
+            status.textContent = `Offline log cache updated with ${cachedCount.toLocaleString()} new logs.`;
+        } else {
+            status.textContent = `Offline search ready. Full history synced; ${cachedCount.toLocaleString()} logs added this session.`;
+        }
+    } catch (error) {
+        const reason = error?.name === 'QuotaExceededError'
+            ? 'Browser storage is full.'
+            : error?.message || 'Unable to finish preparing offline logs.';
+        status.textContent = `${reason} ${cachedCount.toLocaleString()} new logs saved; syncing will resume when possible.`;
+        console.warn('Offline log preparation stopped.', error);
+    } finally {
+        systemLogsOfflinePreparation = null;
+        cancelButton.hidden = true;
+    }
+}
 
 function renderActivityLogs(logs, append = false) {
 
@@ -12722,7 +12915,7 @@ function renderActivityLogs(logs, append = false) {
 
         <tr>
 
-            <td colspan="4">
+            <td colspan="3">
 
                 No activity logs found
 
@@ -12743,7 +12936,6 @@ function renderActivityLogs(logs, append = false) {
         const row = document.createElement('tr');
         const values = [
             log.log_id || 'Pending',
-            log.users?.email || log.user_email || 'Admin',
             log.activity || '',
             new Date(log.created_at || Date.now()).toLocaleString()
         ];
@@ -12763,33 +12955,26 @@ function renderActivityLogs(logs, append = false) {
 async function loadSystemLogs() {
     const table = document.getElementById('logsTable');
     const loadOlderButton = document.getElementById('loadOlderLogsButton');
+    updateSystemLogsAvailabilityNote();
+    const requestId = ++systemLogsRequestId;
+    const search = document.getElementById('logSearchInput').value.trim();
+    const category = document.getElementById('logFilterSelect').value.toLowerCase();
     systemLogsOffset = 0;
     systemLogsHasMore = true;
     systemLogsLoading = false;
+    systemLogsCachedResults = null;
     loadOlderButton.style.display = 'none';
-    table.innerHTML = '<tr><td colspan="4">Loading recent logs...</td></tr>';
-
-    if (typeof window.getCachedSystemLogs === 'function') {
-        try {
-            const cachedLogs = await window.getCachedSystemLogs(supabaseClient);
-            if (cachedLogs.length) {
-                const recentCachedLogs = cachedLogs.slice(0, SYSTEM_LOG_PAGE_SIZE);
-                renderActivityLogs(recentCachedLogs);
-                systemLogsOffset = recentCachedLogs.length;
-            }
-        } catch (cacheError) {
-            console.warn('Could not read cached activity logs.', cacheError);
-        }
-    }
+    table.innerHTML = `<tr><td colspan="3">Searching ${search || category ? 'matching' : 'recent'} logs...</td></tr>`;
 
     try {
-        const { data, error } = await supabaseClient
-            .from('activity_logs')
-            .select('log_id, user_id, activity, created_at, users(email)')
-            .order('created_at', { ascending: false })
-            .order('log_id', { ascending: false })
-            .range(0, SYSTEM_LOG_PAGE_SIZE - 1);
+        const { data, error } = await createSystemLogsQuery(
+            search,
+            category,
+            0,
+            SYSTEM_LOG_PAGE_SIZE - 1
+        );
         if (error) throw error;
+        if (requestId !== systemLogsRequestId) return;
 
         systemLogsHasMore = data.length === SYSTEM_LOG_PAGE_SIZE;
         systemLogsOffset = data.length;
@@ -12800,30 +12985,54 @@ async function loadSystemLogs() {
         renderActivityLogs(data);
     } catch (error) {
         console.warn('Unable to load activity logs.', error);
-        if (!navigator.onLine) console.info('Showing cached activity logs while offline.');
-        if (!table.children.length) {
-            const row = table.insertRow();
-            const cell = row.insertCell();
-            cell.colSpan = 4;
-            cell.textContent = 'Failed loading logs';
+        if (requestId !== systemLogsRequestId) return;
+        if (typeof window.getCachedSystemLogs === 'function') {
+            try {
+                const cachedLogs = await window.getCachedSystemLogs(supabaseClient);
+                if (requestId !== systemLogsRequestId) return;
+                systemLogsCachedResults = cachedLogs.filter(log => matchesSystemLogFilters(log, search, category));
+                const firstPage = systemLogsCachedResults.slice(0, SYSTEM_LOG_PAGE_SIZE);
+                systemLogsHasMore = systemLogsCachedResults.length > firstPage.length;
+                systemLogsOffset = firstPage.length;
+                loadOlderButton.style.display = systemLogsHasMore ? '' : 'none';
+                renderActivityLogs(firstPage);
+                return;
+            } catch (cacheError) {
+                console.warn('Could not read cached activity logs.', cacheError);
+            }
         }
+        const row = table.insertRow();
+        const cell = row.insertCell();
+        cell.colSpan = 3;
+        cell.textContent = 'Failed loading logs';
     }
 }
 
 async function loadOlderSystemLogs() {
     if (systemLogsLoading || !systemLogsHasMore) return;
     systemLogsLoading = true;
+    const requestId = systemLogsRequestId;
+    const search = document.getElementById('logSearchInput').value.trim();
+    const category = document.getElementById('logFilterSelect').value.toLowerCase();
     const button = document.getElementById('loadOlderLogsButton');
     button.disabled = true;
     button.textContent = 'Loading...';
     try {
-        const { data, error } = await supabaseClient
-            .from('activity_logs')
-            .select('log_id, user_id, activity, created_at, users(email)')
-            .order('created_at', { ascending: false })
-            .order('log_id', { ascending: false })
-            .range(systemLogsOffset, systemLogsOffset + SYSTEM_LOG_PAGE_SIZE - 1);
+        if (systemLogsCachedResults) {
+            const cachedPage = systemLogsCachedResults.slice(systemLogsOffset, systemLogsOffset + SYSTEM_LOG_PAGE_SIZE);
+            renderActivityLogs(cachedPage, true);
+            systemLogsOffset += cachedPage.length;
+            systemLogsHasMore = systemLogsOffset < systemLogsCachedResults.length;
+            return;
+        }
+        const { data, error } = await createSystemLogsQuery(
+            search,
+            category,
+            systemLogsOffset,
+            systemLogsOffset + SYSTEM_LOG_PAGE_SIZE - 1
+        );
         if (error) throw error;
+        if (requestId !== systemLogsRequestId) return;
         renderActivityLogs(data, true);
         systemLogsOffset += data.length;
         systemLogsHasMore = data.length === SYSTEM_LOG_PAGE_SIZE;
@@ -12834,32 +13043,19 @@ async function loadOlderSystemLogs() {
         console.warn('Unable to load older activity logs.', error);
     } finally {
         systemLogsLoading = false;
-        button.disabled = false;
-        button.textContent = 'Load older logs';
-        button.style.display = systemLogsHasMore ? '' : 'none';
+        if (requestId === systemLogsRequestId) {
+            button.disabled = false;
+            button.textContent = 'Load older logs';
+            button.style.display = systemLogsHasMore ? '' : 'none';
+        }
     }
 }
 
 function filterLogsTable() {
-    const search = document.getElementById('logSearchInput').value.toLowerCase();
-    const filter = document.getElementById('logFilterSelect').value.toLowerCase();
-    const rows = document.querySelectorAll('#logsTable tr');
-
-    rows.forEach(row => {
-        const text = row.textContent.toLowerCase();
-        let matchesCategory = true;
-        if (filter === 'teacher') {
-            matchesCategory = text.includes('teacher') || text.includes('assignment')
-                || text.includes('section assigned') || text.includes('removed section');
-        } else if (filter === 'student') {
-            matchesCategory = text.includes('student') || text.includes('grade') || text.includes('enrollment');
-        } else if (filter === 'admin') {
-            matchesCategory = text.includes('department') || text.includes('major')
-                || text.includes('section') || text.includes('subject created')
-                || text.includes('approved account') || text.includes('admin');
-        }
-        row.style.display = text.includes(search) && matchesCategory ? '' : 'none';
-    });
+    window.clearTimeout(systemLogsSearchTimer);
+    systemLogsSearchTimer = window.setTimeout(() => {
+        void loadSystemLogs();
+    }, 350);
 }
 /* =========================================================
    DELETE ALL LOGS
@@ -12935,6 +13131,14 @@ async function deleteAllLogs() {
 
                         }
 
+                        if (typeof window.clearCachedSystemLogs === 'function') {
+                            try {
+                                await window.clearCachedSystemLogs(supabaseClient);
+                            } catch (cacheError) {
+                                console.warn('Deleted logs, but could not clear their offline cache.', cacheError);
+                            }
+                        }
+
                         /* ======================
                            SUCCESS ALERT
                         ====================== */
@@ -12977,6 +13181,13 @@ async function deleteAllLogs() {
         /* =========================================================
            INITIAL LOAD
         ========================================================= */
+
+        window.addEventListener('online', scheduleSystemLogsOfflineSync);
+        window.addEventListener('online', updateSystemLogsAvailabilityNote);
+        window.addEventListener('offline', updateSystemLogsAvailabilityNote);
+        supabaseClient.auth.onAuthStateChange((_event, session) => {
+            if (session) scheduleSystemLogsOfflineSync();
+        });
 
         loadDepartmentExplorer();
 
