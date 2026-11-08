@@ -42,7 +42,7 @@
         if (databasePromise) return databasePromise;
 
         databasePromise = new Promise((resolve, reject) => {
-            const request = indexedDB.open(databaseName, 6);
+            const request = indexedDB.open(databaseName, 7);
             request.onupgradeneeded = () => {
                 const database = request.result;
                 if (!database.objectStoreNames.contains(storeName)) {
