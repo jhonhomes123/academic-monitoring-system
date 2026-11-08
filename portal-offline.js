@@ -1097,6 +1097,7 @@
                 lastLogId: String(state.lastLogId || '0'),
                 completed: Boolean(state.completed),
                 totalCount: Number.isFinite(Number(state.totalCount)) ? Number(state.totalCount) : null,
+                cachedCount: Number.isFinite(Number(state.cachedCount)) ? Number(state.cachedCount) : null,
                 updatedAt: new Date().toISOString()
             })
         );

@@ -2929,7 +2929,7 @@ onchange="loadSubjectsForTeacherAssign()">
       
     </script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
-    <script src="portal-offline.js?v=159"></script>
+    <script src="portal-offline.js?v=161"></script>
     <script>
 
         const SUPABASE_URL =
@@ -2945,7 +2945,6 @@ onchange="loadSubjectsForTeacherAssign()">
             );
 
         console.log("Admin Dashboard Connected!");
-        window.setTimeout(scheduleSystemLogsOfflineSync, 0);
         window.beginAdminOfflinePage(supabaseClient).then(restoredOffline => {
             if (restoredOffline) {
                 void renderAdminCreatedAccounts();
@@ -2954,6 +2953,7 @@ onchange="loadSubjectsForTeacherAssign()">
                 void renderAdminStructureQueue();
                 return;
             }
+            scheduleSystemLogsOfflineSync();
             loadDashboardCounts();
             void renderAdminCreatedAccounts();
             void renderAdminPasswordResets();
@@ -12852,31 +12852,55 @@ async function prepareSystemLogsOffline(isAutomatic = false) {
     if (cancelButton) cancelButton.hidden = false;
     setSystemLogsCacheStatus('Syncing offline log history...');
     let cachedCount = 0;
+    let downloadedCount = 0;
     let lastLogId = '0';
     let wasComplete = false;
 
     try {
-        const [{ count: serverLogCount, error: countError }, cacheState, existingLogs] = await Promise.all([
+        const [countResult, latestResult, cacheState, existingLogs] = await Promise.all([
             supabaseClient.from('activity_logs').select('log_id', { count: 'exact', head: true }),
+            supabaseClient.from('activity_logs').select('log_id').order('log_id', { ascending: false }).limit(1).maybeSingle(),
             window.getSystemLogCacheState(supabaseClient),
             window.getCachedSystemLogs(supabaseClient)
         ]);
-        if (countError) throw countError;
-        const expectedCount = Number(serverLogCount || 0);
+        if (countResult.error) throw countResult.error;
+        if (latestResult.error) throw latestResult.error;
+        if (!Number.isInteger(countResult.count) || countResult.count < 0) {
+            throw new Error('Supabase did not return a valid activity-log count; refusing to mark offline logs as current.');
+        }
+        const expectedCount = countResult.count;
+        const latestServerLogId = String(latestResult.data?.log_id || '0');
         const cachedServerLogCount = existingLogs.filter(log => Number.isFinite(Number(log.log_id))).length;
-        const checkpointHasCount = cacheState?.totalCount !== null && cacheState?.totalCount !== undefined;
-        const checkpointCount = checkpointHasCount ? Number(cacheState.totalCount) : null;
-        const checkpointIsMissingRows = cacheState
-            && (checkpointHasCount
-                ? cachedServerLogCount < checkpointCount
-                : cachedServerLogCount < expectedCount);
+        const cachedMaxLogId = existingLogs.reduce((maximum, log) => {
+            const value = String(log.log_id || '');
+            return /^\d+$/.test(value) && BigInt(value) > maximum ? BigInt(value) : maximum;
+        }, 0n).toString();
+        const hasSavedProgress = cacheState
+            && Number(cacheState.totalCount) === expectedCount
+            && Number(cacheState.cachedCount) === cachedServerLogCount
+            && cachedMaxLogId === String(cacheState.lastLogId || '0');
+        const completeCacheIsValid = hasSavedProgress
+            && cacheState.completed
+            && cachedServerLogCount === expectedCount
+            && cachedMaxLogId === latestServerLogId;
+        const partialCacheIsResumable = hasSavedProgress
+            && !cacheState.completed
+            && cachedServerLogCount <= expectedCount;
 
-        if (checkpointIsMissingRows) {
-            lastLogId = '0';
-            setSystemLogsCacheStatus(`Repairing offline log cache: ${cachedServerLogCount.toLocaleString()} of ${expectedCount.toLocaleString()} logs are saved...`);
-        } else {
+        if (completeCacheIsValid) {
+            wasComplete = true;
             lastLogId = cacheState?.lastLogId || '0';
-            wasComplete = Boolean(cacheState?.completed && cachedServerLogCount >= expectedCount);
+            cachedCount = cachedServerLogCount;
+        } else if (partialCacheIsResumable) {
+            lastLogId = cacheState.lastLogId;
+            cachedCount = cachedServerLogCount;
+        } else {
+            if (cacheState || cachedServerLogCount) {
+                await window.clearCachedSystemLogs(supabaseClient);
+            }
+            lastLogId = '0';
+            cachedCount = 0;
+            setSystemLogsCacheStatus(`Building offline log cache: starting from the first log (0 of ${expectedCount.toLocaleString()} saved)...`);
         }
 
         while (!preparation.cancelled) {
@@ -12896,14 +12920,16 @@ async function prepareSystemLogsOffline(isAutomatic = false) {
             if (savedRecords.length !== data.length) {
                 throw new Error('Could not confirm all logs were saved to this account on this device.');
             }
-            cachedCount += data.length;
+            cachedCount += savedRecords.length;
+            downloadedCount += savedRecords.length;
             lastLogId = String(data[data.length - 1].log_id);
             await window.saveSystemLogCacheState(supabaseClient, {
                 lastLogId,
                 completed: false,
-                totalCount: expectedCount
+                totalCount: expectedCount,
+                cachedCount
             });
-            setSystemLogsCacheStatus(`Syncing offline log history: ${cachedCount.toLocaleString()} new logs saved...`);
+            setSystemLogsCacheStatus(`Syncing offline log history: ${cachedCount.toLocaleString()} of ${expectedCount.toLocaleString()} logs saved...`);
             if (data.length < SYSTEM_LOG_PAGE_SIZE) continue;
             await yieldDuringLogPreparation();
         }
@@ -12912,30 +12938,43 @@ async function prepareSystemLogsOffline(isAutomatic = false) {
             await window.saveSystemLogCacheState(supabaseClient, {
                 lastLogId,
                 completed: false,
-                totalCount: expectedCount
+                totalCount: expectedCount,
+                cachedCount
             });
-            setSystemLogsCacheStatus(`Sync paused. ${cachedCount.toLocaleString()} new logs saved; it will resume when you reconnect.`);
+            setSystemLogsCacheStatus(`Sync paused. ${cachedCount.toLocaleString()} of ${expectedCount.toLocaleString()} logs saved; it will resume when you reconnect.`);
         } else {
             const [{ count: latestServerCount, error: latestCountError }, finalCachedLogs] = await Promise.all([
                 supabaseClient.from('activity_logs').select('log_id', { count: 'exact', head: true }),
                 window.getCachedSystemLogs(supabaseClient)
             ]);
             if (latestCountError) throw latestCountError;
+            if (!Number.isInteger(latestServerCount) || latestServerCount !== expectedCount) {
+                throw new Error('The activity-log total changed during sync; automatic verification will retry.');
+            }
             const finalCachedServerLogCount = finalCachedLogs.filter(log => Number.isFinite(Number(log.log_id))).length;
-            if (finalCachedServerLogCount < Number(latestServerCount || 0)) {
-                throw new Error(`Offline cache verification failed: ${finalCachedServerLogCount} of ${Number(latestServerCount || 0)} logs are saved.`);
+            const finalCachedMaxLogId = finalCachedLogs.reduce((maximum, log) => {
+                const value = String(log.log_id || '');
+                return /^\d+$/.test(value) && BigInt(value) > maximum ? BigInt(value) : maximum;
+            }, 0n).toString();
+            const latestServerIdResult = await supabaseClient.from('activity_logs')
+                .select('log_id').order('log_id', { ascending: false }).limit(1).maybeSingle();
+            if (latestServerIdResult.error) throw latestServerIdResult.error;
+            const verifiedLatestServerId = String(latestServerIdResult.data?.log_id || '0');
+            if (finalCachedServerLogCount !== latestServerCount || finalCachedMaxLogId !== verifiedLatestServerId) {
+                throw new Error(`Offline cache verification failed: ${finalCachedServerLogCount} of ${latestServerCount} logs are saved.`);
             }
             await window.saveSystemLogCacheState(supabaseClient, {
                 lastLogId,
                 completed: true,
-                totalCount: Number(latestServerCount || 0)
+                totalCount: latestServerCount,
+                cachedCount: finalCachedServerLogCount
             });
-            if (wasComplete && cachedCount === 0) {
+            if (wasComplete && downloadedCount === 0) {
                 setSystemLogsCacheStatus('Offline log history is up to date on this device.');
             } else if (wasComplete) {
-                setSystemLogsCacheStatus(`Offline log history updated with ${cachedCount.toLocaleString()} new logs.`);
+                setSystemLogsCacheStatus(`Offline log history updated. ${finalCachedServerLogCount.toLocaleString()} logs are available offline.`);
             } else {
-                setSystemLogsCacheStatus(`Offline log search is ready. Full history synced; ${cachedCount.toLocaleString()} logs added this session.`);
+                setSystemLogsCacheStatus(`Offline log search is ready. ${finalCachedServerLogCount.toLocaleString()} logs are available offline; ${downloadedCount.toLocaleString()} downloaded now.`);
             }
         }
     } catch (error) {
