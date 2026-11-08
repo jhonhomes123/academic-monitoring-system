@@ -2928,7 +2928,7 @@ onchange="loadSubjectsForTeacherAssign()">
       
     </script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
-    <script src="portal-offline.js?v=163"></script>
+    <script src="portal-offline.js?v=164"></script>
     <script>
 
         const SUPABASE_URL =
@@ -12850,6 +12850,9 @@ async function prepareSystemLogsOffline(isAutomatic = false) {
     setSystemLogsCacheStatus('Syncing offline log history...');
     let cachedCount = 0;
     let downloadedCount = 0;
+    let pagesThisRun = 0;
+    let yieldedForResponsiveness = false;
+    const maxPagesPerRun = 3;
     let lastLogId = '0';
     let wasComplete = false;
 
@@ -12927,18 +12930,27 @@ async function prepareSystemLogsOffline(isAutomatic = false) {
                 cachedCount
             });
             setSystemLogsCacheStatus(`Syncing offline log history: ${cachedCount.toLocaleString()} of ${expectedCount.toLocaleString()} logs saved...`);
+            pagesThisRun += 1;
+            if (pagesThisRun >= maxPagesPerRun && data.length === SYSTEM_LOG_PAGE_SIZE) {
+                yieldedForResponsiveness = true;
+                break;
+            }
             if (data.length < SYSTEM_LOG_PAGE_SIZE) continue;
             await yieldDuringLogPreparation();
         }
 
-        if (preparation.cancelled) {
+        if (preparation.cancelled || yieldedForResponsiveness) {
             await window.saveSystemLogCacheState(supabaseClient, {
                 lastLogId,
                 completed: false,
                 totalCount: expectedCount,
                 cachedCount
             });
-            setSystemLogsCacheStatus(`Sync paused. ${cachedCount.toLocaleString()} of ${expectedCount.toLocaleString()} logs saved; it will resume when you reconnect.`);
+            if (preparation.cancelled) {
+                setSystemLogsCacheStatus(`Sync paused. ${cachedCount.toLocaleString()} of ${expectedCount.toLocaleString()} logs saved; it will resume when you reconnect.`);
+            } else {
+                setSystemLogsCacheStatus(`Offline log sync yielded after ${pagesThisRun} pages; ${cachedCount.toLocaleString()} of ${expectedCount.toLocaleString()} logs saved.`);
+            }
         } else {
             const [{ count: latestServerCount, error: latestCountError }, finalCachedLogs] = await Promise.all([
                 supabaseClient.from('activity_logs').select('log_id', { count: 'exact', head: true }),
@@ -12986,6 +12998,9 @@ async function prepareSystemLogsOffline(isAutomatic = false) {
     } finally {
         systemLogsOfflinePreparation = null;
         if (cancelButton) cancelButton.hidden = true;
+        if (yieldedForResponsiveness && navigator.onLine) {
+            systemLogsRetryTimer = window.setTimeout(scheduleSystemLogsOfflineSync, 10000);
+        }
     }
 }
 
