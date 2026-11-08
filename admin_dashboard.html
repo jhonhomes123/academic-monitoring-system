@@ -1178,6 +1178,10 @@ table td{
                     </p>
                 </div>
             </div>
+
+            <p id="adminOfflineLogsCacheStatus" role="status" aria-live="polite" style="margin:0 0 20px;color:#475569;font-size:14px;">
+                Offline log history sync will start automatically while connected.
+            </p>
             <!-- DASHBOARD CARDS -->
             <div class="dashboard-grid">
 
@@ -2925,7 +2929,7 @@ onchange="loadSubjectsForTeacherAssign()">
       
     </script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
-    <script src="portal-offline.js?v=157"></script>
+    <script src="portal-offline.js?v=158"></script>
     <script>
 
         const SUPABASE_URL =
@@ -2941,6 +2945,7 @@ onchange="loadSubjectsForTeacherAssign()">
             );
 
         console.log("Admin Dashboard Connected!");
+        window.setTimeout(scheduleSystemLogsOfflineSync, 0);
         window.beginAdminOfflinePage(supabaseClient).then(restoredOffline => {
             if (restoredOffline) {
                 void renderAdminCreatedAccounts();
@@ -2949,7 +2954,6 @@ onchange="loadSubjectsForTeacherAssign()">
                 void renderAdminStructureQueue();
                 return;
             }
-            scheduleSystemLogsOfflineSync();
             loadDashboardCounts();
             void renderAdminCreatedAccounts();
             void renderAdminPasswordResets();
@@ -2957,7 +2961,6 @@ onchange="loadSubjectsForTeacherAssign()">
             void renderAdminStructureQueue();
         }).catch(error => {
             console.warn('Offline admin view could not be prepared.', error);
-            scheduleSystemLogsOfflineSync();
             loadDashboardCounts();
         });
         // LOAD DASHBOARD COUNTS
@@ -12721,6 +12724,7 @@ let systemLogsRequestId = 0;
 let systemLogsSearchTimer = null;
 let systemLogsOfflinePreparation = null;
 let systemLogsAutoSyncScheduled = false;
+let systemLogsRetryTimer = null;
 
 const SYSTEM_LOG_CATEGORY_TERMS = {
     student: ['student', 'grade', 'enrollment'],
@@ -12755,7 +12759,14 @@ function createSystemLogsQuery(search, category, start, end) {
 function cancelSystemLogsOfflinePreparation() {
     if (!systemLogsOfflinePreparation) return;
     systemLogsOfflinePreparation.cancelled = true;
-    document.getElementById('offlineLogsPreparationStatus').textContent = 'Stopping after the current page...';
+    setSystemLogsCacheStatus('Stopping offline log sync after the current page...');
+}
+
+function setSystemLogsCacheStatus(message) {
+    const dashboardStatus = document.getElementById('adminOfflineLogsCacheStatus');
+    const logsStatus = document.getElementById('offlineLogsPreparationStatus');
+    if (dashboardStatus) dashboardStatus.textContent = message;
+    if (logsStatus) logsStatus.textContent = message;
 }
 
 function updateSystemLogsAvailabilityNote() {
@@ -12778,6 +12789,8 @@ function yieldDuringLogPreparation() {
 
 function scheduleSystemLogsOfflineSync() {
     if (!navigator.onLine || systemLogsOfflinePreparation || systemLogsAutoSyncScheduled) return;
+    window.clearTimeout(systemLogsRetryTimer);
+    setSystemLogsCacheStatus('Starting offline log history sync...');
     systemLogsAutoSyncScheduled = true;
     const startSync = () => {
         systemLogsAutoSyncScheduled = false;
@@ -12792,10 +12805,9 @@ function scheduleSystemLogsOfflineSync() {
 
 async function prepareSystemLogsOffline(isAutomatic = false) {
     const cancelButton = document.getElementById('cancelOfflineLogsButton');
-    const status = document.getElementById('offlineLogsPreparationStatus');
     if (systemLogsOfflinePreparation) return;
     if (!navigator.onLine) {
-        if (!isAutomatic) status.textContent = 'Connect to the internet before syncing the offline log cache.';
+        if (!isAutomatic) setSystemLogsCacheStatus('Connect to the internet before syncing the offline log cache.');
         return;
     }
     let sessionData;
@@ -12804,12 +12816,15 @@ async function prepareSystemLogsOffline(isAutomatic = false) {
         if (error) throw error;
         sessionData = data;
     } catch (error) {
-        if (!isAutomatic) status.textContent = error.message || 'Unable to verify the administrator session.';
+        setSystemLogsCacheStatus(error.message || 'Unable to verify the administrator session.');
+        if (isAutomatic && navigator.onLine) {
+            systemLogsRetryTimer = window.setTimeout(scheduleSystemLogsOfflineSync, 15000);
+        }
         return;
     }
     const adminUserId = sessionData.session?.user?.id;
     if (!adminUserId) {
-        if (!isAutomatic) status.textContent = 'Sign in as an administrator before syncing offline logs.';
+        setSystemLogsCacheStatus('Sign in as an administrator to sync offline log history.');
         return;
     }
     try {
@@ -12819,22 +12834,23 @@ async function prepareSystemLogsOffline(isAutomatic = false) {
             .maybeSingle();
         if (error) throw error;
         if (!admin) {
-            if (!isAutomatic) status.textContent = 'Administrator access is required to cache activity logs.';
+            setSystemLogsCacheStatus('Administrator access is required to sync offline log history.');
             return;
         }
     } catch (error) {
-        if (!isAutomatic) status.textContent = error.message || 'Unable to verify administrator access.';
+        setSystemLogsCacheStatus(`Unable to verify administrator access: ${error.message || 'connection error'}. Retrying shortly.`);
+        if (isAutomatic) systemLogsRetryTimer = window.setTimeout(scheduleSystemLogsOfflineSync, 15000);
         return;
     }
     if (typeof window.cacheSystemLogEntries !== 'function') {
-        if (!isAutomatic) status.textContent = 'Offline log storage is unavailable in this browser.';
+        setSystemLogsCacheStatus('Offline log storage is unavailable in this browser.');
         return;
     }
 
     const preparation = { cancelled: false };
     systemLogsOfflinePreparation = preparation;
-    cancelButton.hidden = false;
-    status.textContent = 'Syncing offline log cache...';
+    if (cancelButton) cancelButton.hidden = false;
+    setSystemLogsCacheStatus('Syncing offline log history...');
     let cachedCount = 0;
     let lastLogId = '0';
     let wasComplete = false;
@@ -12864,7 +12880,7 @@ async function prepareSystemLogsOffline(isAutomatic = false) {
             cachedCount += data.length;
             lastLogId = String(data[data.length - 1].log_id);
             await window.saveSystemLogCacheState(supabaseClient, { lastLogId, completed: false });
-            status.textContent = `Syncing offline log cache: ${cachedCount.toLocaleString()} new logs saved...`;
+            setSystemLogsCacheStatus(`Syncing offline log history: ${cachedCount.toLocaleString()} new logs saved...`);
             if (data.length < SYSTEM_LOG_PAGE_SIZE) {
                 await window.saveSystemLogCacheState(supabaseClient, { lastLogId, completed: true });
                 break;
@@ -12874,23 +12890,26 @@ async function prepareSystemLogsOffline(isAutomatic = false) {
 
         if (preparation.cancelled) {
             await window.saveSystemLogCacheState(supabaseClient, { lastLogId, completed: false });
-            status.textContent = `Sync paused. ${cachedCount.toLocaleString()} new logs saved; reload or refresh the cache to resume.`;
+            setSystemLogsCacheStatus(`Sync paused. ${cachedCount.toLocaleString()} new logs saved; it will resume when you reconnect.`);
         } else if (wasComplete && cachedCount === 0) {
-            status.textContent = 'Offline log cache is up to date.';
+            setSystemLogsCacheStatus('Offline log history is up to date on this device.');
         } else if (wasComplete) {
-            status.textContent = `Offline log cache updated with ${cachedCount.toLocaleString()} new logs.`;
+            setSystemLogsCacheStatus(`Offline log history updated with ${cachedCount.toLocaleString()} new logs.`);
         } else {
-            status.textContent = `Offline search ready. Full history synced; ${cachedCount.toLocaleString()} logs added this session.`;
+            setSystemLogsCacheStatus(`Offline log search is ready. Full history synced; ${cachedCount.toLocaleString()} logs added this session.`);
         }
     } catch (error) {
         const reason = error?.name === 'QuotaExceededError'
             ? 'Browser storage is full.'
             : error?.message || 'Unable to finish preparing offline logs.';
-        status.textContent = `${reason} ${cachedCount.toLocaleString()} new logs saved; syncing will resume when possible.`;
+        setSystemLogsCacheStatus(`${reason} ${cachedCount.toLocaleString()} new logs saved; retrying automatically while connected.`);
         console.warn('Offline log preparation stopped.', error);
+        if (error?.name !== 'QuotaExceededError' && navigator.onLine) {
+            systemLogsRetryTimer = window.setTimeout(scheduleSystemLogsOfflineSync, 15000);
+        }
     } finally {
         systemLogsOfflinePreparation = null;
-        cancelButton.hidden = true;
+        if (cancelButton) cancelButton.hidden = true;
     }
 }
 
@@ -13183,6 +13202,9 @@ async function deleteAllLogs() {
         window.addEventListener('online', scheduleSystemLogsOfflineSync);
         window.addEventListener('online', updateSystemLogsAvailabilityNote);
         window.addEventListener('offline', updateSystemLogsAvailabilityNote);
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') scheduleSystemLogsOfflineSync();
+        });
         supabaseClient.auth.onAuthStateChange((_event, session) => {
             if (session) scheduleSystemLogsOfflineSync();
         });
