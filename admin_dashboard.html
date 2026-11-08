@@ -20,29 +20,25 @@
         :root {
             --primary: #0b3d91;
             --secondary: #1f6bff;
-                const { data, error } = await supabaseClient
-                    .from('activity_logs')
-                    .select('log_id, user_id, activity, created_at, users(email)')
-                    .order('created_at', { ascending: false })
-                    .order('log_id', { ascending: false })
-                    .range(0, SYSTEM_LOG_PAGE_SIZE - 1);
+            --gray: #64748b;
+            --border: #dbe3ef;
+            --danger: #dc2626;
+            --warning: #d97706;
+            --success: #15803d;
+        }
 
-                if (error) throw error;
-                systemLogsHasMore = data.length === SYSTEM_LOG_PAGE_SIZE;
-                systemLogsOffset = data.length;
-                document.getElementById('loadOlderLogsButton').style.display = systemLogsHasMore ? '' : 'none';
-                if (typeof window.cacheSystemLogEntries === 'function' && data.length) {
-                    void window.cacheSystemLogEntries(supabaseClient, data);
-                }
-                renderActivityLogs(data);
+        .topbar {
+            background: white;
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 25px;
+            margin-bottom: 30px;
         }
 
         .topbar h1 { color: var(--primary); margin-bottom: 10px; }
         .topbar p { color: var(--gray); }
-                if (!navigator.onLine) {
-                    console.warn('Using cached activity logs because the app is offline.', error);
-                }
-                if (!table.children.length) table.innerHTML = '<tr><td colspan="4">Failed loading logs</td></tr>';
+
+        .dashboard-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
             gap: 20px;
