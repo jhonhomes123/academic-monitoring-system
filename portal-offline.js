@@ -252,7 +252,9 @@
             .eq('auth_user_id', userId)
             .maybeSingle();
         if (error || !admin) return false;
-        await saveAdminAccountLookups(client, userId);
+        void saveAdminAccountLookups(client, userId).catch(cacheError => {
+            console.warn('Admin offline lookup refresh is still pending.', cacheError);
+        });
         void syncAdminQueues(client);
 
         const main = document.querySelector('.main');
@@ -2552,7 +2554,9 @@
             const userId = await getUserId(client);
             const { data: admin, error } = await client.from('admins').select('id').eq('auth_user_id', userId).maybeSingle();
             if (error || !admin) return;
-            await saveAdminAccountLookups(client, userId);
+            void saveAdminAccountLookups(client, userId).catch(cacheError => {
+                console.warn('Admin offline lookup refresh is still pending after reconnect.', cacheError);
+            });
             await syncAdminQueues(client);
             if (wasOfflineView) {
                 window.location.reload();
