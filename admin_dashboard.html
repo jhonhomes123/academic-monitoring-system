@@ -4,66 +4,63 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AMS Admin Dashboard</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
     <style>
-            let data = [];
-            let error = null;
-            const requestedSubjectId = String(subjectId);
-            const [structure, accountData, structureIdMap] = await Promise.all([
-                window.getAdminStructureData(supabaseClient),
-                window.getAdminAccountData(supabaseClient),
-                window.getAdminStructureLocalIdMap?.(supabaseClient) || Promise.resolve(new Map())
-            ]);
-            const lookups = structure.lookups || {};
-            const pending = structure.pending || [];
-            const resolvedSubjectId = String(structureIdMap.get(requestedSubjectId) || requestedSubjectId);
-            const pendingTeacher = teacherId => {
-                const requestedTeacherId = String(teacherId);
-                const resolvedTeacherId = String(structureIdMap.get(requestedTeacherId) || requestedTeacherId);
-                const cachedTeacher = (lookups.teachers || []).find(teacher =>
-                    String(teacher.teacher_id) === requestedTeacherId || String(teacher.teacher_id) === resolvedTeacherId);
-                if (cachedTeacher) return cachedTeacher;
-                const createRequest = (accountData.queued || []).find(operation => operation.role === 'teacher'
-                    && (operation.action || 'admin-create') === 'admin-create'
-                    && `local:${operation.operationId}` === requestedTeacherId);
-                return createRequest ? {
-                    teacher_id: requestedTeacherId,
-                    teacher_number: createRequest.payload.teacher_number,
-                    first_name: createRequest.payload.first_name,
-                    middle_initial: createRequest.payload.middle_initial,
-                    last_name: createRequest.payload.last_name
-                } : null;
-            };
-            if (!navigator.onLine || resolvedSubjectId.startsWith('local:')) {
-                data = (lookups.teacherAssignments || []).filter(assignment =>
-                    String(assignment.subject_id) === requestedSubjectId || String(assignment.subject_id) === resolvedSubjectId);
-            } else {
-                const result = await supabaseClient.from('teacher_subject_assignments')
-                    .select('assignment_id, teacher_id, subject_id, teachers(first_name, middle_initial, last_name)')
-                    .eq('subject_id', resolvedSubjectId);
-                data = result.data || [];
-                error = result.error;
-            }
-            pending.filter(operation => operation.type === 'teacher_subject_assign'
-                && (String(operation.payload.subject_id) === requestedSubjectId
-                    || String(operation.payload.subject_id) === resolvedSubjectId))
-                .forEach(operation => {
-                    const existing = data.some(assignment => assignment.operationId === operation.operationId
-                        || String(assignment.assignment_id) === String(operation.localRef));
-                    if (existing) return;
-                    data.push({
-                        assignment_id: operation.localRef,
-                        operationId: operation.operationId,
-                        teacher_id: operation.payload.teacher_id,
-                        subject_id: operation.payload.subject_id,
-                        teachers: pendingTeacher(operation.payload.teacher_id),
-                        pending: true
-                    });
-                });
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Inter', sans-serif;
         }
+
+        :root {
+            --primary: #0b3d91;
+            --secondary: #1f6bff;
+            --light: #f4f7fc;
+            --white: #ffffff;
+            --text: #1e293b;
+            --gray: #64748b;
+            --border: #dbe4f0;
+            --success: #16a34a;
+            --warning: #f59e0b;
+            --danger: #dc2626;
+        }
+
+        body { background: var(--light); display: flex; }
+        .sidebar {
+            width: 270px;
+            height: 100vh;
+            background: var(--primary);
+            color: white;
+            position: fixed;
+            left: 0;
+            top: 0;
+            padding: 30px 20px;
+            overflow-y: auto;
+        }
+        .logo { margin-bottom: 40px; }
+        .logo h2 { font-size: 25px; }
+        .logo p { font-size: 13px; opacity: .8; margin-top: 5px; }
+        .menu { display: flex; flex-direction: column; gap: 10px; }
+        .menu a { text-decoration: none; color: white; padding: 14px; border-radius: 12px; transition: .3s; font-weight: 500; }
+        .menu a:hover,
+        .menu a.active { background: rgba(255, 255, 255, .15); }
+        .menu i { margin-right: 10px; }
+        .main { margin-left: 270px; width: calc(100% - 270px); padding: 30px; }
+        .content-section { display: none; }
+        .active-section { display: block; }
+        .topbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+        }
+
         .topbar h1 { color: var(--primary); margin-bottom: 10px; }
         .topbar p { color: var(--gray); }
 
@@ -4672,73 +4669,64 @@ async function refreshManageStudentsAfterSectionTransition(sectionId, yearLevel)
     
     `;
 
-            let data;
+            let data = [];
             let error = null;
-            let lookups = null;
-            const queuedTeacherRef = String(teacherId).startsWith('queued:')
-                ? `local:${String(teacherId).slice('queued:'.length)}`
-                : String(teacherId).startsWith('local:') ? String(teacherId) : null;
-            const [{ queued: queuedAccountOperations = [] }, teacherIdMap] = await Promise.all([
+            const requestedSubjectId = String(subjectId);
+            const [structure, accountData, structureIdMap] = await Promise.all([
+                window.getAdminStructureData(supabaseClient),
                 window.getAdminAccountData(supabaseClient),
                 window.getAdminStructureLocalIdMap?.(supabaseClient) || Promise.resolve(new Map())
             ]);
-            const getTeacherRecord = teacherId => {
-                const requestedId = String(teacherId);
-                const realId = String(teacherIdMap.get(requestedId) ?? requestedId);
-                const cachedTeacher = (lookups?.teachers || []).find(candidate =>
-                    String(candidate.teacher_id) === realId || String(candidate.teacher_id) === requestedId);
+            const lookups = structure.lookups || {};
+            const pending = structure.pending || [];
+            const resolvedSubjectId = String(structureIdMap.get(requestedSubjectId) || requestedSubjectId);
+            const resolveTeacher = teacherId => {
+                const requestedTeacherId = String(teacherId);
+                const resolvedTeacherId = String(structureIdMap.get(requestedTeacherId) || requestedTeacherId);
+                const cachedTeacher = (lookups.teachers || []).find(teacher =>
+                    String(teacher.teacher_id) === requestedTeacherId || String(teacher.teacher_id) === resolvedTeacherId);
                 if (cachedTeacher) return cachedTeacher;
-                const localRef = requestedId.startsWith('queued:')
-                    ? `local:${requestedId.slice('queued:'.length)}`
-                    : requestedId;
-                const queuedTeacher = localRef.startsWith('local:')
-                    ? queuedAccountOperations.find(operation => operation.role === 'teacher'
-                        && (operation.action || 'admin-create') === 'admin-create'
-                        && `local:${operation.operationId}` === localRef)
-                    : null;
-                return queuedTeacher ? {
-                    teacher_id: requestedId,
-                    teacher_number: queuedTeacher.payload.teacher_number,
-                    first_name: queuedTeacher.payload.first_name,
-                    middle_initial: queuedTeacher.payload.middle_initial,
-                    last_name: queuedTeacher.payload.last_name
+                const localRef = requestedTeacherId.startsWith('queued:')
+                    ? `local:${requestedTeacherId.slice('queued:'.length)}`
+                    : requestedTeacherId;
+                const createRequest = (accountData.queued || []).find(operation => operation.role === 'teacher'
+                    && (operation.action || 'admin-create') === 'admin-create'
+                    && `local:${operation.operationId}` === localRef);
+                return createRequest ? {
+                    teacher_id: requestedTeacherId,
+                    teacher_number: createRequest.payload.teacher_number,
+                    first_name: createRequest.payload.first_name,
+                    middle_initial: createRequest.payload.middle_initial,
+                    last_name: createRequest.payload.last_name
                 } : null;
             };
-            const teacherRefs = new Set([String(teacherId)]);
-            if (queuedTeacherRef) teacherRefs.add(queuedTeacherRef);
-            const resolvedTeacherId = queuedTeacherRef
-                ? String(teacherIdMap.get(queuedTeacherRef) || teacherId)
-                : String(teacherId);
-            teacherRefs.add(resolvedTeacherId);
 
-            if (!navigator.onLine || queuedTeacherRef) {
-                const structure = await window.getAdminStructureData(supabaseClient);
-                lookups = structure.lookups || lookups;
-                data = (lookups?.teacherAssignments || []).filter(item =>
-                    teacherRefs.has(String(item.teacher_id)));
-                structure.pending.filter(item => item.type === 'teacher_subject_assign'
-                    && teacherRefs.has(String(item.payload.teacher_id)))
-                    .forEach(item => {
-                        const teacher = getTeacherRecord(item.payload.teacher_id);
-                        data.push({ assignment_id: item.localRef, teacher_id: item.payload.teacher_id, teachers: teacher, pending: true });
-                    });
+            if (!navigator.onLine || resolvedSubjectId.startsWith('local:')) {
+                data = (lookups.teacherAssignments || []).filter(assignment =>
+                    String(assignment.subject_id) === requestedSubjectId
+                    || String(assignment.subject_id) === resolvedSubjectId);
             } else {
                 const result = await supabaseClient.from('teacher_subject_assignments')
-                    .select(`assignment_id, teachers(first_name, middle_initial, last_name)`)
-                    .eq('teacher_id', resolvedTeacherId);
+                    .select('assignment_id, teacher_id, subject_id, teachers(first_name, middle_initial, last_name)')
+                    .eq('subject_id', resolvedSubjectId);
                 data = result.data || [];
                 error = result.error;
-                if (!error && window.getAdminStructureData) {
-                    const structure = await window.getAdminStructureData(supabaseClient);
-                    lookups = structure.lookups;
-                    structure.pending.filter(item => item.type === 'teacher_subject_assign'
-                        && teacherRefs.has(String(item.payload.teacher_id)))
-                        .forEach(item => {
-                            const teacher = getTeacherRecord(item.payload.teacher_id);
-                            data.push({ assignment_id: item.localRef, teacher_id: item.payload.teacher_id, subjects: teacher, pending: true });
-                        });
-                }
             }
+
+            pending.filter(operation => operation.type === 'teacher_subject_assign'
+                && (String(operation.payload.subject_id) === requestedSubjectId
+                    || String(operation.payload.subject_id) === resolvedSubjectId))
+                .forEach(operation => {
+                    if (data.some(assignment => String(assignment.assignment_id) === String(operation.localRef))) return;
+                    data.push({
+                        assignment_id: operation.localRef,
+                        operationId: operation.operationId,
+                        teacher_id: operation.payload.teacher_id,
+                        subject_id: operation.payload.subject_id,
+                        teachers: resolveTeacher(operation.payload.teacher_id),
+                        pending: true
+                    });
+                });
 
             if (window.getAdminStructureData) {
                 const { pending } = await window.getAdminStructureData(supabaseClient);
