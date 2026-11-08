@@ -351,7 +351,7 @@
                 const isAllowedOfflineAction = control.matches('button')
                     && /createStudentAccount|createTeacherAccount|saveStudentEdits|saveTeacherEdits|resetStudentPassword|resetTeacherPassword|deleteStudent|deleteTeacher|deleteCreatedStudentAccount|deleteCreatedTeacherAccount|deleteQueuedTeacherAccount|deleteAllUnassignedStudents|deleteAllGraduatedStudents|clearAdminCreatedAccounts|clearAdminDeletionResults|loadUnassignedStudents|loadGraduatedStudents|transitionSelectedManageSection|unassignAllStudentsFromSelectedSection|unassignSelectedStudentsFromSection|assignSelectedUnassignedStudents|addDepartment|addMajor|addSection|addSubject|setActiveSemester|deleteDepartment|deleteMajor|deleteSectionModalAction|deleteSubject|assignTeacherToSubject|removeTeacherAssignment|saveTeacherSection|closeCreateStudentModal|closeEditStudentModal|closeTeacherAssignmentModal|closeModal|closeDepartmentModal|closeMajorModal|closeSectionModal|closeSubjectModal|closeDeleteDepartmentModal|closeDeleteMajorModal|closeDeleteSectionModal|closeDeleteSubjectModal|closeTeacherAssignModal|closeTeacherSectionModal|loadEditStudentMajors|loadEditStudentSections|loadDepartmentDeleteOptions|loadMajorsForDelete|loadMajorsForDeleteSection|loadSectionsForDelete|loadMajorsForDeleteSubject|loadSubjectsForDelete/.test(control.getAttribute('onclick') || '');
                 const isAllowedOfflineStandaloneAction = control.matches('button')
-                    && /deleteStudent|deleteTeacher|deleteCreatedStudentAccount|deleteCreatedTeacherAccount|deleteQueuedTeacherAccount|resetTeacherPassword|openEditTeacherModal|deleteAllUnassignedStudents|deleteAllGraduatedStudents|clearAdminCreatedAccounts|clearAdminPasswordResetResults|clearAdminDeletionResults|transitionSelectedManageSection|unassignAllStudentsFromSelectedSection|openUnassignSelectedStudentsModal/.test(control.getAttribute('onclick') || '');
+                    && /deleteAllLogs|deleteStudent|deleteTeacher|deleteCreatedStudentAccount|deleteCreatedTeacherAccount|deleteQueuedTeacherAccount|resetTeacherPassword|openEditTeacherModal|deleteAllUnassignedStudents|deleteAllGraduatedStudents|clearAdminCreatedAccounts|clearAdminPasswordResetResults|clearAdminDeletionResults|transitionSelectedManageSection|unassignAllStudentsFromSelectedSection|openUnassignSelectedStudentsModal/.test(control.getAttribute('onclick') || '');
                 const isSemesterPicker = control.id === 'activeSemesterSelect';
                 const isExplorerBack = control.id === 'backButton';
                 const isStudentFilter = ['manageStudentYear', 'manageStudentDepartment', 'manageStudentMajor', 'manageStudentSection'].includes(control.id);
@@ -1064,10 +1064,52 @@
         const userId = await getUserId(client);
         if (!userId) return [];
         const records = await adminStoreRequest(adminSystemLogStoreName, 'readonly', store => store.getAll());
-        return (records || []).filter(record => record.userId === userId)
+        const userRecords = (records || []).filter(record => record.userId === userId);
+        if (userRecords.some(record => record.recordType === 'system-log-delete-request')) return [];
+        return userRecords
             .filter(record => record.recordType !== 'system-log-cache-state')
             .filter(record => !String(record.log_id || '').startsWith('pending:'))
             .sort((first, second) => Date.parse(second.created_at || 0) - Date.parse(first.created_at || 0));
+    }
+
+    async function queueSystemLogDeleteAll(client) {
+        const userId = await getUserId(client);
+        if (!userId) throw new Error('Sign in before queuing activity-log deletion.');
+        const records = await adminStoreRequest(adminSystemLogStoreName, 'readonly', store => store.getAll());
+        const userKeys = (records || []).filter(record => record.userId === userId).map(record => record.key);
+        const requestedAt = new Date().toISOString();
+        await adminStoreRequest(adminSystemLogStoreName, 'readwrite', store => {
+            userKeys.forEach(key => store.delete(key));
+            return store.put({
+                key: `${userId}:__delete_all_request__`,
+                userId,
+                recordType: 'system-log-delete-request',
+                requestedAt
+            });
+        });
+        return { requestedAt };
+    }
+
+    async function syncQueuedSystemLogDeleteAll(client) {
+        const userId = await getUserId(client);
+        if (!userId || !navigator.onLine) return false;
+        const request = await adminStoreRequest(
+            adminSystemLogStoreName,
+            'readonly',
+            store => store.get(`${userId}:__delete_all_request__`)
+        );
+        if (!request) return false;
+
+        const { error: deleteError } = await client.from('activity_logs')
+            .delete()
+            .neq('log_id', 0);
+        if (deleteError) throw deleteError;
+
+        const { error: resetError } = await client.rpc('reset_activity_logs_id');
+        if (resetError) throw resetError;
+
+        await clearCachedSystemLogs(client);
+        return true;
     }
 
     async function getSystemLogCacheState(client) {
@@ -1103,8 +1145,7 @@
         const userId = await getUserId(client);
         if (!userId) return false;
         const records = await adminStoreRequest(adminSystemLogStoreName, 'readonly', store => store.getAll());
-        const keysToDelete = (records || []).filter(record => record.userId === userId
-            && (record.recordType === 'system-log-cache-state' || !String(record.log_id || '').startsWith('pending:')))
+        const keysToDelete = (records || []).filter(record => record.userId === userId)
             .map(record => record.key);
         await adminStoreRequest(adminSystemLogStoreName, 'readwrite', store => {
             keysToDelete.forEach(key => store.delete(key));
@@ -1789,6 +1830,8 @@
     window.queueAdminStructureDelete = queueAdminStructureDelete;
     window.cacheSystemLogEntries = cacheSystemLogEntries;
     window.getCachedSystemLogs = getCachedSystemLogs;
+    window.queueSystemLogDeleteAll = queueSystemLogDeleteAll;
+    window.syncQueuedSystemLogDeleteAll = syncQueuedSystemLogDeleteAll;
     window.getSystemLogCacheState = getSystemLogCacheState;
     window.saveSystemLogCacheState = saveSystemLogCacheState;
     window.clearCachedSystemLogs = clearCachedSystemLogs;

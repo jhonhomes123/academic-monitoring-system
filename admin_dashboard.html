@@ -2928,7 +2928,7 @@ onchange="loadSubjectsForTeacherAssign()">
       
     </script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
-    <script src="portal-offline.js?v=166"></script>
+    <script src="portal-offline.js?v=168"></script>
     <script>
 
         const SUPABASE_URL =
@@ -12880,6 +12880,12 @@ async function prepareSystemLogsOffline(isAutomatic = false) {
     let wasComplete = false;
 
     try {
+        if (typeof window.syncQueuedSystemLogDeleteAll === 'function') {
+            const deletedQueuedLogs = await window.syncQueuedSystemLogDeleteAll(supabaseClient);
+            if (deletedQueuedLogs) {
+                setSystemLogsCacheStatus('Queued log deletion synced. Refreshing offline log cache...');
+            }
+        }
         const [countResult, latestResult, cacheState, existingLogs] = await Promise.all([
             supabaseClient.from('activity_logs').select('log_id', { count: 'exact', head: true }),
             supabaseClient.from('activity_logs').select('log_id').order('log_id', { ascending: false }).limit(1).maybeSingle(),
@@ -13212,15 +13218,21 @@ function filterLogsTable() {
 
 async function deleteAllLogs() {
 
+    const deletingOfflineCache = !navigator.onLine || window.adminOfflineView;
+    const confirmTitle = deletingOfflineCache ? 'Queue Delete All Logs' : 'Delete All Logs';
+    const confirmMessage = deletingOfflineCache
+        ? 'Hide saved logs now and delete all server activity logs when this device reconnects? This cannot be undone.'
+        : 'Delete ALL activity logs from the server and this device?';
+
     /* ======================
        FIRST CONFIRM MODAL
     ====================== */
 
     showConfirmModal(
 
-        'Delete All Logs',
+        confirmTitle,
 
-        'Delete ALL activity logs?',
+        confirmMessage,
 
         async () => {
 
@@ -13237,6 +13249,18 @@ async function deleteAllLogs() {
                 async () => {
 
                     try {
+
+                        if (deletingOfflineCache) {
+                            await window.queueSystemLogDeleteAll(supabaseClient);
+                            renderActivityLogs([]);
+                            document.getElementById('loadOlderLogsButton').style.display = 'none';
+                            showAlert(
+                                'success',
+                                'Log Deletion Queued',
+                                'Logs are hidden on this device and will be deleted from the server after reconnecting.'
+                            );
+                            return;
+                        }
 
                         /* ======================
                            DELETE ALL LOGS
