@@ -2866,7 +2866,7 @@ onchange="loadSubjectsForTeacherAssign()">
       
     </script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
-    <script src="portal-offline.js?v=152"></script>
+    <script src="portal-offline.js?v=153"></script>
     <script>
 
         const SUPABASE_URL =
@@ -4687,12 +4687,37 @@ async function refreshManageStudentsAfterSectionTransition(sectionId, yearLevel)
 
             let data;
             let error = null;
+            let lookups = null;
+            const [{ queued: queuedAccountOperations = [] }, teacherIdMap] = await Promise.all([
+                window.getAdminAccountData(supabaseClient),
+                window.getAdminStructureLocalIdMap?.(supabaseClient) || Promise.resolve(new Map())
+            ]);
+            const getTeacherRecord = teacherId => {
+                const requestedId = String(teacherId);
+                const realId = String(teacherIdMap.get(requestedId) ?? requestedId);
+                const cachedTeacher = (lookups?.teachers || []).find(candidate =>
+                    String(candidate.teacher_id) === realId || String(candidate.teacher_id) === requestedId);
+                if (cachedTeacher) return cachedTeacher;
+                const queuedTeacher = requestedId.startsWith('local:')
+                    ? queuedAccountOperations.find(operation => operation.role === 'teacher'
+                        && (operation.action || 'admin-create') === 'admin-create'
+                        && `local:${operation.operationId}` === requestedId)
+                    : null;
+                return queuedTeacher ? {
+                    teacher_id: requestedId,
+                    teacher_number: queuedTeacher.payload.teacher_number,
+                    first_name: queuedTeacher.payload.first_name,
+                    middle_initial: queuedTeacher.payload.middle_initial,
+                    last_name: queuedTeacher.payload.last_name
+                } : null;
+            };
             if (!navigator.onLine) {
                 const offlineRecords = await getAdminExplorerRecords();
+                lookups = offlineRecords.lookups;
                 data = (offlineRecords.lookups?.teacherAssignments || []).filter(item => String(item.subject_id) === String(subjectId));
                 (offlineRecords.pending || []).filter(item => item.type === 'teacher_subject_assign' && String(item.payload.subject_id) === String(subjectId))
                     .forEach(item => {
-                        const teacher = (offlineRecords.lookups?.teachers || []).find(candidate => String(candidate.teacher_id) === String(item.payload.teacher_id));
+                        const teacher = getTeacherRecord(item.payload.teacher_id);
                         data.push({ assignment_id: item.localRef, teacher_id: item.payload.teacher_id, teachers: teacher, pending: true });
                     });
             } else {
@@ -4710,10 +4735,12 @@ async function refreshManageStudentsAfterSectionTransition(sectionId, yearLevel)
                 data = result.data || [];
                 error = result.error;
                 if (!error && window.getAdminStructureData) {
-                    const { lookups, pending } = await window.getAdminStructureData(supabaseClient);
+                    const structure = await window.getAdminStructureData(supabaseClient);
+                    lookups = structure.lookups;
+                    const { pending } = structure;
                     pending.filter(item => item.type === 'teacher_subject_assign' && String(item.payload.subject_id) === String(subjectId))
                         .forEach(item => {
-                            const teacher = (lookups?.teachers || []).find(candidate => String(candidate.teacher_id) === String(item.payload.teacher_id));
+                            const teacher = getTeacherRecord(item.payload.teacher_id);
                             data.push({ assignment_id: item.localRef, teacher_id: item.payload.teacher_id, teachers: teacher, pending: true });
                         });
                 }
@@ -7396,6 +7423,9 @@ async function assignTeacherToSubject() {
             });
             showAlert('success', 'Teacher Assignment Queued', 'This teacher will be assigned after the account and assignment sync.');
             closeTeacherAssignModal();
+            const subjectName = document.getElementById('assignSubjectSelect')
+                .selectedOptions[0]?.textContent?.trim() || 'Subject';
+            await viewSubjectTeachers(subjectId, subjectName);
         } catch (error) {
             showAlert('error', 'Assignment Failed', error.message);
         }
