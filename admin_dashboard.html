@@ -11607,20 +11607,40 @@ async function openTeacherAssignments(
 
     let data;
     let error = null;
-    if (!navigator.onLine || queuedTeacherRef) {
+    const structureIdMap = await window.getAdminStructureLocalIdMap?.(supabaseClient) || new Map();
+    const requestedTeacherId = String(teacherId);
+    const resolvedTeacherId = String(structureIdMap.get(requestedTeacherId) || requestedTeacherId);
+    const teacherRefs = new Set([requestedTeacherId, resolvedTeacherId]);
+    if (requestedTeacherId.startsWith('queued:')) {
+        teacherRefs.add(`local:${requestedTeacherId.slice('queued:'.length)}`);
+    }
+
+    if (!navigator.onLine || requestedTeacherId.startsWith('queued:') || resolvedTeacherId.startsWith('local:')) {
         const { lookups, pending } = await window.getAdminStructureData(supabaseClient);
-        const lookupTeacherId = String(teacherIdMap.get(queuedTeacherRef || String(teacherId)) ?? teacherId);
-        data = (lookups?.teacherAssignments || []).filter(item =>
-            String(item.teacher_id) === lookupTeacherId || String(item.teacher_id) === String(teacherId));
+        data = (lookups?.teacherAssignments || []).filter(item => {
+            const itemTeacherId = String(item.teacher_id || '');
+            return teacherRefs.has(itemTeacherId)
+                || teacherRefs.has(String(structureIdMap.get(itemTeacherId) || itemTeacherId));
+        });
+        const pendingUnassignRefs = new Set((pending || [])
+            .filter(item => item.type === 'teacher_subject_unassign')
+            .map(item => String(item.payload?.assignment_id || ''))
+            .filter(Boolean));
         pending.filter(item => item.type === 'teacher_subject_assign'
-            && (String(item.payload.teacher_id) === String(teacherId)
-                || String(item.payload.teacher_id) === String(queuedTeacherRef)
-                || String(item.payload.teacher_id) === lookupTeacherId))
+            && teacherRefs.has(String(item.payload.teacher_id)))
             .forEach(item => {
+                if (pendingUnassignRefs.has(String(item.localRef || ''))) return;
                 const subject = (lookups?.subjects || []).find(candidate => String(candidate.subject_id) === String(item.payload.subject_id))
-                    || pending.find(candidate => candidate.type === 'subject_add' && candidate.localRef === item.payload.subject_id)?.payload;
-                data.push({ assignment_id: item.localRef, teacher_id: teacherId, subject_id: item.payload.subject_id, subjects: subject, pending: true });
+                    || (pending.find(candidate => candidate.type === 'subject_add' && candidate.localRef === item.payload.subject_id)?.payload ?? null);
+                data.push({
+                    assignment_id: item.localRef,
+                    teacher_id: teacherId,
+                    subject_id: item.payload.subject_id,
+                    subjects: subject,
+                    pending: true
+                });
             });
+        data = data.filter(item => !pendingUnassignRefs.has(String(item.assignment_id || '')));
     } else {
         const result = await supabaseClient
             .from('teacher_subject_assignments')
@@ -11638,21 +11658,31 @@ async function openTeacherAssignments(
             `)
             .eq(
                 'teacher_id',
-                teacherId
+                resolvedTeacherId
             );
         data = result.data || [];
         error = result.error;
         if (window.getAdminStructureData) {
             const { lookups, pending } = await window.getAdminStructureData(supabaseClient);
-            const lookupTeacherId = String(teacherIdMap.get(String(teacherId)) ?? teacherId);
+            const pendingUnassignRefs = new Set((pending || [])
+                .filter(item => item.type === 'teacher_subject_unassign')
+                .map(item => String(item.payload?.assignment_id || ''))
+                .filter(Boolean));
             pending.filter(item => item.type === 'teacher_subject_assign'
-                && (String(item.payload.teacher_id) === String(teacherId)
-                    || String(item.payload.teacher_id) === lookupTeacherId))
+                && teacherRefs.has(String(item.payload.teacher_id)))
                 .forEach(item => {
+                    if (pendingUnassignRefs.has(String(item.localRef || ''))) return;
                     const subject = (lookups?.subjects || []).find(candidate => String(candidate.subject_id) === String(item.payload.subject_id))
-                        || pending.find(candidate => candidate.type === 'subject_add' && candidate.localRef === item.payload.subject_id)?.payload;
-                    data.push({ assignment_id: item.localRef, teacher_id: teacherId, subject_id: item.payload.subject_id, subjects: subject, pending: true });
+                        || (pending.find(candidate => candidate.type === 'subject_add' && candidate.localRef === item.payload.subject_id)?.payload ?? null);
+                    data.push({
+                        assignment_id: item.localRef,
+                        teacher_id: teacherId,
+                        subject_id: item.payload.subject_id,
+                        subjects: subject,
+                        pending: true
+                    });
                 });
+            data = data.filter(item => !pendingUnassignRefs.has(String(item.assignment_id || '')));
         }
     }
 
