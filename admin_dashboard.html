@@ -20,51 +20,29 @@
         :root {
             --primary: #0b3d91;
             --secondary: #1f6bff;
-            --light: #f4f7fc;
-            --white: #ffffff;
-            --text: #1e293b;
-            --gray: #64748b;
-            --border: #dbe4f0;
-            --success: #16a34a;
-            --warning: #f59e0b;
-            --danger: #dc2626;
-        }
+                const { data, error } = await supabaseClient
+                    .from('activity_logs')
+                    .select('log_id, user_id, activity, created_at, users(email)')
+                    .order('created_at', { ascending: false })
+                    .order('log_id', { ascending: false })
+                    .range(0, SYSTEM_LOG_PAGE_SIZE - 1);
 
-        body { background: var(--light); display: flex; }
-        .sidebar {
-            width: 270px;
-            height: 100vh;
-            background: var(--primary);
-            color: white;
-            position: fixed;
-            left: 0;
-            top: 0;
-            padding: 30px 20px;
-            overflow-y: auto;
-        }
-        .logo { margin-bottom: 40px; }
-        .logo h2 { font-size: 25px; }
-        .logo p { font-size: 13px; opacity: .8; margin-top: 5px; }
-        .menu { display: flex; flex-direction: column; gap: 10px; }
-        .menu a { text-decoration: none; color: white; padding: 14px; border-radius: 12px; transition: .3s; font-weight: 500; }
-        .menu a:hover,
-        .menu a.active { background: rgba(255, 255, 255, .15); }
-        .menu i { margin-right: 10px; }
-        .main { margin-left: 270px; width: calc(100% - 270px); padding: 30px; }
-        .content-section { display: none; }
-        .active-section { display: block; }
-        .topbar {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 30px;
-            flex-wrap: wrap;
+                if (error) throw error;
+                systemLogsHasMore = data.length === SYSTEM_LOG_PAGE_SIZE;
+                systemLogsOffset = data.length;
+                document.getElementById('loadOlderLogsButton').style.display = systemLogsHasMore ? '' : 'none';
+                if (typeof window.cacheSystemLogEntries === 'function' && data.length) {
+                    void window.cacheSystemLogEntries(supabaseClient, data);
+                }
+                renderActivityLogs(data);
         }
 
         .topbar h1 { color: var(--primary); margin-bottom: 10px; }
         .topbar p { color: var(--gray); }
-
-        .dashboard-grid {
+                if (!navigator.onLine) {
+                    console.warn('Using cached activity logs because the app is offline.', error);
+                }
+                if (!table.children.length) table.innerHTML = '<tr><td colspan="4">Failed loading logs</td></tr>';
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
             gap: 20px;
@@ -2631,6 +2609,12 @@ onchange="loadSubjectsForTeacherAssign()">
 
             </table>
 
+        </div>
+
+        <div style="display:flex;justify-content:center;padding:12px 0;">
+            <button type="button" id="loadOlderLogsButton" onclick="loadOlderSystemLogs()" style="display:none;padding:9px 16px;cursor:pointer;">
+                Load older logs
+            </button>
         </div>
         </div>
 
@@ -12634,14 +12618,25 @@ function closeTeacherSectionModal() {
    LOAD SYSTEM LOGS
 ========================================================= */
 
-function renderActivityLogs(logs) {
+const SYSTEM_LOG_PAGE_SIZE = 100;
+let systemLogsOffset = 0;
+let systemLogsLoading = false;
+let systemLogsHasMore = true;
+
+function renderActivityLogs(logs, append = false) {
 
     const table =
         document.getElementById(
             'logsTable'
         );
 
+    if (!append) {
+        table.replaceChildren();
+    }
+
     if (!logs || !logs.length) {
+
+        if (append || table.children.length) return;
 
         table.innerHTML = `
 
@@ -12661,262 +12656,130 @@ function renderActivityLogs(logs) {
 
     }
 
-    table.innerHTML = '';
+    const fragment = document.createDocumentFragment();
 
     logs.forEach(log => {
 
-        const date =
-            new Date(
-                log.created_at || Date.now()
-            ).toLocaleString();
-
-        table.innerHTML += `
-
-        <tr>
-
-            <td>
-
-                ${log.log_id || 'Pending'}
-
-            </td>
-
-            <td>
-
-                ${log.users?.email || log.user_email || 'Admin'}
-
-            </td>
-
-            <td>
-
-                ${log.activity}
-
-            </td>
-
-            <td>
-
-                ${date}
-
-            </td>
-
-        </tr>
-
-        `;
+        const row = document.createElement('tr');
+        const values = [
+            log.log_id || 'Pending',
+            log.users?.email || log.user_email || 'Admin',
+            log.activity || '',
+            new Date(log.created_at || Date.now()).toLocaleString()
+        ];
+        values.forEach(value => {
+            const cell = document.createElement('td');
+            cell.textContent = String(value);
+            row.appendChild(cell);
+        });
+        fragment.appendChild(row);
 
     });
+
+    table.appendChild(fragment);
 
 }
 
 async function loadSystemLogs() {
+    const table = document.getElementById('logsTable');
+    const loadOlderButton = document.getElementById('loadOlderLogsButton');
+    systemLogsOffset = 0;
+    systemLogsHasMore = true;
+    systemLogsLoading = false;
+    loadOlderButton.style.display = 'none';
+    table.innerHTML = '<tr><td colspan="4">Loading recent logs...</td></tr>';
 
-    const table =
-        document.getElementById(
-            'logsTable'
-        );
-
-    table.innerHTML = `
-
-    <tr>
-
-        <td colspan="4">
-
-            Loading logs...
-
-        </td>
-
-    </tr>
-
-    `;
-
-    try {
-
-        const { data, error } =
-            await supabaseClient
-                .from('activity_logs')
-                .select(`
-
-                    *,
-                    users (
-                        email
-                    )
-
-                `)
-                .order(
-                    'created_at',
-                    {
-                        ascending: false
-                    }
-                );
-
-        if (!error && Array.isArray(data)) {
-
-            if (data.length) {
-                if (typeof window.cacheSystemLogEntries === 'function') {
-                    await window.cacheSystemLogEntries(supabaseClient, data);
-                }
-                renderActivityLogs(data);
-                return;
-            }
-
-            if (typeof window.getCachedSystemLogs === 'function') {
-                const cachedLogs = await window.getCachedSystemLogs(supabaseClient);
-                if (cachedLogs.length) {
-                    renderActivityLogs(cachedLogs);
-                    return;
-                }
-            }
-
-            table.innerHTML = `
-
-            <tr>
-
-                <td colspan="4">
-
-                    No activity logs found
-
-                </td>
-
-            </tr>
-
-            `;
-            return;
-
-        }
-
-        if (error && !navigator.onLine) {
-            console.warn('Using cached activity logs because the app is offline.', error);
-        }
-
-        if (typeof window.getCachedSystemLogs === 'function') {
-
+    if (typeof window.getCachedSystemLogs === 'function') {
+        try {
             const cachedLogs = await window.getCachedSystemLogs(supabaseClient);
             if (cachedLogs.length) {
-                renderActivityLogs(cachedLogs);
-                return;
+                const recentCachedLogs = cachedLogs.slice(0, SYSTEM_LOG_PAGE_SIZE);
+                renderActivityLogs(recentCachedLogs);
+                systemLogsOffset = recentCachedLogs.length;
             }
-
+        } catch (cacheError) {
+            console.warn('Could not read cached activity logs.', cacheError);
         }
-
-        if (error) {
-            console.log(error);
-        }
-
-        table.innerHTML = `
-
-        <tr>
-
-            <td colspan="4">
-
-                Failed loading logs
-
-            </td>
-
-        </tr>
-
-        `;
-
-    } catch (error) {
-
-        console.log(error);
-
-        if (typeof window.getCachedSystemLogs === 'function') {
-            const cachedLogs = await window.getCachedSystemLogs(supabaseClient);
-            if (cachedLogs.length) {
-                renderActivityLogs(cachedLogs);
-                return;
-            }
-        }
-
-        table.innerHTML = `
-
-        <tr>
-
-            <td colspan="4">
-
-                Failed loading logs
-
-            </td>
-
-        </tr>
-
-        `;
-
     }
 
+    try {
+        const { data, error } = await supabaseClient
+            .from('activity_logs')
+            .select('log_id, user_id, activity, created_at, users(email)')
+            .order('created_at', { ascending: false })
+            .order('log_id', { ascending: false })
+            .range(0, SYSTEM_LOG_PAGE_SIZE - 1);
+        if (error) throw error;
+
+        systemLogsHasMore = data.length === SYSTEM_LOG_PAGE_SIZE;
+        systemLogsOffset = data.length;
+        loadOlderButton.style.display = systemLogsHasMore ? '' : 'none';
+        if (data.length && typeof window.cacheSystemLogEntries === 'function') {
+            void window.cacheSystemLogEntries(supabaseClient, data);
+        }
+        renderActivityLogs(data);
+    } catch (error) {
+        console.warn('Unable to load activity logs.', error);
+        if (!navigator.onLine) console.info('Showing cached activity logs while offline.');
+        if (!table.children.length) {
+            const row = table.insertRow();
+            const cell = row.insertCell();
+            cell.colSpan = 4;
+            cell.textContent = 'Failed loading logs';
+        }
+    }
 }
 
-/* =========================================================
-   FILTER LOGS
-========================================================= */
+async function loadOlderSystemLogs() {
+    if (systemLogsLoading || !systemLogsHasMore) return;
+    systemLogsLoading = true;
+    const button = document.getElementById('loadOlderLogsButton');
+    button.disabled = true;
+    button.textContent = 'Loading...';
+    try {
+        const { data, error } = await supabaseClient
+            .from('activity_logs')
+            .select('log_id, user_id, activity, created_at, users(email)')
+            .order('created_at', { ascending: false })
+            .order('log_id', { ascending: false })
+            .range(systemLogsOffset, systemLogsOffset + SYSTEM_LOG_PAGE_SIZE - 1);
+        if (error) throw error;
+        renderActivityLogs(data, true);
+        systemLogsOffset += data.length;
+        systemLogsHasMore = data.length === SYSTEM_LOG_PAGE_SIZE;
+        if (data.length && typeof window.cacheSystemLogEntries === 'function') {
+            void window.cacheSystemLogEntries(supabaseClient, data);
+        }
+    } catch (error) {
+        console.warn('Unable to load older activity logs.', error);
+    } finally {
+        systemLogsLoading = false;
+        button.disabled = false;
+        button.textContent = 'Load older logs';
+        button.style.display = systemLogsHasMore ? '' : 'none';
+    }
+}
 
 function filterLogsTable() {
-
-    const search =
-        document.getElementById(
-            "logSearchInput"
-        ).value.toLowerCase();
-
-    const filter =
-        document.getElementById(
-            "logFilterSelect"
-        ).value.toLowerCase();
-
-    const rows =
-        document.querySelectorAll(
-            "#logsTable tr"
-        );
+    const search = document.getElementById('logSearchInput').value.toLowerCase();
+    const filter = document.getElementById('logFilterSelect').value.toLowerCase();
+    const rows = document.querySelectorAll('#logsTable tr');
 
     rows.forEach(row => {
-
-        const text =
-            row.textContent.toLowerCase();
-
+        const text = row.textContent.toLowerCase();
         let matchesCategory = true;
-
-        if (filter === "teacher") {
-            matchesCategory = text.includes("teacher") || text.includes("assignment")
-                || text.includes("section assigned") || text.includes("removed section");
+        if (filter === 'teacher') {
+            matchesCategory = text.includes('teacher') || text.includes('assignment')
+                || text.includes('section assigned') || text.includes('removed section');
+        } else if (filter === 'student') {
+            matchesCategory = text.includes('student') || text.includes('grade') || text.includes('enrollment');
+        } else if (filter === 'admin') {
+            matchesCategory = text.includes('department') || text.includes('major')
+                || text.includes('section') || text.includes('subject created')
+                || text.includes('approved account') || text.includes('admin');
         }
-
-        else if (filter === "student") {
-
-            matchesCategory =
-
-                text.includes("student") ||
-
-                text.includes("grade") ||
-
-                text.includes("enrollment");
-
-        }
-
-        else if (filter === "admin") {
-
-            matchesCategory =
-
-                text.includes("department") ||
-
-                text.includes("major") ||
-
-                text.includes("section") ||
-
-                text.includes("subject created") ||
-
-                text.includes("Approved account") ||
-
-                text.includes("admin");
-
-        }
-
-        const matchesSearch =
-            text.includes(search);
-
-        row.style.display =
-            matchesSearch && matchesCategory
-                ? ""
-                : "none";
-
+        row.style.display = text.includes(search) && matchesCategory ? '' : 'none';
     });
-
 }
 /* =========================================================
    DELETE ALL LOGS
