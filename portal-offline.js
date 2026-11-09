@@ -2091,7 +2091,7 @@
             setPreparationProgress(false);
 
             if (navigator.onLine && failedPages.size) {
-                setNotice(`Could not prepare these ${role} pages for offline viewing: ${[...failedPages].join(', ')}. Retry while connected.`, true, 'sync');
+                console.warn(`Offline ${role} page preparation did not finish for: ${[...failedPages].join(', ')}.`);
             }
         })().finally(() => {
             warmupPromise = null;
@@ -2220,7 +2220,8 @@
                     setNotice('Your assigned teacher data is saved for offline viewing.', true, 'ready');
                     window.setTimeout(() => setNotice('', false), 6000);
                 } else {
-                    setNotice('Some assigned teacher data could not be saved. Stay online and try again.', true, 'sync');
+                    const failedRouteCount = savedRoutes.filter(saved => !saved).length;
+                    console.warn(`${failedRouteCount} assigned teacher route snapshot(s) could not be saved for offline viewing.`);
                 }
             }
         })().finally(() => {
