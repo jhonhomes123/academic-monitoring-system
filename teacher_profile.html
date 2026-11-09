@@ -650,7 +650,7 @@
 
     </div>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
-    <script src="portal-offline.js"></script>
+    <script src="portal-offline.js?v=170"></script>
     <script>
 
     /* =====================================================
@@ -689,7 +689,7 @@
 
         if(authError || !user){
 
-            if (await restoreTeacherOfflineSnapshot(supabaseClient, 'profile', true)) return;
+            if (!navigator.onLine && await restoreTeacherOfflineSnapshot(supabaseClient, 'profile', true)) return;
 
             showAlert(
                 "error",
@@ -728,7 +728,7 @@
 
         if(error){
 
-            if (await restoreTeacherOfflineSnapshot(supabaseClient, 'profile', true)) return;
+            if (!navigator.onLine && await restoreTeacherOfflineSnapshot(supabaseClient, 'profile', true)) return;
 
             console.log(error);
 
@@ -794,7 +794,7 @@
 
     catch(err){
 
-        if (await restoreTeacherOfflineSnapshot(supabaseClient, 'profile', true)) return;
+        if (!navigator.onLine && await restoreTeacherOfflineSnapshot(supabaseClient, 'profile', true)) return;
 
         console.log(err);
 

@@ -31,6 +31,7 @@
     let adminSnapshotObserver;
     let adminSnapshotTimer;
     let adminOfflineReadyNoticeShown = false;
+    const teacherSyncFailureStorageKey = 'ams-teacher-sync-last-failure';
     const pageParams = new URLSearchParams(window.location.search);
     const isStudentWarmupFrame = pageParams.get('amsOfflineWarm') === '1';
     const isTeacherWarmupFrame = pageParams.get('amsTeacherOfflineWarm') === '1'
@@ -1922,6 +1923,7 @@
                     : `${remaining.length} teacher change${remaining.length === 1 ? '' : 's'} still waiting to sync. Reconnect and retry.`;
                 setNotice(retryMessage, true, 'sync');
             } else if (operations.length) {
+                try { sessionStorage.removeItem(teacherSyncFailureStorageKey); } catch {}
                 document.querySelectorAll('.offline-queued-requirement').forEach(element => element.remove());
                 document.querySelectorAll('button').forEach(button => {
                     if (button.textContent.trim() === 'Queued offline') button.textContent = 'Save';
@@ -1938,12 +1940,16 @@
                 && (!Number.isInteger(Number(failedPayload.subject_id)) || Number(failedPayload.subject_id) <= 0
                     || !Number.isInteger(Number(failedPayload.section_id)) || Number(failedPayload.section_id) <= 0);
             const assignmentError = String(error?.message || '').includes('You are not assigned to this active subject and section.');
+            const changeLabel = failedType === 'grade' ? 'grade' : failedType === 'attachment' ? 'file' : failedType === 'requirement_delete' ? 'requirement deletion' : failedType === 'requirement' ? 'requirement' : 'change';
+            const operationTag = failedOperation?.operationId ? ` (${failedOperation.operationId.slice(0, 8)})` : '';
             const syncMessage = navigator.onLine
                 ? invalidGrade
                     ? 'An older saved grade is missing its subject and section, so it cannot sync. Remove it here, then enter the grade again after selecting the class.'
                     : assignmentError && failedType === 'grade'
                     ? 'A saved grade could not sync because this teacher is not assigned to that class. It will keep trying until the issue is fixed or the saved grade is removed.'
-                    : `A saved ${failedType === 'grade' ? 'grade' : failedType === 'attachment' ? 'file' : failedType === 'requirement_delete' ? 'requirement deletion' : failedType === 'requirement' ? 'requirement' : 'change'} could not sync. It is still saved on this device and will be retried.`
+                    : failedOperation
+                        ? `Saved ${changeLabel}${operationTag} could not sync: ${error?.message || 'server rejected the change'}. It remains on this device and will retry.`
+                        : `Could not check the saved teacher queue: ${error?.message || 'storage read failed'}. No new change was made.`
                 : 'Some teacher changes could not sync. They remain saved on this device; retry when online.';
             const discardAction = invalidGrade ? {
                 label: 'Remove this saved grade',
@@ -1955,7 +1961,13 @@
                     void syncTeacherQueue(client);
                 }
             } : null;
-            setNotice(syncMessage, true, 'sync', discardAction);
+            const failureSignature = `${failedOperation?.operationId || 'queue-read'}:${error?.message || 'unknown'}`;
+            let shouldNotify = true;
+            try {
+                shouldNotify = sessionStorage.getItem(teacherSyncFailureStorageKey) !== failureSignature;
+                if (shouldNotify) sessionStorage.setItem(teacherSyncFailureStorageKey, failureSignature);
+            } catch {}
+            if (shouldNotify) setNotice(syncMessage, true, 'sync', discardAction);
         } finally {
             syncInProgress = false;
         }
@@ -2228,7 +2240,9 @@
                 snapshot = await readSnapshot(snapshotKey(userId, pageKey, role));
             }
             if (!snapshot?.html) {
-                setNotice(`Offline. This ${role} page has no saved copy on this device yet.`, true);
+                if (!navigator.onLine) {
+                    setNotice(`Offline. This ${role} page has no saved copy on this device yet.`, true);
+                }
                 return false;
             }
 
@@ -2268,7 +2282,9 @@
             return true;
         } catch (error) {
             console.warn('Unable to restore the student offline view.', error);
-            setNotice(`Offline. A saved ${role} copy could not be opened on this device.`, true);
+            if (!navigator.onLine) {
+                setNotice(`Offline. A saved ${role} copy could not be opened on this device.`, true);
+            }
             return false;
         }
     }
