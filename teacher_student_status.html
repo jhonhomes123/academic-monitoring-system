@@ -802,7 +802,7 @@ id="confirmModal">
 
 </div>
 
-<script src="portal-offline.js?v=178"></script>
+<script src="portal-offline.js?v=179"></script>
 <script>
 
 /* ================= ALERT FUNCTION ================= */
@@ -958,9 +958,34 @@ async function getActiveSubjectIds(){
 
 let teacherId = null;
 let teacherUserId = null;
+const gradeBaselineByStudent = new Map();
 const statusRouteParams = new URLSearchParams(window.location.search);
 const targetStudentId = statusRouteParams.get('student_id');
 const targetTerm = statusRouteParams.get('term');
+
+window.capturePortalOfflineState = () => ({
+    gradeBaseline: Array.from(gradeBaselineByStudent.entries())
+});
+window.restorePortalOfflineState = state => {
+    gradeBaselineByStudent.clear();
+    (state?.gradeBaseline || []).forEach(([studentId, grade]) => {
+        gradeBaselineByStudent.set(String(studentId), grade);
+    });
+};
+window.applyQueuedGradeToBaseline = payload => {
+    const studentId = String(payload?.student_id || '');
+    if (!studentId) return;
+    const baseline = gradeBaselineByStudent.get(studentId) || {
+        student_id: Number(studentId),
+        subject_id: Number(payload.subject_id)
+    };
+    Object.keys(payload).forEach(field => {
+        if (['prelim', 'midterm', 'final', 'prelim_status', 'midterm_status', 'final_status', 'status'].includes(field)) {
+            baseline[field] = payload[field];
+        }
+    });
+    gradeBaselineByStudent.set(studentId, baseline);
+};
 
 function formatStudentTableName(student) {
     const middleInitial = String(student.middle_initial || '').trim();
@@ -1482,6 +1507,8 @@ async function loadStudents(){
     }
 
     const gradesByStudent = new Map((grades || []).map(grade => [String(grade.student_id), grade]));
+    gradeBaselineByStudent.clear();
+    gradesByStudent.forEach((grade, studentId) => gradeBaselineByStudent.set(studentId, { ...grade }));
 
     const orderedStudents = [
         ['Male', students.filter(student => student.gender === 'Male')],
@@ -1606,33 +1633,20 @@ studentId
     const currentSubjectFilter = document.getElementById("subjectFilter");
     const currentSectionFilter = document.getElementById("sectionFilter");
     const subjectId = currentSubjectFilter?.value || "";
-
-    const prelim =
-    document.getElementById(
-    `prelim-${studentId}`
-    ).value || null;
-
-    const midterm =
-    document.getElementById(
-    `midterm-${studentId}`
-    ).value || null;
-
-    const finalGrade =
-    document.getElementById(
-    `final-${studentId}`
-    ).value || null;
-
-    const prelimStatus = document.getElementById(`prelim-status-${studentId}`).value || null;
-    const midtermStatus = document.getElementById(`midterm-status-${studentId}`).value || null;
-    const finalStatus = document.getElementById(`final-status-${studentId}`).value || null;
-    const termStatuses = [prelimStatus, midtermStatus, finalStatus];
-    const status = termStatuses.includes("FAILED")
-        ? "FAILED"
-        : termStatuses.includes("INCOMPLETE")
-            ? "INCOMPLETE"
-            : termStatuses.every(value => value === "PASSED")
-                ? "PASSED"
-                : null;
+    const baseline = gradeBaselineByStudent.get(String(studentId)) || null;
+    const termValues = Object.fromEntries(['prelim', 'midterm', 'final'].map(term => [term, {
+        grade: document.getElementById(`${term}-${studentId}`).value,
+        status: document.getElementById(`${term}-status-${studentId}`).value
+    }]));
+    const gradeChanged = (value, original) => {
+        const currentNumber = value === '' ? null : Number(value);
+        const originalNumber = original == null || original === '' ? null : Number(original);
+        return currentNumber !== originalNumber;
+    };
+    const changedTerms = Object.keys(termValues).filter(term =>
+        gradeChanged(termValues[term].grade, baseline?.[term])
+        || (termValues[term].status || null) !== (baseline?.[`${term}_status`] || null)
+    );
 
     if (!Number.isInteger(Number(subjectId)) || Number(subjectId) <= 0
         || !Number.isInteger(Number(currentSectionFilter?.value)) || Number(currentSectionFilter.value) <= 0) {
@@ -1640,18 +1654,43 @@ studentId
         return;
     }
 
+    if (!changedTerms.length) {
+        showAlert("warning", "No Changes", "Change at least one term before saving.");
+        return;
+    }
+
+    const nextStatuses = {
+        prelim: baseline?.prelim_status || null,
+        midterm: baseline?.midterm_status || null,
+        final: baseline?.final_status || null
+    };
+    changedTerms.forEach(term => { nextStatuses[term] = termValues[term].status || null; });
+    const status = Object.values(nextStatuses).includes("FAILED")
+        ? "FAILED"
+        : Object.values(nextStatuses).includes("INCOMPLETE")
+            ? "INCOMPLETE"
+            : Object.values(nextStatuses).every(value => value === "PASSED")
+                ? "PASSED"
+                : null;
+    const changedFields = {};
+    changedTerms.forEach(term => {
+        changedFields[term] = termValues[term].grade === '' ? null : termValues[term].grade;
+        changedFields[`${term}_status`] = termValues[term].status || null;
+    });
+
     if (!navigator.onLine) {
         try {
             await queueTeacherOperation(supabaseClient, 'grade', {
                 student_id: Number(studentId),
                 subject_id: Number(subjectId),
                 section_id: Number(currentSectionFilter.value),
-                prelim,
-                midterm,
-                final: finalGrade,
-                prelim_status: prelimStatus,
-                midterm_status: midtermStatus,
-                final_status: finalStatus,
+                changed_terms: changedTerms,
+                ...changedFields,
+                status
+            });
+            gradeBaselineByStudent.set(String(studentId), {
+                ...(baseline || { student_id: Number(studentId), subject_id: Number(subjectId) }),
+                ...changedFields,
                 status
             });
             const saveButton = document.querySelector(`[onclick*="saveGrade(${studentId})"]`);
@@ -1663,42 +1702,22 @@ studentId
         }
     }
 
-    const { error } =
-    await supabaseClient
-
-    .from("student_grades")
-
-    .upsert({
-
-        student_id:studentId,
-
-        subject_id:subjectId,
-
-        prelim,
-
-        midterm,
-
-        final:finalGrade,
-
-        prelim_status:prelimStatus,
-
-        midterm_status:midtermStatus,
-
-        final_status:finalStatus,
-
-        status,
-
-        updated_at:
-        new Date()
-
-    },
-
-    {
-
-        onConflict:
-        "student_id,subject_id"
-
-    });
+    const updatePayload = { ...changedFields, status, updated_at: new Date().toISOString() };
+    const result = baseline
+        ? await supabaseClient.from("student_grades").update(updatePayload)
+            .eq("student_id", studentId).eq("subject_id", subjectId)
+        : await supabaseClient.from("student_grades").insert({
+            student_id: Number(studentId),
+            subject_id: Number(subjectId),
+            prelim: termValues.prelim.grade || null,
+            midterm: termValues.midterm.grade || null,
+            final: termValues.final.grade || null,
+            prelim_status: termValues.prelim.status || null,
+            midterm_status: termValues.midterm.status || null,
+            final_status: termValues.final.status || null,
+            ...updatePayload
+        });
+    const { error } = result;
 
     if(error){
 
@@ -1710,6 +1729,12 @@ studentId
 
         return;
     }
+
+    gradeBaselineByStudent.set(String(studentId), {
+        ...(baseline || { student_id: Number(studentId), subject_id: Number(subjectId) }),
+        ...changedFields,
+        status
+    });
 
     showAlert(
         "success",

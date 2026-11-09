@@ -584,7 +584,7 @@
     </style>
     <link rel="stylesheet" href="mobile_fix.css">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="portal-offline.js?v=178"></script>
+    <script src="portal-offline.js?v=179"></script>
 </head>
 
 <body>
@@ -849,7 +849,13 @@ Select Subject and Section
             let teacherUserId = null;
             let currentRequirementStudents = [];
 
+            window.capturePortalOfflineState = () => ({ requirementStudents: currentRequirementStudents });
+            window.restorePortalOfflineState = state => {
+                currentRequirementStudents = Array.isArray(state?.requirementStudents) ? state.requirementStudents : [];
+            };
+
             function formatPersonTableName(person) {
+                if (person.display_name) return person.display_name;
                 const middleInitial = String(person.middle_initial || '').trim();
                 return `${String(person.last_name || '').trim()}, ${String(person.first_name || '').trim()}${middleInitial ? ` ${middleInitial.charAt(0).toUpperCase()}.` : ''}`;
             }
@@ -1178,7 +1184,7 @@ Select Subject and Section
                             : "";
 
                     html += `
-                        <tr>
+                        <tr data-student-id="${student.student_id}">
                             <td>${formatPersonTableName(student)}</td>
                             <td>${requirementList}</td>
                             <td>
@@ -1206,6 +1212,24 @@ Select Subject and Section
 
                 if (!studentIds.length || !subjectId || !title) {
                     return showAlert('warning', 'Validation', 'Select at least one student and enter a requirement title.');
+                }
+
+                if (!navigator.onLine) {
+                    try {
+                        await queueTeacherOperation(supabaseClient, 'requirement', {
+                            subject_id: Number(subjectId),
+                            student_ids: studentIds,
+                            requirement_title: title,
+                            requirement_description: description,
+                            deadline: deadline || null
+                        }, file || null);
+                        closeRequirementModal();
+                        showAlert('success', 'Saved Offline', `Saved "${title}" for ${studentIds.length} student${studentIds.length === 1 ? '' : 's'} on this device.`);
+                        return;
+                    } catch (error) {
+                        showAlert('error', 'Offline Save Failed', error.message || 'Unable to save this requirement on the device.');
+                        return;
+                    }
                 }
 
                 const { data: insertedData, error } = await supabaseClient
@@ -1683,6 +1707,19 @@ Select Subject and Section
             }
 
             function openRequirementModal(studentId = null) {
+                if (!currentRequirementStudents.length) {
+                    currentRequirementStudents = Array.from(document.querySelectorAll('#studentsTable tr'))
+                        .map(row => {
+                            const addButton = row.querySelector('button[onclick*="openRequirementModal"]');
+                            const buttonStudentId = addButton?.getAttribute('onclick')?.match(/openRequirementModal\((\d+)\)/)?.[1];
+                            return {
+                                student_id: Number(row.dataset.studentId || buttonStudentId),
+                                student_number: 'N/A',
+                                display_name: row.cells[0]?.textContent.trim() || 'Student'
+                            };
+                        })
+                        .filter(student => Number.isInteger(student.student_id) && student.student_id > 0);
+                }
                 if (!currentRequirementStudents.length) {
                     return showAlert('warning', 'No Students', 'Select a subject and section with students first.');
                 }

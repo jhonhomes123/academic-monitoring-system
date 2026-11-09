@@ -2268,7 +2268,10 @@
                     setNotice('This class list is not saved for offline use yet. Connect to the internet, open the class once, then try again offline.', true);
                     return true;
                 }
-                snapshot = snapshot || await readLatestTeacherSnapshot(userId, pageKey);
+                snapshot = snapshot || (pageKey === 'subjects'
+                    ? await readSnapshot(snapshotKey(userId, pageKey, role, emptyTeacherFilterState()))
+                    : await readLatestTeacherSnapshot(userId, pageKey));
+                if (pageKey !== 'subjects') snapshot = snapshot || await readLatestTeacherSnapshot(userId, pageKey);
             } else {
                 snapshot = await readSnapshot(snapshotKey(userId, pageKey, role));
             }
@@ -2495,6 +2498,7 @@
                     final_status: 'final-status'
                 };
                 Object.entries(gradeFields).forEach(([payloadField, elementId]) => {
+                    if (!Object.prototype.hasOwnProperty.call(payload, payloadField)) return;
                     const input = container.querySelector(`#${elementId}-${payload.student_id}`);
                     if (!input) return;
                     input.value = payload[payloadField] ?? '';
@@ -2502,6 +2506,9 @@
                         window.updateStatusColor(input);
                     }
                 });
+                if (typeof window.applyQueuedGradeToBaseline === 'function') {
+                    window.applyQueuedGradeToBaseline(payload);
+                }
                 const saveButton = container.querySelector(`#save-grade-${payload.student_id}`);
                 if (saveButton) saveButton.textContent = 'Queued offline';
             }
@@ -2523,7 +2530,7 @@
                         const linkRoute = new URL(link.href, window.location.href).searchParams;
                         const term = String(linkRoute.get('term') || '').toLowerCase();
                         const field = gradeTerms.find(([, termName]) => termName === term)?.[0];
-                        if (!field) return;
+                        if (!field || !Object.prototype.hasOwnProperty.call(payload, field)) return;
                         const status = String(payload[field] || 'PENDING').toUpperCase();
                         link.classList.remove('status-approved', 'status-failed', 'status-incomplete', 'status-pending');
                         link.classList.add(status === 'PASSED' ? 'status-approved'
@@ -2544,7 +2551,11 @@
                     ? (payload.student_ids || [])
                     : (payload.student_ids || []);
                 studentIds.forEach(studentId => {
-                    const row = container.querySelector(`tr[data-student-id="${studentId}"]`);
+                    const row = container.querySelector(`tr[data-student-id="${studentId}"]`)
+                        || Array.from(container.querySelectorAll('#studentsTable tr')).find(candidate => {
+                            const handler = candidate.querySelector('button[onclick*="openRequirementModal"]')?.getAttribute('onclick') || '';
+                            return handler.match(/openRequirementModal\((\d+)\)/)?.[1] === String(studentId);
+                        });
                     const cell = row?.children[1];
                     if (!cell) return;
                     const pending = document.createElement('div');
