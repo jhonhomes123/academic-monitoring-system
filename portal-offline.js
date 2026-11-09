@@ -2505,6 +2505,38 @@
                 const saveButton = container.querySelector(`#save-grade-${payload.student_id}`);
                 if (saveButton) saveButton.textContent = 'Queued offline';
             }
+            if (operation.type === 'grade' && pageKey === 'students') {
+                const gradeTerms = [
+                    ['prelim_status', 'prelim'],
+                    ['midterm_status', 'midterm'],
+                    ['final_status', 'final']
+                ];
+                container.querySelectorAll('tr').forEach(row => {
+                    const studentLink = row.querySelector('.term-status-list a');
+                    if (!studentLink) return;
+                    const route = new URL(studentLink.href, window.location.href).searchParams;
+                    if (String(route.get('student_id')) !== String(payload.student_id)
+                        || String(route.get('subject_id')) !== String(payload.subject_id)
+                        || String(route.get('section_id')) !== String(payload.section_id)) return;
+
+                    row.querySelectorAll('.term-status-list a').forEach(link => {
+                        const linkRoute = new URL(link.href, window.location.href).searchParams;
+                        const term = String(linkRoute.get('term') || '').toLowerCase();
+                        const field = gradeTerms.find(([, termName]) => termName === term)?.[0];
+                        if (!field) return;
+                        const status = String(payload[field] || 'PENDING').toUpperCase();
+                        link.classList.remove('status-approved', 'status-failed', 'status-incomplete', 'status-pending');
+                        link.classList.add(status === 'PASSED' ? 'status-approved'
+                            : status === 'FAILED' ? 'status-failed'
+                                : status === 'INCOMPLETE' ? 'status-incomplete' : 'status-pending');
+                        link.replaceChildren();
+                        const strong = document.createElement('strong');
+                        strong.textContent = `${term.charAt(0).toUpperCase()}${term.slice(1)}: `;
+                        link.append(strong, document.createTextNode(status));
+                        link.title = `${term.charAt(0).toUpperCase()}${term.slice(1)}: ${status} (queued offline)`;
+                    });
+                });
+            }
             if ((operation.type === 'requirement' || operation.type === 'attachment') && pageKey === 'subjects') {
                 const currentSubject = container.querySelector('#subjectSelect')?.value;
                 if (String(currentSubject) !== String(payload.subject_id)) continue;

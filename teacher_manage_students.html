@@ -486,7 +486,7 @@ TABLE SCROLLBAR
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
-<script src="portal-offline.js?v=177"></script>
+<script src="portal-offline.js?v=178"></script>
     <script>
 
     /* =====================================================
@@ -1106,8 +1106,7 @@ async function loadStudents(){
 
         const grade = gradesByStudent.get(String(student.student_id));
 
-        const overallStatus = grade?.status || "PENDING";
-        const termStatus = value => value || overallStatus;
+        const termStatus = value => value || "PENDING";
         const statusClass = value => value === "PASSED"
             ? "status-approved"
             : value === "FAILED"
