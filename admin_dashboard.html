@@ -2928,7 +2928,7 @@ onchange="loadSubjectsForTeacherAssign()">
       
     </script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
-    <script src="portal-offline.js?v=168"></script>
+    <script src="portal-offline.js?v=169"></script>
     <script>
 
         const SUPABASE_URL =
@@ -12726,6 +12726,7 @@ let systemLogsOfflinePreparation = null;
 let systemLogsAutoSyncScheduled = false;
 let systemLogsRetryTimer = null;
 let systemLogsRealtimeChannel = null;
+let systemLogsLoadWaitAttached = false;
 
 const SYSTEM_LOG_CATEGORY_TERMS = {
     student: ['student', 'grade', 'enrollment'],
@@ -12809,6 +12810,16 @@ function startSystemLogsRealtimeSync() {
 
 function scheduleSystemLogsOfflineSync() {
     if (!navigator.onLine || systemLogsOfflinePreparation || systemLogsAutoSyncScheduled) return;
+    if (document.readyState !== 'complete') {
+        if (!systemLogsLoadWaitAttached) {
+            systemLogsLoadWaitAttached = true;
+            window.addEventListener('load', () => {
+                systemLogsLoadWaitAttached = false;
+                scheduleSystemLogsOfflineSync();
+            }, { once: true });
+        }
+        return;
+    }
     window.clearTimeout(systemLogsRetryTimer);
     setSystemLogsCacheStatus('Starting offline log history sync...');
     systemLogsAutoSyncScheduled = true;

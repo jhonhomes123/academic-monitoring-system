@@ -252,7 +252,7 @@
             .eq('auth_user_id', userId)
             .maybeSingle();
         if (error || !admin) return false;
-        void saveAdminAccountLookups(client, userId).catch(cacheError => {
+        void refreshAdminAccountLookupsIfStale(client, userId).catch(cacheError => {
             console.warn('Admin offline lookup refresh is still pending.', cacheError);
         });
         void syncAdminQueues(client);
@@ -988,6 +988,21 @@
         } catch (error) {
             console.warn('Could not cache admin account dropdown data.', error);
         }
+    }
+
+    async function refreshAdminAccountLookupsIfStale(client, userId) {
+        const [lookups, studentRoster] = await Promise.all([
+            getAdminAccountLookups(client, userId),
+            getAdminStudentRoster(client, userId)
+        ]);
+        const maxAgeMs = 5 * 60 * 1000;
+        const isFresh = record => {
+            const savedAt = Date.parse(record?.savedAt || '');
+            return Number.isFinite(savedAt) && Date.now() - savedAt < maxAgeMs;
+        };
+        if (isFresh(lookups) && isFresh(studentRoster)) return false;
+        await saveAdminAccountLookups(client, userId);
+        return true;
     }
 
     async function refreshAdminTeacherLookups(client, userId = null) {
@@ -2597,7 +2612,7 @@
             const userId = await getUserId(client);
             const { data: admin, error } = await client.from('admins').select('id').eq('auth_user_id', userId).maybeSingle();
             if (error || !admin) return;
-            void saveAdminAccountLookups(client, userId).catch(cacheError => {
+            void refreshAdminAccountLookupsIfStale(client, userId).catch(cacheError => {
                 console.warn('Admin offline lookup refresh is still pending after reconnect.', cacheError);
             });
             await syncAdminQueues(client);

@@ -821,7 +821,8 @@ async function loadStudentDashboard() {
         const { data: { user }, error: userErr } = await supabaseClient.auth.getUser();
         if (userErr || !user) {
             if (await restoreStudentOfflineSnapshot(supabaseClient, 'dashboard', true)) return;
-            console.error('Not logged in', userErr);
+            console.warn('Student dashboard requires an active sign-in.', userErr);
+            window.location.replace('login.html');
             return;
         }
 
