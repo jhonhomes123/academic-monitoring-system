@@ -655,6 +655,28 @@ table td{
 
     </div>
 
+    <div class="table-section">
+        <div class="section-header">
+            <h2>Offline Changes</h2>
+            <p>Changes saved on this device are kept here until they sync or you remove them.</p>
+        </div>
+        <div class="table-responsive">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Change</th>
+                        <th>Details</th>
+                        <th>Status</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody id="teacherOfflineQueueTable">
+                    <tr><td colspan="4">Loading saved changes...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
 </div>
  <!-- ================= AMS ALERT ================= -->
 
@@ -867,7 +889,7 @@ function closeConfirmModal(){
 }
 </script>
 
-<script src="portal-offline.js?v=170"></script>
+<script src="portal-offline.js?v=173"></script>
 <script>
 const SUPABASE_URL = 'https://nrqrsolfowebujogawti.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5ycXJzb2xmb3dlYnVqb2dhd3RpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkyODE2NjksImV4cCI6MjA5NDg1NzY2OX0.XcawTf9niOIZbG0hBTtwSXjySWfdVl3LAClbWdZmfl8';
@@ -895,7 +917,11 @@ async function getActiveSubjectIds() {
 }
 
 async function initializeTeacherDashboard() {
-    if (await beginTeacherOfflinePage(supabaseClient, 'dashboard')) return;
+    const restoredOffline = await beginTeacherOfflinePage(supabaseClient, 'dashboard');
+    ensureTeacherOfflineQueuePanel();
+    void renderTeacherOfflineQueue();
+    window.addEventListener('teacher-offline-queue-changed', () => void renderTeacherOfflineQueue());
+    if (restoredOffline) return;
     try {
     const { data: { user }, error } = await supabaseClient.auth.getUser();
     if (error || !user) {
@@ -910,6 +936,91 @@ async function initializeTeacherDashboard() {
         console.error('Unable to load teacher dashboard', error);
         await restoreTeacherOfflineSnapshot(supabaseClient, 'dashboard', true);
     }
+}
+
+function ensureTeacherOfflineQueuePanel() {
+    const main = document.querySelector('.main');
+    if (!main || document.getElementById('teacherOfflineQueueTable')) return;
+    const section = document.createElement('section');
+    section.className = 'table-section';
+    section.innerHTML = '<div class="section-header"><h2>Offline Changes</h2><p>Saved changes remain on this device until they sync or you remove them.</p></div><div class="table-responsive"><table><thead><tr><th>Change</th><th>Details</th><th>Status</th><th>Action</th></tr></thead><tbody id="teacherOfflineQueueTable"></tbody></table></div>';
+    main.appendChild(section);
+}
+
+function describeTeacherOfflineOperation(operation) {
+    const payload = operation.payload || {};
+    if (operation.type === 'grade') {
+        return `Student ${payload.student_id || 'unknown'}; subject ${payload.subject_id || 'unknown'}; section ${payload.section_id || 'unknown'}`;
+    }
+    if (operation.type === 'requirement') {
+        return `${payload.requirement_title || 'Requirement'}; ${payload.student_ids?.length || 0} student(s)`;
+    }
+    if (operation.type === 'requirement_delete') return `Requirement ${payload.requirement_id || 'unknown'}`;
+    if (operation.type === 'attachment') return operation.file?.name || payload.file_name || 'Uploaded file';
+    return operation.operationId;
+}
+
+async function renderTeacherOfflineQueue() {
+    const table = document.getElementById('teacherOfflineQueueTable');
+    if (!table || typeof window.getTeacherOfflineQueue !== 'function') return;
+    try {
+        const queue = await window.getTeacherOfflineQueue(supabaseClient);
+        table.replaceChildren();
+        if (!queue.length) {
+            const row = table.insertRow();
+            const cell = row.insertCell();
+            cell.colSpan = 4;
+            cell.textContent = 'No saved teacher changes';
+            return;
+        }
+
+        const labels = {
+            grade: 'Grade',
+            requirement: 'Requirement',
+            requirement_delete: 'Requirement deletion',
+            attachment: 'Attachment'
+        };
+        queue.forEach(operation => {
+            const row = table.insertRow();
+            [
+                labels[operation.type] || operation.type,
+                describeTeacherOfflineOperation(operation),
+                operation.lastError
+                    ? `Needs attention: ${operation.lastError}`
+                    : navigator.onLine ? 'Waiting to sync' : 'Saved on this device'
+            ].forEach(text => {
+                const cell = row.insertCell();
+                cell.textContent = String(text);
+            });
+            const actionCell = row.insertCell();
+            const removeButton = document.createElement('button');
+            removeButton.type = 'button';
+            removeButton.className = 'btn reject-btn';
+            removeButton.textContent = 'Remove';
+            removeButton.addEventListener('click', () => removeTeacherOfflineChange(operation));
+            actionCell.appendChild(removeButton);
+        });
+    } catch (error) {
+        console.warn('Unable to render teacher offline changes.', error);
+        table.replaceChildren();
+        const row = table.insertRow();
+        const cell = row.insertCell();
+        cell.colSpan = 4;
+        cell.textContent = `Unable to read saved changes: ${error.message || 'storage error'}`;
+    }
+}
+
+function removeTeacherOfflineChange(operation) {
+    const label = operation.type === 'grade' ? 'grade' : operation.type === 'attachment' ? 'attachment' : operation.type === 'requirement_delete' ? 'requirement deletion' : 'requirement change';
+    showConfirmModal('Remove Saved Change', `Remove this queued ${label}? It will not be sent to the server.`, async () => {
+        try {
+            await window.discardTeacherOfflineOperation(supabaseClient, operation.operationId);
+            await renderTeacherOfflineQueue();
+            showAlert('success', 'Saved Change Removed', 'The queued change was removed from this device.');
+        } catch (error) {
+            showAlert('error', 'Could Not Remove Change', error.message || 'The saved change remains on this device.');
+        }
+    });
 }
 
 async function loadTeacher() {

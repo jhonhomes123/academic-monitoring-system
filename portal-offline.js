@@ -420,6 +420,7 @@
                     ? 'Delete'
                     : 'Requirement';
         setNotice(`${changeLabel} saved on this device. ${pending.length} change${pending.length === 1 ? '' : 's'} waiting to sync.`, true, 'sync');
+        window.dispatchEvent(new CustomEvent('teacher-offline-queue-changed'));
         if (window.currentOfflineRole === 'teacher' && window.currentStudentOfflinePage) {
             await applyQueuedTeacherOperations(client, window.currentStudentOfflinePage, document.querySelector('.main'));
         }
@@ -439,6 +440,18 @@
                     || first.operationId.localeCompare(second.operationId)));
             request.onerror = () => reject(request.error || new Error('Unable to read queued teacher changes.'));
         });
+    }
+
+    async function discardTeacherOfflineOperation(client, operationId) {
+        const userId = await getUserId(client);
+        if (!userId || !operationId) throw new Error('Sign in before removing a saved teacher change.');
+        const key = `${userId}:${operationId}`;
+        const operation = await adminStoreRequest(queueStoreName, 'readonly', store => store.get(key));
+        if (!operation || operation.userId !== userId) throw new Error('This saved teacher change was not found.');
+        await removeQueuedTeacherOperation(key);
+        try { sessionStorage.removeItem(teacherSyncFailureStorageKey); } catch {}
+        window.dispatchEvent(new CustomEvent('teacher-offline-queue-changed'));
+        return true;
     }
 
     function adminStoreRequest(storeName, mode, action) {
@@ -1913,6 +1926,7 @@
                 });
                 if (error) throw error;
                 await removeQueuedTeacherOperation(operation.key);
+                window.dispatchEvent(new CustomEvent('teacher-offline-queue-changed'));
                 failedOperation = null;
             }
 
@@ -1962,6 +1976,17 @@
                 }
             } : null;
             const failureSignature = `${failedOperation?.operationId || 'queue-read'}:${error?.message || 'unknown'}`;
+            if (failedOperation) {
+                try {
+                    await adminStoreRequest(queueStoreName, 'readwrite', store => store.put({
+                        ...failedOperation,
+                        lastError: error?.message || 'Unable to apply this saved change.'
+                    }));
+                    window.dispatchEvent(new CustomEvent('teacher-offline-queue-changed'));
+                } catch (queueError) {
+                    console.warn('Could not save teacher queue error details.', queueError);
+                }
+            }
             let shouldNotify = true;
             try {
                 shouldNotify = sessionStorage.getItem(teacherSyncFailureStorageKey) !== failureSignature;
@@ -2032,6 +2057,7 @@
         warmupPromise = (async () => {
             const pagesToWarm = pages.filter(page => page.key !== currentPageKey);
             const missingPages = [];
+            const failedPages = new Set();
             const defaultFilterState = role === 'teacher' ? emptyTeacherFilterState() : null;
             for (const page of pagesToWarm) {
                 if (!(await readSnapshot(snapshotKey(userId, page.key, role, defaultFilterState)))) missingPages.push(page);
@@ -2053,8 +2079,10 @@
                 document.body.appendChild(frame);
 
                 try {
-                    await waitForSnapshot(userId, page.key, role, saveStartedAt, 30000, defaultFilterState);
+                    const saved = await waitForSnapshot(userId, page.key, role, saveStartedAt, 30000, defaultFilterState);
+                    if (!saved) failedPages.add(page.key);
                 } catch (error) {
+                    failedPages.add(page.key);
                     console.warn(`Could not prepare offline ${page.key} page.`, error);
                 } finally {
                     frame.remove();
@@ -2062,13 +2090,8 @@
             }));
             setPreparationProgress(false);
 
-            if (navigator.onLine) {
-                const hasAllPages = await Promise.all(pages.map(async page =>
-                    Boolean(await readSnapshot(snapshotKey(userId, page.key, role, role === 'teacher' ? emptyTeacherFilterState() : null)))
-                ));
-                if (!hasAllPages.every(Boolean)) {
-                    setNotice(`Some ${role} pages could not be saved for offline viewing. Open them while online to try again.`, true, 'sync');
-                }
+            if (navigator.onLine && failedPages.size) {
+                setNotice(`Could not prepare these ${role} pages for offline viewing: ${[...failedPages].join(', ')}. Retry while connected.`, true, 'sync');
             }
         })().finally(() => {
             warmupPromise = null;
@@ -2259,10 +2282,12 @@
                 element.value = field.value;
                 if (field.checked !== undefined) element.checked = field.checked;
             });
-            const routeParams = new URLSearchParams(window.location.search);
-            const hasStatusRoute = role === 'teacher' && pageKey === 'status'
-                && ['year', 'department_id', 'major_id', 'subject_id', 'section_id'].every(key => routeParams.get(key));
-            if (role === 'teacher' && !hasStatusRoute) {
+            const teacherFilterIds = role === 'teacher' ? getTeacherFilterIds(pageKey) : [];
+            const savedTeacherFilters = Object.fromEntries(snapshot.filterState || []);
+            const hasCompleteSavedRoute = role === 'teacher'
+                && teacherFilterIds.length > 0
+                && teacherFilterIds.every(id => Boolean(savedTeacherFilters[id]));
+            if (role === 'teacher' && !hasCompleteSavedRoute) {
                 clearTeacherFilterSelections(main, pageKey);
             }
             if (role === 'teacher' && typeof window.restorePortalOfflineState === 'function') {
@@ -2307,16 +2332,18 @@
     }
 
     async function readTeacherRouteSnapshot(userId, pageKey) {
-        if (pageKey !== 'status') return null;
+        if (!['students', 'subjects', 'status'].includes(pageKey)) return null;
         const params = new URLSearchParams(window.location.search);
-        const routeFilters = {
-            yearFilter: params.get('year'),
-            departmentFilter: params.get('department_id'),
-            majorFilter: params.get('major_id'),
-            subjectFilter: params.get('subject_id'),
-            sectionFilter: params.get('section_id')
-        };
-        if (Object.values(routeFilters).some(value => !value)) return null;
+        const filterIds = getTeacherFilterIds(pageKey);
+        const routeValues = [
+            params.get('year'),
+            params.get('department_id'),
+            params.get('major_id'),
+            params.get('subject_id'),
+            params.get('section_id')
+        ];
+        if (!routeValues.every(Boolean)) return null;
+        const routeFilters = Object.fromEntries(filterIds.map((id, index) => [id, routeValues[index]]));
 
         const database = await openDatabase();
         const prefix = `${userId}:teacher:${pageKey}:`;
@@ -2571,6 +2598,7 @@
     window.syncTeacherQueue = syncTeacherQueue;
     window.preloadTeacherAssignedRosters = preloadTeacherAssignedRosters;
     window.getTeacherOfflineQueue = getTeacherQueue;
+    window.discardTeacherOfflineOperation = discardTeacherOfflineOperation;
     window.syncTeacherOfflineQueue = syncTeacherQueue;
     window.clearStudentOfflineSnapshots = clearStudentOfflineSnapshots;
 

@@ -584,6 +584,7 @@
     </style>
     <link rel="stylesheet" href="mobile_fix.css">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="portal-offline.js?v=173"></script>
 </head>
 
 <body>
@@ -1079,6 +1080,7 @@ Select Subject and Section
                         <tr>
                             <td colspan="3">Select Subject and Section</td>
                         </tr>`;
+                    await saveTeacherOfflineSnapshot(supabaseClient, 'subjects');
                     return;
                 }
 
@@ -1088,6 +1090,7 @@ Select Subject and Section
                     .eq('section_id', sectionId);
 
                 if (error) {
+                    if (!navigator.onLine && await restoreTeacherOfflineSnapshot(supabaseClient, 'subjects')) return;
                     return showAlert('error', 'Error', error.message || 'Unable to load students');
                 }
 
@@ -1097,6 +1100,7 @@ Select Subject and Section
                         <tr>
                             <td colspan="3">No students found</td>
                         </tr>`;
+                    await saveTeacherOfflineSnapshot(supabaseClient, 'subjects');
                     return;
                 }
 
@@ -1187,6 +1191,7 @@ Select Subject and Section
                 }
 
                 studentsTable.innerHTML = html;
+                await saveTeacherOfflineSnapshot(supabaseClient, 'subjects');
             }
 
             async function saveRequirement() {
@@ -1398,35 +1403,67 @@ Select Subject and Section
             }
 
             window.onload = async () => {
+                if (await beginTeacherOfflinePage(supabaseClient, 'subjects')) return;
                 const { data: { user }, error } = await supabaseClient.auth.getUser();
-                if (error) {
-                    console.error(error);
+                if (error || !user) {
+                    if (!navigator.onLine && await restoreTeacherOfflineSnapshot(supabaseClient, 'subjects', true)) return;
+                    window.location.replace('login.html');
+                    return;
                 }
 
-                if (user) {
-                    teacherUserId = user.id;
-                    await loadTeacher();
-                }
-
+                teacherUserId = user.id;
+                await loadTeacher();
                 await loadYears();
+
+                const route = new URLSearchParams(window.location.search);
+                const year = route.get('year');
+                const departmentId = route.get('department_id');
+                const majorId = route.get('major_id');
+                const subjectId = route.get('subject_id');
+                const sectionId = route.get('section_id');
+                if (year) {
+                    document.getElementById('yearSelect').value = year;
+                    await loadDepartments(year);
+                    if (departmentId) {
+                        document.getElementById('departmentSelect').value = departmentId;
+                        await loadMajors(departmentId);
+                    }
+                    if (majorId) {
+                        document.getElementById('majorSelect').value = majorId;
+                        await loadSubjects(majorId);
+                    }
+                    if (subjectId) {
+                        document.getElementById('subjectSelect').value = subjectId;
+                        await loadSections(subjectId);
+                    }
+                    if (sectionId) {
+                        document.getElementById('sectionSelect').value = sectionId;
+                        await loadStudents();
+                    }
+                }
+                await saveTeacherOfflineSnapshot(supabaseClient, 'subjects');
             };
 
             document.getElementById('yearSelect').addEventListener('change', async function () {
                 const yearLevel = this.value;
                 await loadDepartments(yearLevel);
+                await saveTeacherOfflineSnapshot(supabaseClient, 'subjects');
             });
 
             document.getElementById('departmentSelect').addEventListener('change', async function () {
                 await loadMajors(this.value);
+                await saveTeacherOfflineSnapshot(supabaseClient, 'subjects');
             });
 
             document.getElementById('majorSelect').addEventListener('change', async function () {
                 await loadSubjects(this.value);
+                await saveTeacherOfflineSnapshot(supabaseClient, 'subjects');
             });
 
             document.getElementById('subjectSelect').addEventListener('change', async function () {
                 await loadSections(this.value);
                 if (document.getElementById('sectionSelect').value) await loadStudents();
+                else await saveTeacherOfflineSnapshot(supabaseClient, 'subjects');
             });
 
             document.getElementById('sectionSelect').addEventListener('change', async function () {
