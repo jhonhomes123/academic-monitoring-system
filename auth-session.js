@@ -1,12 +1,16 @@
-function showLogoutConfirmation(title, message) {
+function showLogoutConfirmation(title, message, confirmLabel = 'Log out') {
     const existingModal = document.getElementById('confirmModal');
     if (existingModal && typeof window.showConfirmModal === 'function') {
         return new Promise(resolve => {
             let settled = false;
+            const confirmButton = existingModal.querySelector('#confirmActionBtn');
+            const previousConfirmLabel = confirmButton?.textContent;
+            if (confirmButton) confirmButton.textContent = confirmLabel;
             const finish = approved => {
                 if (settled) return;
                 settled = true;
                 document.removeEventListener('keydown', onKeyDown);
+                if (confirmButton && previousConfirmLabel !== undefined) confirmButton.textContent = previousConfirmLabel;
                 resolve(approved);
             };
             const onKeyDown = event => {
@@ -41,9 +45,10 @@ function showLogoutConfirmation(title, message) {
 
     const overlay = document.createElement('div');
     overlay.id = 'amsLogoutConfirmOverlay';
-    overlay.innerHTML = '<div id="amsLogoutConfirmDialog" role="dialog" aria-modal="true" aria-labelledby="amsLogoutConfirmTitle" aria-describedby="amsLogoutConfirmMessage"><div class="confirm-icon" aria-hidden="true">!</div><h2 id="amsLogoutConfirmTitle"></h2><p id="amsLogoutConfirmMessage"></p><div class="confirm-buttons"><button type="button" class="cancel-btn">Cancel</button><button type="button" class="confirm-btn">Log out</button></div></div>';
+    overlay.innerHTML = '<div id="amsLogoutConfirmDialog" role="dialog" aria-modal="true" aria-labelledby="amsLogoutConfirmTitle" aria-describedby="amsLogoutConfirmMessage"><div class="confirm-icon" aria-hidden="true">!</div><h2 id="amsLogoutConfirmTitle"></h2><p id="amsLogoutConfirmMessage"></p><div class="confirm-buttons"><button type="button" class="cancel-btn">Cancel</button><button type="button" class="confirm-btn"></button></div></div>';
     overlay.querySelector('#amsLogoutConfirmTitle').textContent = title;
     overlay.querySelector('#amsLogoutConfirmMessage').textContent = message;
+    overlay.querySelector('.confirm-btn').textContent = confirmLabel;
     document.body.appendChild(overlay);
 
     return new Promise(resolve => {
@@ -99,20 +104,27 @@ async function logoutAndRedirect(event, client) {
         if (!await showLogoutConfirmation('Check Saved Data', message)) return;
     }
 
+    while (true) {
+        window.portalLogoutInProgress = true;
+        try {
+            const { error } = await client.auth.signOut(navigator.onLine ? undefined : { scope: 'local' });
+            if (error) throw error;
+            break;
+        } catch (error) {
+            window.portalLogoutInProgress = false;
+            console.error('Unable to clear the sign-in session', error);
+            const retry = await showLogoutConfirmation(
+                'Sign Out Failed',
+                `${error?.message || 'The session could not be cleared.'} Check your connection and try again.`,
+                'Try Again'
+            );
+            if (!retry) return;
+        }
+    }
+
     if (session?.user?.id && typeof window.clearStudentOfflineSnapshots === 'function') {
         await window.clearStudentOfflineSnapshots(session.user.id);
         document.querySelector('.main')?.replaceChildren();
-    }
-
-    window.portalLogoutInProgress = true;
-    try {
-        const { error } = await client.auth.signOut(navigator.onLine ? undefined : { scope: 'local' });
-        if (error) throw error;
-    } catch (error) {
-        window.portalLogoutInProgress = false;
-        console.error('Unable to clear the sign-in session', error);
-        alert('Could not sign out right now. Please try again.');
-        return;
     }
 
     window.location.replace('index.html');
