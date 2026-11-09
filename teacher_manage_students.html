@@ -553,6 +553,7 @@ INIT
 
 async function initialize(){
 
+    try {
     if (await beginTeacherOfflinePage(supabaseClient, 'students')) return;
 
     /* =========================
@@ -565,6 +566,7 @@ async function initialize(){
     } = await supabaseClient.auth.getUser();
 
     if(error || !user){
+        if (await restoreTeacherOfflineSnapshot(supabaseClient, 'students', true)) return;
         if (navigator.onLine) {
             window.location.replace('login.html');
             return;
@@ -601,6 +603,11 @@ async function initialize(){
     }
     await saveTeacherOfflineSnapshot(supabaseClient, 'students');
 
+    } catch (startupError) {
+        console.error('Unable to initialize Manage Students.', startupError);
+        if (await restoreTeacherOfflineSnapshot(supabaseClient, 'students', true)) return;
+        tableBody.innerHTML = '<tr><td colspan="3" class="empty">Student data could not be loaded. Check your connection and refresh, or sign in again.</td></tr>';
+    }
 
 }
 
