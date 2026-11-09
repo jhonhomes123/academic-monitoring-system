@@ -70,6 +70,20 @@ function showLogoutConfirmation(title, message, confirmLabel = 'Log out') {
     });
 }
 
+async function clearLocalLogoutSession(client) {
+    const auth = client?.auth;
+    const storageKey = auth?.storageKey;
+    if (!auth || !storageKey || typeof auth.storage?.removeItem !== 'function') {
+        throw new Error('This browser could not clear the saved sign-in session locally.');
+    }
+    await auth.storage.removeItem(storageKey);
+    try {
+        await auth.stopAutoRefresh?.();
+    } catch (error) {
+        console.warn('Local session was cleared, but token refresh could not be stopped.', error);
+    }
+}
+
 async function logoutAndRedirect(event, client) {
     event.preventDefault();
 
@@ -113,9 +127,29 @@ async function logoutAndRedirect(event, client) {
         } catch (error) {
             window.portalLogoutInProgress = false;
             console.error('Unable to clear the sign-in session', error);
+            if (!navigator.onLine) {
+                const signOutLocally = await showLogoutConfirmation(
+                    'Sign Out Offline',
+                    'The server could not be reached. Sign out on this device only? Your queued changes will stay saved here and sync after you sign in again while connected.',
+                    'Sign Out Here'
+                );
+                if (!signOutLocally) return;
+                try {
+                    await clearLocalLogoutSession(client);
+                    break;
+                } catch (localError) {
+                    console.error('Unable to clear the local sign-in session.', localError);
+                    await showLogoutConfirmation(
+                        'Sign Out Failed',
+                        `${localError?.message || 'The saved sign-in could not be cleared.'} Your queued data has not been removed.`,
+                        'Okay'
+                    );
+                    return;
+                }
+            }
             const retry = await showLogoutConfirmation(
                 'Sign Out Failed',
-                `${error?.message || 'The session could not be cleared.'} Check your connection and try again.`,
+                `${error?.message || 'The session could not be cleared.'} Check your connection and try again. Your saved offline changes remain on this device.`,
                 'Try Again'
             );
             if (!retry) return;
