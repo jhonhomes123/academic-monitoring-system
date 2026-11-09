@@ -2062,7 +2062,13 @@
             for (const page of pagesToWarm) {
                 if (!(await readSnapshot(snapshotKey(userId, page.key, role, defaultFilterState)))) missingPages.push(page);
             }
-            if (!missingPages.length) return;
+            if (!missingPages.length) {
+                if (role === 'teacher' && navigator.onLine) {
+                    setNotice('Teacher portal pages are ready for offline viewing.', true, 'ready');
+                    window.setTimeout(() => setNotice('', false), 6000);
+                }
+                return;
+            }
 
             setPreparationProgress(true);
             await Promise.all(missingPages.map(async page => {
@@ -2092,6 +2098,9 @@
 
             if (navigator.onLine && failedPages.size) {
                 console.warn(`Offline ${role} page preparation did not finish for: ${[...failedPages].join(', ')}.`);
+            } else if (role === 'teacher' && navigator.onLine) {
+                setNotice('Teacher portal pages are ready for offline viewing.', true, 'ready');
+                window.setTimeout(() => setNotice('', false), 6000);
             }
         })().finally(() => {
             warmupPromise = null;
