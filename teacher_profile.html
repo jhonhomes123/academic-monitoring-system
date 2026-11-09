@@ -691,6 +691,11 @@
 
             if (!navigator.onLine && await restoreTeacherOfflineSnapshot(supabaseClient, 'profile', true)) return;
 
+            if (navigator.onLine) {
+                window.location.replace('login.html');
+                return;
+            }
+
             showAlert(
                 "error",
                 "Login Required",
