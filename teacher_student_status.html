@@ -802,7 +802,7 @@ id="confirmModal">
 
 </div>
 
-<script src="portal-offline.js?v=173"></script>
+<script src="portal-offline.js?v=174"></script>
 <script>
 
 /* ================= ALERT FUNCTION ================= */
@@ -1001,11 +1001,18 @@ async function initialize(){
     }
 
     const {
-        data:{user}
-    } =
-    await supabaseClient.auth.getUser();
+        data:{user},
+        error
+    } = await supabaseClient.auth.getUser();
 
-    if(!user) return;
+    if(!user || error) {
+        if (navigator.onLine) {
+            window.location.replace('login.html');
+            return;
+        }
+        tableBody.innerHTML = '<tr><td colspan="5">Sign in while connected once to prepare this class list for offline use.</td></tr>';
+        return;
+    }
 
     teacherUserId = user.id;
 

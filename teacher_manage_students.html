@@ -486,7 +486,7 @@ TABLE SCROLLBAR
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
-<script src="portal-offline.js?v=173"></script>
+<script src="portal-offline.js?v=174"></script>
     <script>
 
     /* =====================================================
@@ -565,8 +565,11 @@ async function initialize(){
     } = await supabaseClient.auth.getUser();
 
     if(error || !user){
-
-        console.log("User not logged in");
+        if (navigator.onLine) {
+            window.location.replace('login.html');
+            return;
+        }
+        tableBody.innerHTML = '<tr><td colspan="3">Sign in while connected once to prepare this class list for offline use.</td></tr>';
         return;
 
     }

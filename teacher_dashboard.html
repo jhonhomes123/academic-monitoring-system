@@ -889,7 +889,7 @@ function closeConfirmModal(){
 }
 </script>
 
-<script src="portal-offline.js?v=173"></script>
+<script src="portal-offline.js?v=174"></script>
 <script>
 const SUPABASE_URL = 'https://nrqrsolfowebujogawti.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5ycXJzb2xmb3dlYnVqb2dhd3RpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkyODE2NjksImV4cCI6MjA5NDg1NzY2OX0.XcawTf9niOIZbG0hBTtwSXjySWfdVl3LAClbWdZmfl8';
@@ -925,8 +925,12 @@ async function initializeTeacherDashboard() {
     try {
     const { data: { user }, error } = await supabaseClient.auth.getUser();
     if (error || !user) {
-        if (await restoreTeacherOfflineSnapshot(supabaseClient, 'dashboard', true)) return;
-        console.error('Teacher dashboard auth error', error);
+        if (!navigator.onLine && await restoreTeacherOfflineSnapshot(supabaseClient, 'dashboard', true)) return;
+        if (navigator.onLine) {
+            window.location.replace('login.html');
+            return;
+        }
+        document.getElementById('sectionSummaryBody').innerHTML = '<tr><td colspan="6" class="empty">Sign in while connected once to prepare this dashboard for offline use.</td></tr>';
         return;
     }
     teacherUserId = user.id;
@@ -934,7 +938,8 @@ async function initializeTeacherDashboard() {
     await loadTeacherSummary();
     } catch (error) {
         console.error('Unable to load teacher dashboard', error);
-        await restoreTeacherOfflineSnapshot(supabaseClient, 'dashboard', true);
+        if (!navigator.onLine && await restoreTeacherOfflineSnapshot(supabaseClient, 'dashboard', true)) return;
+        document.getElementById('sectionSummaryBody').innerHTML = `<tr><td colspan="6" class="empty">Unable to load teacher dashboard: ${String(error?.message || 'data request failed')}</td></tr>`;
     }
 }
 
