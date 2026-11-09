@@ -181,25 +181,6 @@
             font-size: 14px;
         }
 
-        #requirementStudentPicker table {
-            min-width: 0;
-            table-layout: fixed;
-        }
-
-        #requirementStudentPicker th,
-        #requirementStudentPicker td {
-            padding: 8px 10px;
-        }
-
-        #requirementStudentPicker th:first-child,
-        #requirementStudentPicker td:first-child {
-            width: 44px;
-        }
-
-        #requirementStudentPicker td:last-child {
-            overflow-wrap: anywhere;
-        }
-
         .warning-text {
             color: var(--warning);
             font-weight: 700;
@@ -279,10 +260,9 @@
 
         .ams-alert {
             position: fixed;
-            top: 16px;
-            right: 16px;
-            width: min(420px, calc(100vw - 32px));
-            min-width: 0;
+            top: 30px;
+            right: 30px;
+            min-width: 340px;
             max-width: 420px;
             background: white;
             border-radius: 20px;
@@ -348,14 +328,12 @@
             margin-bottom: 8px;
             font-size: 18px;
             color: var(--primary);
-            overflow-wrap: anywhere;
         }
 
         .alert-content p {
             color: var(--gray);
             line-height: 1.7;
             font-size: 14px;
-            overflow-wrap: anywhere;
         }
 
         .alert-close {
@@ -370,12 +348,10 @@
         @media(max-width:600px) {
 
             .ams-alert {
-                left: 12px;
-                right: 12px;
-                width: auto;
+                left: 20px;
+                right: 20px;
+                min-width: auto;
                 max-width: none;
-                padding: 16px;
-                gap: 12px;
             }
 
         }
@@ -608,7 +584,6 @@
     </style>
     <link rel="stylesheet" href="mobile_fix.css">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="portal-offline.js"></script>
 </head>
 
 <body>
@@ -793,6 +768,7 @@ Select Subject and Section
                                 <thead>
                                     <tr>
                                         <th style="width:44px;">Select</th>
+                                        <th>Student ID</th>
                                         <th>Student Name</th>
                                     </tr>
                                 </thead>
@@ -871,15 +847,6 @@ Select Subject and Section
             let teacherId = null;
             let teacherUserId = null;
             let currentRequirementStudents = [];
-
-            window.capturePortalOfflineState = () => ({ currentRequirementStudents, teacherId, teacherUserId });
-            window.restorePortalOfflineState = state => {
-                currentRequirementStudents = Array.isArray(state?.currentRequirementStudents)
-                    ? state.currentRequirementStudents
-                    : [];
-                teacherId = state?.teacherId || null;
-                teacherUserId = state?.teacherUserId || null;
-            };
 
             function formatPersonTableName(person) {
                 const middleInitial = String(person.middle_initial || '').trim();
@@ -1121,7 +1088,6 @@ Select Subject and Section
                     .eq('section_id', sectionId);
 
                 if (error) {
-                    await restoreTeacherOfflineSnapshot(supabaseClient, 'subjects', true);
                     return showAlert('error', 'Error', error.message || 'Unable to load students');
                 }
 
@@ -1131,39 +1097,17 @@ Select Subject and Section
                         <tr>
                             <td colspan="3">No students found</td>
                         </tr>`;
-                    await saveTeacherOfflineSnapshot(supabaseClient, 'subjects');
                     return;
                 }
 
                 currentRequirementStudents = students;
 
-                const studentIds = students.map(student => student.student_id);
-                const [requirementsResult, filesResult] = await Promise.all([
-                    supabaseClient
-                        .from('student_requirements')
-                        .select('*')
-                        .eq('subject_id', subjectId)
-                        .in('student_id', studentIds),
-                    supabaseClient
-                        .from('subject_instruction_files')
-                        .select('*')
-                        .eq('subject_id', subjectId)
-                        .eq('teacher_id', teacherId)
-                ]);
-
-                if (requirementsResult.error || filesResult.error) {
-                    currentRequirementStudents = [];
-                    await restoreTeacherOfflineSnapshot(supabaseClient, 'subjects', true);
-                    return showAlert('error', 'Error', requirementsResult.error?.message || filesResult.error?.message || 'Unable to load student requirements.');
-                }
-
-                const requirementsByStudent = new Map();
-                (requirementsResult.data || []).forEach(requirement => {
-                    const studentRequirements = requirementsByStudent.get(String(requirement.student_id)) || [];
-                    studentRequirements.push(requirement);
-                    requirementsByStudent.set(String(requirement.student_id), studentRequirements);
-                });
-                const uploadedFiles = filesResult.data || [];
+                // fetch instructor uploaded files for this subject (once)
+                const { data: uploadedFiles } = await supabaseClient
+                    .from('subject_instruction_files')
+                    .select('*')
+                    .eq('subject_id', subjectId)
+                    .eq('teacher_id', teacherId);
 
                 let html = '';
                 const genderGroups = [
@@ -1178,7 +1122,11 @@ Select Subject and Section
                         `${first.last_name || ''}, ${first.first_name || ''}`.localeCompare(`${second.last_name || ''}, ${second.first_name || ''}`, undefined, { sensitivity: 'base' })
                     );
                     for (const student of group) {
-                    const requirements = requirementsByStudent.get(String(student.student_id)) || [];
+                    const { data: requirements } = await supabaseClient
+                        .from('student_requirements')
+                        .select('*')
+                        .eq('student_id', student.student_id)
+                        .eq('subject_id', subjectId);
 
                     const requirementList = requirements?.length
                         ? requirements.map(r => {
@@ -1191,15 +1139,15 @@ Select Subject and Section
                                         ${requirementFiles.map(f => `<div style="margin-bottom:6px;"><a href="${f.file_url}" target="_blank" style="color:#2563eb; text-decoration:none;">📎 ${f.file_name}</a></div>`).join('')}
                                     </div>`
                                 : '';
-                            return `<div data-requirement-id="${r.requirement_id}" style="margin-bottom:10px; padding:12px; background-color:#f1f5f9; border-radius:8px; border:1px solid #dbe4f0;">
+                            return `<div style="margin-bottom:10px; padding:12px; background-color:#f1f5f9; border-radius:8px; border:1px solid #dbe4f0;">
                                         <div style="display:flex; justify-content:space-between; align-items:start; gap:10px;">
                                             <div style="flex:1; min-width:0;">
                                                 <strong>${r.requirement_title}</strong>
-                                                ${description ? `<div style="color:#475569;margin-top:4px;white-space:pre-wrap;">${description}</div>` : ''}
+                                                ${description ? `<div style="color:#475569;margin-top:4px;">${description}</div>` : ''}
                                                 ${deadlineText}
                                                 ${requirementFilesHtml}
                                             </div>
-                                            <button class="btn btn-danger" data-requirement-id="${r.requirement_id}" onclick="deleteRequirement(${r.requirement_id})" style="margin-left:10px; white-space:nowrap; padding:6px 12px; font-size:12px;">Delete</button>
+                                            <button class="btn btn-danger" onclick="deleteRequirement(${r.requirement_id})" style="margin-left:10px; white-space:nowrap; padding:6px 12px; font-size:12px;">Delete</button>
                                         </div>
                                     </div>`;
                         }).join('')
@@ -1226,7 +1174,7 @@ Select Subject and Section
                             : "";
 
                     html += `
-                        <tr data-student-id="${student.student_id}">
+                        <tr>
                             <td>${formatPersonTableName(student)}</td>
                             <td>${requirementList}</td>
                             <td>
@@ -1239,7 +1187,6 @@ Select Subject and Section
                 }
 
                 studentsTable.innerHTML = html;
-                await saveTeacherOfflineSnapshot(supabaseClient, 'subjects');
             }
 
             async function saveRequirement() {
@@ -1254,25 +1201,6 @@ Select Subject and Section
 
                 if (!studentIds.length || !subjectId || !title) {
                     return showAlert('warning', 'Validation', 'Select at least one student and enter a requirement title.');
-                }
-
-                if (!navigator.onLine) {
-                    try {
-                        await queueTeacherOperation(supabaseClient, 'requirement', {
-                            teacher_id: Number(teacherId),
-                            subject_id: Number(subjectId),
-                            section_id: Number(document.getElementById('sectionSelect').value),
-                            student_ids: studentIds,
-                            requirement_title: title,
-                            requirement_description: description,
-                            deadline: deadline || null
-                        }, file || null);
-                        closeRequirementModal();
-                        return;
-                    } catch (queueError) {
-                        showAlert('error', 'Offline Save Failed', queueError.message || 'Unable to save this requirement on the device.');
-                        return;
-                    }
                 }
 
                 const { data: insertedData, error } = await supabaseClient
@@ -1357,34 +1285,13 @@ Select Subject and Section
                     }
                 }
 
+                showAlert('success', 'Requirements Added', `Added "${title}" for ${insertedData.length} student${insertedData.length === 1 ? '' : 's'}.`);
                 closeRequirementModal();
                 await loadStudents();
-                showAlert('success', 'Requirements Added', `Added "${title}" for ${insertedData.length} student${insertedData.length === 1 ? '' : 's'}.`);
             }
 
             async function deleteRequirement(requirementId) {
                 showConfirmModal('Delete', 'Delete this requirement and its files?', async () => {
-                    if (!navigator.onLine) {
-                        try {
-                            const subjectId = document.getElementById('subjectSelect')?.value || selectedSubjectId;
-                            if (!subjectId || Number(subjectId) <= 0) {
-                                throw new Error('Choose a subject before deleting this requirement offline.');
-                            }
-                            await queueTeacherOperation(supabaseClient, 'requirement_delete', {
-                                requirement_id: Number(requirementId),
-                                subject_id: Number(subjectId),
-                                teacher_id: Number(teacherId)
-                            });
-                            document.querySelectorAll(`[data-requirement-id="${requirementId}"]`).forEach(element => element.remove());
-                            showAlert('success', 'Queued Offline', 'Requirement delete saved on this device and will sync when online.');
-                            closeConfirmModal();
-                            return;
-                        } catch (queueError) {
-                            closeConfirmModal();
-                            return showAlert('error', 'Offline Delete Failed', queueError.message || 'Unable to save this delete on the device.');
-                        }
-                    }
-
                     const { error: requirementError } = await supabaseClient
                         .from('student_requirements')
                         .delete()
@@ -1403,8 +1310,8 @@ Select Subject and Section
                         return showAlert('error', 'Error', fileError.message || 'Unable to delete files');
                     }
 
-                    await loadStudents();
                     showAlert('success', 'Deleted', 'Requirement and files removed');
+                    await loadStudents();
                 });
             }
 
@@ -1418,27 +1325,6 @@ Select Subject and Section
 
                 if (!teacherId) {
                     return showAlert('error', 'Error', 'Teacher profile not loaded. Please reload and try again.');
-                }
-
-                if (!navigator.onLine) {
-                    if (!document.getElementById('sectionSelect').value) {
-                        return showAlert('warning', 'Select a Section', 'Choose the assigned section before queueing an offline attachment.');
-                    }
-                    try {
-                        await queueTeacherOperation(supabaseClient, 'attachment', {
-                            teacher_id: Number(teacherId),
-                            subject_id: Number(subjectId),
-                            section_id: Number(document.getElementById('sectionSelect').value),
-                            student_ids: selectedStudentId ? [Number(selectedStudentId)] : []
-                        }, file);
-                        selectedSubjectId = null;
-                        selectedStudentId = null;
-                        document.getElementById('instructionFile').value = '';
-                        closeUploadModal();
-                        return;
-                    } catch (queueError) {
-                        return showAlert('error', 'Offline Upload Failed', queueError.message || 'Unable to save this attachment for later upload.');
-                    }
                 }
 
                 const fileName = `${Date.now()}_${file.name}`;
@@ -1512,7 +1398,6 @@ Select Subject and Section
             }
 
             window.onload = async () => {
-                if (await beginTeacherOfflinePage(supabaseClient, 'subjects')) return;
                 const { data: { user }, error } = await supabaseClient.auth.getUser();
                 if (error) {
                     console.error(error);
@@ -1524,21 +1409,6 @@ Select Subject and Section
                 }
 
                 await loadYears();
-                const warmRoute = new URLSearchParams(window.location.search);
-                if (warmRoute.get('amsTeacherRosterWarm') === '1') {
-                    document.getElementById('yearSelect').value = warmRoute.get('year') || '';
-                    await loadDepartments(document.getElementById('yearSelect').value);
-                    document.getElementById('departmentSelect').value = warmRoute.get('department_id') || '';
-                    await loadMajors(document.getElementById('departmentSelect').value);
-                    document.getElementById('majorSelect').value = warmRoute.get('major_id') || '';
-                    await loadSubjects(document.getElementById('majorSelect').value);
-                    document.getElementById('subjectSelect').value = warmRoute.get('subject_id') || '';
-                    await loadSections(document.getElementById('subjectSelect').value);
-                    document.getElementById('sectionSelect').value = warmRoute.get('section_id') || '';
-                    await loadStudents();
-                    return;
-                }
-                await saveTeacherOfflineSnapshot(supabaseClient, 'subjects');
             };
 
             document.getElementById('yearSelect').addEventListener('change', async function () {
@@ -1644,8 +1514,6 @@ Select Subject and Section
 
             /* ================= ALERT FUNCTION ================= */
 
-            let alertCloseTimer = null;
-
             function showAlert(type, title, message) {
 
                 const alertBox =
@@ -1661,8 +1529,6 @@ Select Subject and Section
                     document.getElementById('alertIcon');
 
                 // RESET CLASSES
-
-                clearTimeout(alertCloseTimer);
 
                 alertBox.className = 'ams-alert';
 
@@ -1701,14 +1567,18 @@ Select Subject and Section
 
                 // SHOW
 
-                requestAnimationFrame(() => {
+                setTimeout(() => {
+
                     alertBox.classList.add('show');
-                });
+
+                }, 100);
 
                 // AUTO CLOSE
 
-                alertCloseTimer = setTimeout(() => {
+                setTimeout(() => {
+
                     closeAlert();
+
                 }, 4000);
 
             }
@@ -1716,9 +1586,6 @@ Select Subject and Section
             /* CLOSE ALERT */
 
             function closeAlert() {
-
-                clearTimeout(alertCloseTimer);
-                alertCloseTimer = null;
 
                 document
                     .getElementById('amsAlert')
@@ -1747,10 +1614,6 @@ Select Subject and Section
 
                 document.getElementById(
                     'confirmModal'
-                ).style.display = 'flex';
-
-                document.getElementById(
-                    'confirmModal'
                 ).classList.add('show');
 
                 document.getElementById(
@@ -1769,9 +1632,9 @@ Select Subject and Section
 
             function closeConfirmModal() {
 
-                const modal = document.getElementById('confirmModal');
-                modal.classList.remove('show');
-                modal.style.display = '';
+                document.getElementById(
+                    'confirmModal'
+                ).classList.remove('show');
 
             }
             function updateRequirementStudentCount() {
@@ -1809,12 +1672,15 @@ Select Subject and Section
                     checkboxCell.style.textAlign = 'center';
                     checkboxCell.appendChild(checkbox);
 
+                    const idCell = document.createElement('td');
+                    idCell.textContent = student.student_number || 'N/A';
+
                     const nameCell = document.createElement('td');
                     const name = document.createElement('span');
                     name.textContent = formatPersonTableName(student);
                     nameCell.appendChild(name);
 
-                    row.append(checkboxCell, nameCell);
+                    row.append(checkboxCell, idCell, nameCell);
                     list.appendChild(row);
                 });
 

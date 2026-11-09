@@ -1090,6 +1090,17 @@
         return { requestedAt };
     }
 
+    async function hasQueuedSystemLogDeleteAll(client) {
+        const userId = await getUserId(client);
+        if (!userId) return false;
+        const request = await adminStoreRequest(
+            adminSystemLogStoreName,
+            'readonly',
+            store => store.get(`${userId}:__delete_all_request__`)
+        );
+        return Boolean(request);
+    }
+
     async function syncQueuedSystemLogDeleteAll(client) {
         const userId = await getUserId(client);
         if (!userId || !navigator.onLine) return false;
@@ -1831,6 +1842,7 @@
     window.cacheSystemLogEntries = cacheSystemLogEntries;
     window.getCachedSystemLogs = getCachedSystemLogs;
     window.queueSystemLogDeleteAll = queueSystemLogDeleteAll;
+    window.hasQueuedSystemLogDeleteAll = hasQueuedSystemLogDeleteAll;
     window.syncQueuedSystemLogDeleteAll = syncQueuedSystemLogDeleteAll;
     window.getSystemLogCacheState = getSystemLogCacheState;
     window.saveSystemLogCacheState = saveSystemLogCacheState;
