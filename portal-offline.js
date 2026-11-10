@@ -216,6 +216,19 @@
         window.supabaseClientForOffline = client;
         window.currentStudentOfflinePage = pageKey;
         window.currentOfflineRole = role;
+        if (role === 'teacher' && ['students', 'status'].includes(pageKey)) {
+            const resetTeacherOfflineFilters = () => {
+                const main = document.querySelector('.main');
+                if (!main) return;
+                clearTeacherFilterSelections(main, pageKey);
+                getTeacherFilterIds(pageKey).forEach(id => {
+                    const select = main.querySelector(`#${id}`);
+                    if (select) select.value = '';
+                });
+            };
+            if (!navigator.onLine) resetTeacherOfflineFilters();
+            window.addEventListener('offline', resetTeacherOfflineFilters, { once: true });
+        }
         if (navigator.onLine) {
             setNotice('', false);
             if (role === 'teacher' && !isWarmupFrame) {
@@ -2308,6 +2321,9 @@
                 element.value = field.value;
                 if (field.checked !== undefined) element.checked = field.checked;
             });
+            if (role === 'teacher' && ['students', 'status'].includes(pageKey)) {
+                clearTeacherFilterSelections(main, pageKey);
+            }
             const teacherFilterIds = role === 'teacher' ? getTeacherFilterIds(pageKey) : [];
             const savedTeacherFilters = Object.fromEntries(snapshot.filterState || []);
             const hasCompleteSavedRoute = role === 'teacher'
