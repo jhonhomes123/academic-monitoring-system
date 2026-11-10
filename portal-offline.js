@@ -1896,7 +1896,11 @@
     }
 
     async function syncTeacherQueue(client) {
-        if (!navigator.onLine || syncInProgress) return;
+        if (!navigator.onLine) return;
+        if (syncInProgress) {
+            teacherSyncRequested = true;
+            return;
+        }
         syncInProgress = true;
         let failedOperation = null;
         try {
@@ -1942,9 +1946,13 @@
                 document.querySelectorAll('button').forEach(button => {
                     if (button.textContent.trim() === 'Queued offline') button.textContent = 'Save';
                 });
-                setNotice('Teacher changes synced. Refreshing saved teacher data...', true, 'ready');
+                const isTeacherDashboard = window.currentStudentOfflinePage === 'dashboard';
+                setNotice(isTeacherDashboard
+                    ? 'Teacher changes synced. Your saved changes are now applied.'
+                    : 'Teacher changes synced. Refreshing saved teacher data...', true, 'ready');
                 await preloadTeacherAssignedRosters(client, true);
-                window.setTimeout(() => window.location.reload(), 1200);
+                if (!isTeacherDashboard) window.setTimeout(() => window.location.reload(), 1200);
+                else window.setTimeout(() => setNotice('', false), 6000);
             }
         } catch (error) {
             console.error('Unable to sync queued teacher changes.', error);
@@ -1995,10 +2003,15 @@
             if (shouldNotify) setNotice(syncMessage, true, 'sync', discardAction);
         } finally {
             syncInProgress = false;
+            if (teacherSyncRequested && navigator.onLine) {
+                teacherSyncRequested = false;
+                void syncTeacherQueue(client);
+            }
         }
     }
 
     let syncInProgress = false;
+    let teacherSyncRequested = false;
 
     async function saveOfflineSnapshot(client, pageKey, role) {
         if (!navigator.onLine) return false;

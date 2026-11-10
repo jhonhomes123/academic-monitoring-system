@@ -224,6 +224,26 @@ table td{
     text-align:center;
     color:var(--gray);
 }
+
+.offline-remove-btn{
+    min-width:84px;
+    padding:8px 12px;
+    border:1px solid #b91c1c;
+    border-radius:6px;
+    background:#dc2626;
+    color:#fff;
+    font-weight:700;
+    cursor:pointer;
+}
+
+.offline-remove-btn:hover{
+    background:#b91c1c;
+}
+
+.offline-remove-btn:focus-visible{
+    outline:3px solid #fca5a5;
+    outline-offset:2px;
+}
 /* ================= CUSTOM AMS ALERT ================= */
 
 .ams-alert{
@@ -889,7 +909,7 @@ function closeConfirmModal(){
 }
 </script>
 
-<script src="portal-offline.js?v=179"></script>
+<script src="portal-offline.js?v=180"></script>
 <script>
 const SUPABASE_URL = 'https://nrqrsolfowebujogawti.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5ycXJzb2xmb3dlYnVqb2dhd3RpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkyODE2NjksImV4cCI6MjA5NDg1NzY2OX0.XcawTf9niOIZbG0hBTtwSXjySWfdVl3LAClbWdZmfl8';
@@ -934,6 +954,9 @@ async function initializeTeacherDashboard() {
         return;
     }
     teacherUserId = user.id;
+    await renderTeacherOfflineQueue();
+    await window.syncTeacherOfflineQueue(supabaseClient);
+    await renderTeacherOfflineQueue();
     await loadTeacher();
     await loadTeacherSummary();
     } catch (error) {
@@ -952,17 +975,47 @@ function ensureTeacherOfflineQueuePanel() {
     main.appendChild(section);
 }
 
+function formatTeacherQueueTermDetail(term, payload) {
+    const label = term ? term.charAt(0).toUpperCase() + term.slice(1) : 'Term';
+    const gradeValue = payload[term];
+    const statusValue = payload[`${term}_status`];
+    const gradeText = gradeValue === null || gradeValue === undefined || gradeValue === '' ? 'No grade' : String(gradeValue);
+    const statusText = statusValue ? ` (${statusValue})` : '';
+    return `${label}: ${gradeText}${statusText}`;
+}
+
 function describeTeacherOfflineOperation(operation) {
     const payload = operation.payload || {};
     if (operation.type === 'grade') {
-        return `Student ${payload.student_id || 'unknown'}; subject ${payload.subject_id || 'unknown'}; section ${payload.section_id || 'unknown'}`;
+        const studentId = payload.student_id ? `Student ${payload.student_id}` : 'Student unknown';
+        const subjectId = payload.subject_id ? `Subject ${payload.subject_id}` : 'Subject unknown';
+        const sectionId = payload.section_id ? `Section ${payload.section_id}` : 'Section unknown';
+        const changedTerms = Array.isArray(payload.changed_terms) && payload.changed_terms.length
+            ? payload.changed_terms.map(term => formatTeacherQueueTermDetail(term, payload)).join(' • ')
+            : payload.status
+                ? `Overall status: ${payload.status}`
+                : 'Grade update';
+        return `${studentId} • ${subjectId} • ${sectionId} • ${changedTerms}`;
     }
     if (operation.type === 'requirement') {
-        return `${payload.requirement_title || 'Requirement'}; ${payload.student_ids?.length || 0} student(s)`;
+        const title = payload.requirement_title || 'Requirement';
+        const studentCount = payload.student_ids?.length || 0;
+        const subjectText = payload.subject_id ? `Subject ${payload.subject_id}` : 'Subject not selected';
+        const deadlineText = payload.deadline ? ` • Due ${new Date(payload.deadline).toLocaleDateString()}` : '';
+        return `${title} • ${studentCount} student${studentCount === 1 ? '' : 's'} • ${subjectText}${deadlineText}`;
     }
-    if (operation.type === 'requirement_delete') return `Requirement ${payload.requirement_id || 'unknown'}`;
-    if (operation.type === 'attachment') return operation.file?.name || payload.file_name || 'Uploaded file';
-    return operation.operationId;
+    if (operation.type === 'requirement_delete') {
+        const requirementId = payload.requirement_id ? `Requirement ${payload.requirement_id}` : 'Requirement';
+        const subjectText = payload.subject_id ? ` • Subject ${payload.subject_id}` : '';
+        return `${requirementId} deleted${subjectText}`;
+    }
+    if (operation.type === 'attachment') {
+        const fileName = operation.file?.name || payload.file_name || 'Uploaded file';
+        const studentText = payload.student_id ? ` • Student ${payload.student_id}` : '';
+        const subjectText = payload.subject_id ? ` • Subject ${payload.subject_id}` : '';
+        return `${fileName}${studentText}${subjectText}`;
+    }
+    return operation.operationId || 'Queued action';
 }
 
 async function renderTeacherOfflineQueue() {
@@ -975,24 +1028,27 @@ async function renderTeacherOfflineQueue() {
             const row = table.insertRow();
             const cell = row.insertCell();
             cell.colSpan = 4;
-            cell.textContent = 'No saved teacher changes';
+            cell.textContent = 'All saved changes are synced.';
             return;
         }
 
         const labels = {
-            grade: 'Grade',
+            grade: 'Grade update',
             requirement: 'Requirement',
-            requirement_delete: 'Requirement deletion',
+            requirement_delete: 'Requirement removal',
             attachment: 'Attachment'
         };
         queue.forEach(operation => {
             const row = table.insertRow();
+            const statusText = operation.lastError
+                ? `Needs attention: ${operation.lastError}`
+                : navigator.onLine
+                    ? 'Waiting to sync'
+                    : 'Saved on this device';
             [
                 labels[operation.type] || operation.type,
                 describeTeacherOfflineOperation(operation),
-                operation.lastError
-                    ? `Needs attention: ${operation.lastError}`
-                    : navigator.onLine ? 'Waiting to sync' : 'Saved on this device'
+                statusText
             ].forEach(text => {
                 const cell = row.insertCell();
                 cell.textContent = String(text);
@@ -1000,7 +1056,7 @@ async function renderTeacherOfflineQueue() {
             const actionCell = row.insertCell();
             const removeButton = document.createElement('button');
             removeButton.type = 'button';
-            removeButton.className = 'btn reject-btn';
+            removeButton.className = 'offline-remove-btn';
             removeButton.textContent = 'Remove';
             removeButton.addEventListener('click', () => removeTeacherOfflineChange(operation));
             actionCell.appendChild(removeButton);
