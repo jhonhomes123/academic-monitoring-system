@@ -2311,6 +2311,22 @@
             const main = document.querySelector('.main');
             if (!main) return false;
             main.innerHTML = snapshot.html;
+            if (role === 'student' && pageKey === 'dashboard') {
+                main.querySelector('.dashboard-grid')?.remove();
+                const enrolledTable = main.querySelector('#enrolledTableBody')?.closest('table');
+                enrolledTable?.querySelectorAll('thead tr').forEach(row => row.children[1]?.remove());
+                const enrolledBody = main.querySelector('#enrolledTableBody');
+                enrolledBody?.querySelectorAll('tr').forEach(row => {
+                    if (row.children.length > 1) row.children[1].remove();
+                    const emptyCell = row.querySelector('td[colspan]');
+                    if (emptyCell) emptyCell.colSpan = 2;
+                });
+                const semesterSummary = main.querySelector('#activeSemesterSummary');
+                if (semesterSummary) semesterSummary.textContent = semesterSummary.textContent.replace(/instructor status/gi, 'term status');
+            }
+            if (role === 'student' && pageKey === 'academic') {
+                main.querySelector('.small-grid')?.remove();
+            }
             const restoredAlert = document.getElementById('amsAlert');
             if (restoredAlert) restoredAlert.classList.remove('show');
             const restoredConfirm = document.getElementById('confirmModal');

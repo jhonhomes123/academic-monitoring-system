@@ -637,32 +637,6 @@ table tr:hover{
 
         </div>
 
-        <!-- SUMMARY CARDS -->
-
-        <div class="dashboard-grid">
-
-            <div class="card">
-                <h3>Total Subjects</h3>
-                <h2 id="totalSubjects">0</h2>
-            </div>
-
-            <div class="card">
-                <h3>Passed</h3>
-                <h2 class="pass-text" id="passedCount">0</h2>
-            </div>
-
-            <div class="card">
-                <h3>Incomplete</h3>
-                <h2 class="warning-text" id="incompleteCount">0</h2>
-            </div>
-
-            <div class="card">
-                <h3>Failed</h3>
-                <h2 class="danger-text" id="failedCount">0</h2>
-            </div>
-
-        </div>
-
         <!-- SUBJECT SUMMARY -->
 
         <div class="table-section">
@@ -673,19 +647,18 @@ table tr:hover{
                     <h2>Enrolled Subjects</h2>
 
                     <p id="activeSemesterSummary">
-                        Current subjects and instructor status
+                        Current subjects and term status
                     </p>
                 </div>
 
             </div>
 
-            <table>
+            <table id="enrolledSubjectsTable">
 
                 <thead>
 
                     <tr>
                         <th>Subject</th>
-                        <th>Instructor</th>
                         <th>Term Status</th>
                     </tr>
 
@@ -693,7 +666,7 @@ table tr:hover{
 
                 <tbody id="enrolledTableBody">
                     <tr>
-                        <td colspan="3" class="empty">Loading enrolled subjects...</td>
+                        <td colspan="2" class="empty">Loading enrolled subjects...</td>
                     </tr>
                 </tbody>
 
@@ -912,7 +885,7 @@ async function loadStudentDashboard() {
         const semesterSummary = document.getElementById('activeSemesterSummary');
         if (semesterSummary) {
             semesterSummary.textContent = activeSemester
-                ? `Current subjects and instructor status for ${activeSemester.semester_name}`
+                ? `Current subjects and term status for ${activeSemester.semester_name}`
                 : 'No active semester is set by the administrator';
         }
 
@@ -948,28 +921,10 @@ async function loadStudentDashboard() {
         const gradesBySubject = new Map((gradeRows || []).map(grade => [String(grade.subject_id), grade]));
 
         const enrolledBody = document.getElementById('enrolledTableBody');
-        const totalSubjectsEl = document.getElementById('totalSubjects');
-        const passedEl = document.getElementById('passedCount');
-        const incEl = document.getElementById('incompleteCount');
-        const failedEl = document.getElementById('failedCount');
 
-        let passed = 0, incomplete = 0, failed = 0;
         const rows = (sectionSubjects || []).map(subject => {
             const grade = gradesBySubject.get(String(subject.subject_id)) || {};
-            const assignment = (assignments || []).find(item =>
-                String(item.subject_id) === String(subject.subject_id)
-                && (item.teacher_section_assignments || []).some(sectionAssignment =>
-                    String(sectionAssignment.section_id) === String(student.section_id)
-                )
-            );
-            const teacher = assignment?.teachers;
-            const instructor = teacher
-                ? `${teacher.last_name || ''}, ${teacher.first_name || ''}${teacher.middle_initial ? ` ${String(teacher.middle_initial).trim().charAt(0).toUpperCase()}.` : ''}`
-                : 'TBD';
             const statusRaw = (grade.status || '').toString().toUpperCase();
-            if (statusRaw === 'PASSED') passed++;
-            else if (statusRaw === 'FAILED') failed++;
-            else if (statusRaw === 'INCOMPLETE') incomplete++;
 
             const termStatus = value => (value || statusRaw || 'PENDING').toString().toUpperCase();
             const termStatusClass = value => value === 'PASSED'
@@ -980,15 +935,10 @@ async function loadStudentDashboard() {
             const prelimStatus = termStatus(grade.prelim_status);
             const midtermStatus = termStatus(grade.midterm_status);
             const finalStatus = termStatus(grade.final_status);
-            return `<tr><td>${subject.subject_name || subject.subject_code}</td><td>${instructor}</td><td><span class="${termStatusClass(prelimStatus)}">Prelim: ${prelimStatus}</span><br><span class="${termStatusClass(midtermStatus)}">Midterm: ${midtermStatus}</span><br><span class="${termStatusClass(finalStatus)}">Final: ${finalStatus}</span></td></tr>`;
-        }).join('') || '<tr><td colspan="3" class="empty">No subjects for the active semester</td></tr>';
-        const total = (sectionSubjects || []).length;
+            return `<tr><td>${subject.subject_name || subject.subject_code}</td><td><span class="${termStatusClass(prelimStatus)}">Prelim: ${prelimStatus}</span><br><span class="${termStatusClass(midtermStatus)}">Midterm: ${midtermStatus}</span><br><span class="${termStatusClass(finalStatus)}">Final: ${finalStatus}</span></td></tr>`;
+        }).join('') || '<tr><td colspan="2" class="empty">No subjects for the active semester</td></tr>';
 
         if (enrolledBody) enrolledBody.innerHTML = rows;
-        if (totalSubjectsEl) totalSubjectsEl.textContent = String(total);
-        if (passedEl) passedEl.textContent = String(passed);
-        if (incEl) incEl.textContent = String(incomplete);
-        if (failedEl) failedEl.textContent = String(failed);
 
         // Load recent missing requirements
         const { data: reqs, error: reqErr } = activeSubjectIds.size

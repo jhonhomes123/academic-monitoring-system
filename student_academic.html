@@ -227,21 +227,6 @@ table tr:hover{
 </div>
 
 <div class="main">
-    <div class="small-grid">
-        <div class="small-card">
-            <h4>Passed</h4>
-            <h3 class="pass-text" id="passedCount">0</h3>
-        </div>
-        <div class="small-card">
-            <h4>Incomplete</h4>
-            <h3 class="warning-text" id="incompleteCount">0</h3>
-        </div>
-        <div class="small-card">
-            <h4>Failed</h4>
-            <h3 class="danger-text" id="failedCount">0</h3>
-        </div>
-    </div>
-
     <div class="table-section">
         <div class="section-header">
             <div>
@@ -389,14 +374,6 @@ function renderAcademic(grades, message) {
         const numericValue = Number(value);
         return Number.isFinite(numericValue) ? numericValue.toFixed(1) : value;
     };
-    const passedCount = grades.filter((item) => item.status === "PASSED").length;
-    const incompleteCount = grades.filter((item) => item.status === "INCOMPLETE").length;
-    const failedCount = grades.filter((item) => item.status === "FAILED").length;
-
-    document.getElementById("passedCount").innerText = passedCount;
-    document.getElementById("incompleteCount").innerText = incompleteCount;
-    document.getElementById("failedCount").innerText = failedCount;
-
     if (!grades.length) {
         tableBody.innerHTML = `
             <tr>
