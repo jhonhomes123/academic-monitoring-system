@@ -252,6 +252,7 @@ body{
                 <p>Basic student profile details</p>
             </div>
             <div class="profile-details">
+                <div class="info-box"><h4>Name</h4><p id="studentName">Loading...</p></div>
                 <div class="info-box"><h4>Student ID</h4><p id="studentNumber">Loading...</p></div>
                 <div class="info-box"><h4>Course</h4><p id="studentCourse">Loading...</p></div>
                 <div class="info-box"><h4>Year & Section</h4><p id="studentYearSection">Loading...</p></div>
@@ -367,11 +368,13 @@ async function loadStudentProfile() {
             }
         }
 
+        const studentName = [studentData.first_name, studentData.last_name].filter(Boolean).join(' ').trim() || '-';
         setProfileFields(
             studentData.student_number || "-",
             majorName,
             sectionLabel,
-            contactEmail
+            contactEmail,
+            studentName
         );
         await saveStudentOfflineSnapshot(supabaseClient, 'profile');
     } catch (err) {
@@ -381,7 +384,8 @@ async function loadStudentProfile() {
     }
 }
 
-function setProfileFields(studentNumber, course, yearSection, email) {
+function setProfileFields(studentNumber, course, yearSection, email, name = "-") {
+    document.getElementById("studentName").innerText = name;
     document.getElementById("studentNumber").innerText = studentNumber;
     document.getElementById("studentCourse").innerText = course;
     document.getElementById("studentYearSection").innerText = yearSection;
