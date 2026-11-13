@@ -2313,21 +2313,39 @@
             main.innerHTML = snapshot.html;
             if (role === 'student' && pageKey === 'dashboard') {
                 main.querySelector('.dashboard-grid')?.remove();
-                const enrolledTable = main.querySelector('#enrolledTableBody')?.closest('table');
+                const enrolledTable = main.querySelector('#enrolledSubjectsTable') || main.querySelector('#enrolledTableBody')?.closest('table');
                 const hasStatusColumn = enrolledTable
-                    ? Array.from(enrolledTable.querySelectorAll('thead th, thead td')).some(cell => /status/i.test(cell.textContent || ''))
+                    ? Array.from(enrolledTable.querySelectorAll('thead th, thead td')).some(cell => /term status|status/i.test(cell.textContent || ''))
                     : false;
                 const hasInstructorColumn = enrolledTable
                     ? Array.from(enrolledTable.querySelectorAll('thead th, thead td')).some(cell => /instructor/i.test(cell.textContent || ''))
                     : false;
 
-                if (hasInstructorColumn && !hasStatusColumn) {
-                    enrolledTable?.querySelectorAll('thead tr').forEach(row => row.children[1]?.remove());
-                    const enrolledBody = main.querySelector('#enrolledTableBody');
-                    enrolledBody?.querySelectorAll('tr').forEach(row => {
-                        if (row.children.length > 1) row.children[1].remove();
+                if (enrolledTable) {
+                    const headerRow = enrolledTable.querySelector('thead tr');
+                    if (headerRow && !hasStatusColumn) {
+                        headerRow.innerHTML = '<th>Subject</th><th>Term Status</th>';
+                    }
+                }
+
+                const enrolledBody = main.querySelector('#enrolledTableBody');
+                if (enrolledBody) {
+                    enrolledBody.querySelectorAll('tr').forEach(row => {
+                        const secondCell = row.children[1];
+                        const cellText = (secondCell?.textContent || '').replace(/\s+/g, ' ').trim();
+                        if (hasInstructorColumn && !hasStatusColumn && row.children.length > 1) {
+                            secondCell.remove();
+                        }
+                        if (row.children.length > 1 && (!/prelim|midterm|final/i.test(cellText) || /instructor/i.test(cellText))) {
+                            const safeCell = row.children[1] || document.createElement('td');
+                            if (!row.children[1]) row.appendChild(safeCell);
+                            safeCell.innerHTML = `
+                                <span class="warning-text">Prelim: PENDING</span><br>
+                                <span class="warning-text">Midterm: PENDING</span><br>
+                                <span class="warning-text">Final: PENDING</span>`;
+                        }
                         const emptyCell = row.querySelector('td[colspan]');
-                        if (emptyCell) emptyCell.colSpan = 2;
+                        if (emptyCell && row.children.length === 1) emptyCell.colSpan = 2;
                     });
                 }
                 const semesterSummary = main.querySelector('#activeSemesterSummary');
