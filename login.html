@@ -2219,10 +2219,15 @@ let studentProfileNeedsSetup = false;
 if (Number(userData.role_id) === 3) {
     const { data: studentProfile, error: studentProfileError } = await supabaseClient
         .from('students')
-        .select('section_id')
+        .select('section_id, first_name, last_name, student_number')
         .eq('user_id', userId)
         .maybeSingle();
-    studentProfileNeedsSetup = !studentProfileError && (!studentProfile || studentProfile.section_id == null);
+
+    const hasValidStudentProfile = Boolean(studentProfile)
+        && Boolean(studentProfile.first_name || studentProfile.last_name || studentProfile.student_number);
+
+    studentProfileNeedsSetup = !studentProfileError
+        && (!studentProfile || (!hasValidStudentProfile && userData.email?.endsWith('@accounts.tcc.invalid')));
 }
 const firstLoginSetupRequired = Number(userData.role_id) === 3
     && !passwordChangeRequired
