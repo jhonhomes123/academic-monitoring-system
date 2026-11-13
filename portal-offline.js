@@ -2314,13 +2314,22 @@
             if (role === 'student' && pageKey === 'dashboard') {
                 main.querySelector('.dashboard-grid')?.remove();
                 const enrolledTable = main.querySelector('#enrolledTableBody')?.closest('table');
-                enrolledTable?.querySelectorAll('thead tr').forEach(row => row.children[1]?.remove());
-                const enrolledBody = main.querySelector('#enrolledTableBody');
-                enrolledBody?.querySelectorAll('tr').forEach(row => {
-                    if (row.children.length > 1) row.children[1].remove();
-                    const emptyCell = row.querySelector('td[colspan]');
-                    if (emptyCell) emptyCell.colSpan = 2;
-                });
+                const hasStatusColumn = enrolledTable
+                    ? Array.from(enrolledTable.querySelectorAll('thead th, thead td')).some(cell => /status/i.test(cell.textContent || ''))
+                    : false;
+                const hasInstructorColumn = enrolledTable
+                    ? Array.from(enrolledTable.querySelectorAll('thead th, thead td')).some(cell => /instructor/i.test(cell.textContent || ''))
+                    : false;
+
+                if (hasInstructorColumn && !hasStatusColumn) {
+                    enrolledTable?.querySelectorAll('thead tr').forEach(row => row.children[1]?.remove());
+                    const enrolledBody = main.querySelector('#enrolledTableBody');
+                    enrolledBody?.querySelectorAll('tr').forEach(row => {
+                        if (row.children.length > 1) row.children[1].remove();
+                        const emptyCell = row.querySelector('td[colspan]');
+                        if (emptyCell) emptyCell.colSpan = 2;
+                    });
+                }
                 const semesterSummary = main.querySelector('#activeSemesterSummary');
                 if (semesterSummary) semesterSummary.textContent = semesterSummary.textContent.replace(/instructor status/gi, 'term status');
             }
